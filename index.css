@@ -1,0 +1,147 @@
+:root {
+  --bg: #0b1020;
+  --card: rgba(255, 255, 255, 0.06);
+  --border: rgba(255, 255, 255, 0.12);
+  --text: #e8eefc;
+  --muted: #a9b7d4;
+  --danger: #ff6b6b;
+  --ok: #51cf66;
+  --accent: #7aa2ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial,
+    sans-serif;
+  background: radial-gradient(1200px 900px at 20% 10%, #1b2a6b 0%, transparent 60%),
+    radial-gradient(900px 700px at 80% 90%, #2c164e 0%, transparent 55%),
+    var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+.page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+}
+
+.card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 22px;
+  backdrop-filter: blur(10px);
+}
+
+.header h1 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  letter-spacing: 0.2px;
+}
+
+.header p {
+  margin: 0 0 18px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+input {
+  width: 100%;
+  padding: 12px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--text);
+  outline: none;
+}
+
+input:focus {
+  border-color: rgba(122, 162, 255, 0.7);
+  box-shadow: 0 0 0 3px rgba(122, 162, 255, 0.15);
+}
+
+.password-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.toggle {
+  white-space: nowrap;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.15);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.toggle:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.primary {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(122, 162, 255, 0.95),
+    rgba(143, 92, 255, 0.95)
+  );
+  color: #0b1020;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.msg {
+  min-height: 18px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.msg.error {
+  color: var(--danger);
+}
+
+.msg.ok {
+  color: var(--ok);
+}
+
+.footer {
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}

@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Admin Login</title>
+    <link rel="stylesheet" href="./index.css" />
+  </head>
+
+  <body>
+    <main class="page">
+      <section class="card">
+        <header class="header">
+          <h1>Admin Login</h1>
+          <p>Sign in to manage quotes.</p>
+        </header>
+
+        <form id="login-form" class="form" autocomplete="on" novalidate>
+          <label class="field">
+            <span>Email</span>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              placeholder="you@yourcompany.com"
+              required
+            />
+          </label>
+
+          <label class="field">
+            <span>Password</span>
+            <div class="password-row">
+              <input
+                id="password"
+                name="password"
+                type="password"
+                placeholder="••••••••••"
+                required
+              />
+              <button
+                id="toggle-password"
+                class="toggle"
+                type="button"
+                aria-label="Show password"
+              >
+                Show
+              </button>
+            </div>
+          </label>
+
+          <button id="submit" class="primary" type="submit">Sign in</button>
+
+          <div id="msg" class="msg" role="status" aria-live="polite"></div>
+        </form>
+
+        <footer class="footer">
+          <small>Internal tool</small>
+        </footer>
+      </section>
+    </main>
+
+    <script type="module" src="./index.js"></script>
+  </body>
+</html>
