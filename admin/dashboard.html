@@ -61,44 +61,28 @@
       </section>
     </main>
 
-    <!-- Create Quote Dialog -->
     <dialog id="create-dialog" class="dialog">
-      <form id="create-form" class="dialog-form" method="dialog">
-        <h2>Create Quote</h2>
+  <form id="create-form" class="dialog-form" method="dialog">
+    <h2>Create Quote (Shell)</h2>
 
-        <label class="field">
-          <span>Customer name</span>
-          <input id="customer_name" type="text" required placeholder="John Smith" />
-        </label>
+    <label class="field">
+      <span>Customer name</span>
+      <input id="customer_name" type="text" required placeholder="John Smith" />
+    </label>
 
-        <label class="field">
-          <span>Customer email (optional)</span>
-          <input id="customer_email" type="email" placeholder="john@email.com" />
-        </label>
+    <label class="field">
+      <span>Customer email (optional)</span>
+      <input id="customer_email" type="email" placeholder="john@email.com" />
+    </label>
 
-        <label class="field">
-          <span>Total (CAD)</span>
-          <input
-            id="total"
-            type="text"
-            inputmode="decimal"
-            placeholder="12000"
-            value="0"
-          />
-        </label>
+    <div class="dialog-actions">
+      <button id="create-cancel" class="btn ghost" type="button">Cancel</button>
+      <button id="create-submit" class="btn primary" type="submit">Create & Open</button>
+    </div>
 
-        <div class="dialog-actions">
-          <button id="create-cancel" class="btn ghost" type="button">
-            Cancel
-          </button>
-          <button id="create-submit" class="btn primary" type="submit">
-            Save Draft
-          </button>
-        </div>
-
-        <div id="create-msg" class="muted small"></div>
-      </form>
-    </dialog>
+    <div id="create-msg" class="muted small"></div>
+  </form>
+</dialog>
 
     <script type="module" src="./dashboard.js"></script>
   </body>

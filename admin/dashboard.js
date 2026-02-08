@@ -1,6 +1,7 @@
 import { supabase } from "../js/api.js";
 import { requireAdminOrRedirect } from "../js/adminGuard.js";
-import { listQuotes, createQuote, duplicateQuote, cancelQuote } from "../js/quotesApi.js";
+import { listQuotes, createQuote, duplicateQuoteById, cancelQuote } from "../js/quotesApi.js";
+import { makeDefaultQuoteData } from "../js/quoteDefaults.js";
 
 const userEmailEl = document.getElementById("user-email");
 const errorBox = document.getElementById("error-box");
@@ -19,7 +20,6 @@ const createMsg = document.getElementById("create-msg");
 
 const customerNameEl = document.getElementById("customer_name");
 const customerEmailEl = document.getElementById("customer_email");
-const totalEl = document.getElementById("total");
 
 function setError(message) {
   if (!message) {
@@ -41,31 +41,16 @@ function closeDialog(d) {
   else d.removeAttribute("open");
 }
 
-function toCents(input) {
-  const cleaned = String(input ?? "")
-    .trim()
-    .replace(/[^0-9.-]/g, "");
-  const n = Number.parseFloat(cleaned);
-  if (!Number.isFinite(n)) return 0;
-  return Math.round(n * 100);
-}
-
 function formatMoney(cents = 0, currency = "CAD") {
   const dollars = (Number(cents) || 0) / 100;
-  return new Intl.NumberFormat("en-CA", {
-    style: "currency",
-    currency,
-  }).format(dollars);
+  return new Intl.NumberFormat("en-CA", { style: "currency", currency }).format(dollars);
 }
 
 function formatDate(iso) {
   try {
     return new Date(iso).toLocaleString("en-CA", {
-      year: "numeric",
-      month: "short",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
+      year: "numeric", month: "short", day: "2-digit",
+      hour: "2-digit", minute: "2-digit",
     });
   } catch {
     return iso ?? "";
@@ -95,7 +80,13 @@ function renderRow(q) {
   const tr = document.createElement("tr");
 
   const tdQuote = document.createElement("td");
-  tdQuote.textContent = `Q-${q.quote_no}`;
+  const openLink = document.createElement("a");
+  openLink.href = `./quote.html?id=${q.id}`;
+  openLink.textContent = `Q-${q.quote_no}`;
+  openLink.style.color = "inherit";
+  openLink.style.fontWeight = "800";
+  openLink.style.textDecoration = "underline";
+  tdQuote.appendChild(openLink);
 
   const tdCustomer = document.createElement("td");
   const name = q.customer_name || "(No name)";
@@ -118,27 +109,32 @@ function renderRow(q) {
   const actions = document.createElement("div");
   actions.className = "row-actions";
 
+  const btnOpen = document.createElement("button");
+  btnOpen.className = "btn small";
+  btnOpen.textContent = "Open";
+  btnOpen.addEventListener("click", () => {
+    window.location.href = `./quote.html?id=${q.id}`;
+  });
+  actions.appendChild(btnOpen);
+
   const btnNewVersion = document.createElement("button");
   btnNewVersion.className = "btn small";
   btnNewVersion.textContent = "New Version";
   btnNewVersion.addEventListener("click", async () => {
-    const ok = window.confirm(
-      `Create a new Draft version copied from Q-${q.quote_no}?`
-    );
+    const ok = window.confirm(`Create a new Draft version copied from Q-${q.quote_no}?`);
     if (!ok) return;
 
     try {
       setError("");
       btnNewVersion.disabled = true;
-      await duplicateQuote(q);
-      await loadQuotes();
+      const newQ = await duplicateQuoteById(q.id);
+      window.location.href = `./quote.html?id=${newQ.id}`;
     } catch (e) {
       setError(e?.message || "Failed to create new version.");
     } finally {
       btnNewVersion.disabled = false;
     }
   });
-
   actions.appendChild(btnNewVersion);
 
   if (canCancel(q.status)) {
@@ -146,9 +142,7 @@ function renderRow(q) {
     btnCancel.className = "btn small danger";
     btnCancel.textContent = "Cancel";
     btnCancel.addEventListener("click", async () => {
-      const ok = window.confirm(
-        `Cancel Q-${q.quote_no}? (This does not delete it.)`
-      );
+      const ok = window.confirm(`Cancel Q-${q.quote_no}? (This does not delete it.)`);
       if (!ok) return;
 
       try {
@@ -162,7 +156,6 @@ function renderRow(q) {
         btnCancel.disabled = false;
       }
     });
-
     actions.appendChild(btnCancel);
   }
 
@@ -181,25 +174,17 @@ function renderRow(q) {
 async function loadQuotes() {
   setError("");
   emptyState.hidden = true;
-
   clearTable();
 
   try {
     const quotes = await listQuotes({ limit: 200 });
-
     if (!quotes.length) {
       emptyState.hidden = false;
       return;
     }
-
-    for (const q of quotes) {
-      quotesBody.appendChild(renderRow(q));
-    }
+    for (const q of quotes) quotesBody.appendChild(renderRow(q));
   } catch (e) {
-    setError(
-      (e?.message || "Failed to load quotes.") +
-        " (If this is your first run, confirm the quotes table + RLS policy exist.)"
-    );
+    setError((e?.message || "Failed to load quotes.") + " (Confirm your quotes table + RLS policy exist.)");
   }
 }
 
@@ -219,14 +204,12 @@ async function init() {
   userEmailEl.textContent = session.user.email || "";
 
   refreshBtn.addEventListener("click", loadQuotes);
-
   logoutBtn.addEventListener("click", logout);
 
   createBtn.addEventListener("click", () => {
     setCreateMsg("");
     customerNameEl.value = "";
     customerEmailEl.value = "";
-    totalEl.value = "0";
     openDialog(createDialog);
     customerNameEl.focus();
   });
@@ -239,7 +222,6 @@ async function init() {
 
     const customer_name = customerNameEl.value.trim();
     const customer_email = customerEmailEl.value.trim() || null;
-    const total_cents = toCents(totalEl.value);
 
     if (!customer_name) {
       setCreateMsg("Customer name is required.");
@@ -248,21 +230,27 @@ async function init() {
 
     try {
       createSubmitBtn.disabled = true;
-      createSubmitBtn.textContent = "Saving…";
-      await createQuote({
+      createSubmitBtn.textContent = "Creating…";
+
+      // Create “shell” quote with default payload
+      const data = makeDefaultQuoteData({ customer_name, customer_email });
+      const q = await createQuote({
         customer_name,
         customer_email,
-        total_cents,
+        total_cents: 0,
         currency: "CAD",
-        data: {}, // later you’ll store template/items here
+        data,
       });
+
       closeDialog(createDialog);
-      await loadQuotes();
+
+      // Go straight into the quote builder page
+      window.location.href = `./quote.html?id=${q.id}`;
     } catch (e2) {
       setCreateMsg(e2?.message || "Failed to create quote.");
     } finally {
       createSubmitBtn.disabled = false;
-      createSubmitBtn.textContent = "Save Draft";
+      createSubmitBtn.textContent = "Create & Open";
     }
   });
 

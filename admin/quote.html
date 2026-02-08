@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Quote Builder</title>
+    <link rel="stylesheet" href="./quote.css" />
+    <script defer src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+  </head>
+
+  <body>
+    <header class="topbar no-print">
+      <div class="brand">
+        <img class="logo" src="../assets/logo.jpg" alt="Endura" />
+        <div class="brand-text">
+          <div class="brand-title">Quote Builder</div>
+          <div class="brand-sub">
+            <span id="quote-code">…</span>
+            <span class="dot">•</span>
+            <span id="quote-status">…</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="back-btn" class="btn ghost">Back</button>
+        <button id="save-btn" class="btn primary">Save</button>
+        <button id="pdf-btn" class="btn">Download PDF</button>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <div id="msg" class="msg" hidden></div>
+
+      <!-- This is what we render into the PDF -->
+      <section id="quote-page" class="page">
+        <header class="doc-header avoid-break">
+          <div class="brand-row">
+            <img src="../assets/logo.jpg" alt="Endura Metal Roofing Ltd." class="doc-logo" />
+            <div class="brand-meta">
+              <div class="company-name" data-company="name"></div>
+              <div class="contact-list">
+                <div data-company="addr1"></div>
+                <div data-company="addr2"></div>
+                <div data-company="phone"></div>
+                <div data-company="email"></div>
+                <div data-company="web"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="meta-grid">
+            <label>Quote #<input type="text" data-bind="quote_no" readonly /></label>
+            <label>Date<input type="date" data-bind="quote_date" /></label>
+            <label>Expires<input type="date" data-bind="quote_expires" /></label>
+            <label>Prepared by<input type="text" placeholder="Estimator name" data-bind="prepared_by" /></label>
+          </div>
+        </header>
+
+        <section class="grid-2 avoid-break">
+          <div class="card">
+            <h3>Bill To</h3>
+            <div class="stack-10">
+              <input type="text" placeholder="Client / Company" data-bind="client_name" />
+              <input type="text" placeholder="Contact Person" data-bind="client_contact" />
+              <input type="text" placeholder="Phone" data-bind="client_phone" />
+              <input type="text" placeholder="Email" data-bind="client_email" />
+              <input type="text" placeholder="Billing Address" data-bind="client_addr" />
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Project</h3>
+            <div class="stack-10">
+              <input type="text" placeholder="Project Name" data-bind="project_name" />
+              <input type="text" placeholder="Project Location" data-bind="project_location" />
+              <input type="date" data-bind="project_start" />
+              <textarea rows="3" placeholder="Brief project overview…" data-bind="project_overview"></textarea>
+            </div>
+          </div>
+        </section>
+
+        <section class="card avoid-break">
+          <h3>Scope of Work</h3>
+          <textarea rows="6" placeholder="Describe the work…" data-bind="scope"></textarea>
+        </section>
+
+        <section class="card avoid-break">
+          <div class="row-between">
+            <h3>Items & Pricing</h3>
+            <button id="add-item" class="btn small no-print" type="button">+ Item</button>
+          </div>
+
+          <div class="table-wrap">
+            <table class="items-table" aria-label="Line items">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Description</th>
+                  <th class="num">Qty</th>
+                  <th class="num">Unit</th>
+                  <th class="center">Tax</th>
+                  <th class="num">Line Total</th>
+                  <th class="no-print slim"></th>
+                </tr>
+              </thead>
+              <tbody id="item-rows"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card totals avoid-break">
+          <h3>Summary</h3>
+          <div class="totals-grid">
+            <div class="row">
+              <div class="label">Subtotal</div>
+              <div class="spacer"></div>
+              <div class="value"><span>$</span><span id="subtotal">0.00</span></div>
+            </div>
+
+            <div class="row">
+              <div class="label">Tax Rate</div>
+              <div class="spacer"></div>
+              <div class="value">
+                <span class="ghost">$</span>
+                <span><input id="tax-rate" type="text" inputmode="decimal" value="13" class="short" />%</span>
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="label">Tax</div>
+              <div class="spacer"></div>
+              <div class="value"><span>$</span><span id="tax-amount">0.00</span></div>
+            </div>
+
+            <div class="row">
+              <div class="label">Additional Fees</div>
+              <div class="spacer"></div>
+              <div class="value">
+                <span>$</span>
+                <span><input id="fees" type="text" inputmode="decimal" placeholder="0.00" /></span>
+              </div>
+            </div>
+
+            <div class="row total">
+              <div class="label">Total</div>
+              <div class="spacer"></div>
+              <div class="value"><span>$</span><span id="grand-total">0.00</span></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card avoid-break">
+          <h3>Deposit</h3>
+          <div class="stack-10">
+            <div class="inline-controls no-print">
+              <label class="radio"><input type="radio" name="deposit_mode" value="auto" checked /> Auto (40%)</label>
+              <label class="radio"><input type="radio" name="deposit_mode" value="custom" /> Custom</label>
+            </div>
+            <label class="inline">
+              <span class="label-mini">Deposit Due</span>
+              <input id="deposit-due" type="text" inputmode="decimal" placeholder="$0.00" />
+            </label>
+          </div>
+        </section>
+
+        <section class="card avoid-break">
+          <h3>Payment & Terms</h3>
+          <textarea rows="12" data-bind="terms"></textarea>
+        </section>
+
+        <section class="card avoid-break">
+          <h3>Notes & Exclusions</h3>
+          <textarea rows="5" data-bind="notes" placeholder="Project-specific exclusions, colour selections, deck repairs, etc."></textarea>
+        </section>
+
+        <section class="signatures avoid-break">
+          <div class="sig-block">
+            <div class="sig-line"><span>Client Signature</span></div>
+            <div class="sig-inline">
+              <div class="sig-line"><span>Printed Name</span></div>
+              <div class="sig-line"><span>Title</span></div>
+              <div class="sig-line"><span>Date</span></div>
+            </div>
+          </div>
+          <div class="sig-block">
+            <div class="sig-line"><span>Endura Representative</span></div>
+            <div class="sig-inline">
+              <div class="sig-line"><span>Printed Name</span></div>
+              <div class="sig-line"><span>Title</span></div>
+              <div class="sig-line"><span>Date</span></div>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <div id="pdf-sandbox" class="visually-hidden" aria-hidden="true"></div>
+    </main>
+
+    <script type="module" src="./quote.js"></script>
+  </body>
+</html>
