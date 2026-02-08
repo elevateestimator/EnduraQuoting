@@ -12,7 +12,7 @@ export const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
  * This is NOT your only security layer — you’ll still lock signups + use RLS later.
  */
 export const ADMIN_EMAILS = [
-  "you@yourcompany.com",
+  "jacob@endurametalroofing.ca",
   // "second-admin@yourcompany.com",
 ];
 
