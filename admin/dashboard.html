@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Endura Quoting — Dashboard</title>
+    <link rel="stylesheet" href="./dashboard.css" />
+  </head>
+
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <img class="logo" src="../assets/logo.jpg" alt="Endura" />
+        <div class="brand-text">
+          <div class="brand-title">Endura Quoting</div>
+          <div class="brand-sub">
+            Logged in as <span id="user-email">…</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="refresh-btn" class="btn ghost">Refresh</button>
+        <button id="create-btn" class="btn primary">Create Quote</button>
+        <button id="logout-btn" class="btn danger">Logout</button>
+      </div>
+    </header>
+
+    <main class="page">
+      <section class="card">
+        <div class="card-header">
+          <h1>Quotes</h1>
+          <p class="muted">
+            New Version = copy quote into a new Draft. Cancel is only available
+            for unsigned quotes.
+          </p>
+        </div>
+
+        <div id="error-box" class="error" hidden></div>
+
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Quote #</th>
+                <th>Customer</th>
+                <th>Total</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th style="width: 260px">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="quotes-body"></tbody>
+          </table>
+        </div>
+
+        <div id="empty-state" class="empty" hidden>
+          <div class="empty-title">No quotes yet</div>
+          <div class="empty-sub">Click “Create Quote” to add your first one.</div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Create Quote Dialog -->
+    <dialog id="create-dialog" class="dialog">
+      <form id="create-form" class="dialog-form" method="dialog">
+        <h2>Create Quote</h2>
+
+        <label class="field">
+          <span>Customer name</span>
+          <input id="customer_name" type="text" required placeholder="John Smith" />
+        </label>
+
+        <label class="field">
+          <span>Customer email (optional)</span>
+          <input id="customer_email" type="email" placeholder="john@email.com" />
+        </label>
+
+        <label class="field">
+          <span>Total (CAD)</span>
+          <input
+            id="total"
+            type="text"
+            inputmode="decimal"
+            placeholder="12000"
+            value="0"
+          />
+        </label>
+
+        <div class="dialog-actions">
+          <button id="create-cancel" class="btn ghost" type="button">
+            Cancel
+          </button>
+          <button id="create-submit" class="btn primary" type="submit">
+            Save Draft
+          </button>
+        </div>
+
+        <div id="create-msg" class="muted small"></div>
+      </form>
+    </dialog>
+
+    <script type="module" src="./dashboard.js"></script>
+  </body>
+</html>

@@ -4,8 +4,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
  * Fill these in from:
  * Supabase Dashboard -> Project Settings -> API
  */
-export const SUPABASE_URL = "https://YOUR_PROJECT_ID.supabase.co";
-export const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
+export const SUPABASE_URL = "https://iahowsrpngjbvwvczcsz.supabase.co";
+export const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlhaG93c3JwbmdqYnZ3dmN6Y3N6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1NjMxNzYsImV4cCI6MjA4NjEzOTE3Nn0.NYO3DYhwpGaQSm1I_wDOxy1JzyG2OWNGdN4QBxvfZMc";
 
 /**
  * Admin allow-list (client-side guard).

@@ -1,0 +1,284 @@
+:root {
+  --bg: #0b1020;
+  --card: rgba(255, 255, 255, 0.06);
+  --border: rgba(255, 255, 255, 0.12);
+  --text: #e8eefc;
+  --muted: #a9b7d4;
+
+  --danger: #ff6b6b;
+  --ok: #51cf66;
+  --warn: #ffd43b;
+
+  --accent1: #7aa2ff;
+  --accent2: #8f5cff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial,
+    sans-serif;
+  background: radial-gradient(1200px 900px at 20% 10%, #1b2a6b 0%, transparent 60%),
+    radial-gradient(900px 700px at 80% 90%, #2c164e 0%, transparent 55%),
+    var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 18px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(10px);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  object-fit: cover;
+}
+
+.brand-title {
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+
+.brand-sub {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.page {
+  padding: 18px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 16px;
+  backdrop-filter: blur(10px);
+}
+
+.card-header h1 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.muted {
+  color: var(--muted);
+}
+.small {
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.error {
+  margin: 12px 0;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 107, 107, 0.35);
+  background: rgba(255, 107, 107, 0.12);
+  color: #ffd1d1;
+  font-size: 13px;
+}
+
+.table-wrap {
+  overflow: auto;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  margin-top: 12px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 860px;
+}
+
+thead th {
+  text-align: left;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 700;
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.16);
+}
+
+tbody td {
+  padding: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  font-size: 13px;
+}
+
+tbody tr:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.badge.draft {
+  background: rgba(122, 162, 255, 0.12);
+  border-color: rgba(122, 162, 255, 0.25);
+}
+.badge.sent {
+  background: rgba(255, 212, 59, 0.10);
+  border-color: rgba(255, 212, 59, 0.25);
+}
+.badge.viewed {
+  background: rgba(81, 207, 102, 0.10);
+  border-color: rgba(81, 207, 102, 0.25);
+}
+.badge.signed {
+  background: rgba(81, 207, 102, 0.18);
+  border-color: rgba(81, 207, 102, 0.35);
+}
+.badge.cancelled {
+  background: rgba(255, 107, 107, 0.12);
+  border-color: rgba(255, 107, 107, 0.25);
+}
+
+.btn {
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.15);
+  color: var(--text);
+  padding: 10px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.btn:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.btn.primary {
+  border: 0;
+  background: linear-gradient(135deg, rgba(122, 162, 255, 0.95), rgba(143, 92, 255, 0.95));
+  color: #0b1020;
+}
+
+.btn.danger {
+  border: 1px solid rgba(255, 107, 107, 0.35);
+  background: rgba(255, 107, 107, 0.12);
+}
+
+.btn.ghost {
+  background: transparent;
+}
+
+.btn.small {
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.row-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.empty {
+  padding: 18px;
+  text-align: center;
+}
+
+.empty-title {
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+.empty-sub {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* Dialog */
+.dialog::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.dialog {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  background: rgba(12, 16, 32, 0.98);
+  color: var(--text);
+  width: min(520px, calc(100% - 24px));
+}
+
+.dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dialog-form h2 {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+input {
+  width: 100%;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--text);
+  outline: none;
+}
+
+input:focus {
+  border-color: rgba(122, 162, 255, 0.7);
+  box-shadow: 0 0 0 3px rgba(122, 162, 255, 0.15);
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 6px;
+}
