@@ -11,6 +11,9 @@
   /* Endura */
   --brand:#0267b5;
   --brand-dark:#014d89;
+
+  /* Signature vibe */
+  --sig-font: "Segoe Script", "Brush Script MT", "Snell Roundhand", "Lucida Handwriting", cursive;
 }
 
 *{ box-sizing:border-box; }
@@ -90,45 +93,117 @@ body{
   background: var(--paper);
   color: var(--ink);
   border: 1px solid var(--paper-border);
-  border-radius: 14px;
-  padding: 0.65in;
+  border-radius: 16px;
+  padding: 0.70in; /* a touch more breathing room */
   box-shadow: 0 18px 55px rgba(2,6,23,0.18);
 }
 
-.doc-header{ display:grid; gap: 14px; margin-bottom: 8px; }
-.brand-row{ display:grid; grid-template-columns: 160px 1fr; gap: 14px; align-items:center; }
-.doc-logo{ width: 160px; height:auto; object-fit:contain; }
-.company-name{ font-size: 20px; font-weight: 900; letter-spacing:.2px; }
-.contact-list{
+/* ===== Premium Header ===== */
+.doc-header{
+  display:block;
+  margin-bottom: 18px;
+}
+
+.header-grid{
+  display:grid;
+  grid-template-columns: 170px 1fr;
+  gap: 18px;
+  align-items:center;
+}
+
+.doc-logo{
+  width: 170px;
+  height: 170px;
+  object-fit: contain;
+}
+
+.header-main{
+  display:grid;
+  gap: 12px;
+}
+
+.header-top{
+  display:flex;
+  align-items:flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.company-name{
+  font-size: 24px;
+  font-weight: 950;
+  letter-spacing: .02em;
+  line-height: 1.1;
+  color: #0b0f14;
+}
+
+.doc-pill{
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: #0b0f14;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(2,103,181,.55);
+  background: #f3f4f6;
+  white-space: nowrap;
+}
+
+.contact-line{
   display:flex;
   flex-wrap:wrap;
   gap: 6px 10px;
+  margin-top: 8px;
   font-size: 12px;
   color:#374151;
 }
-.contact-list div:not(:first-child)::before{
+.contact-line span{
+  white-space: nowrap;
+}
+.contact-line span + span::before{
   content:"•";
   margin: 0 8px;
   color:#9ca3af;
 }
 
+.accent-bar{
+  height: 4px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--brand), rgba(2,103,181,.35));
+}
+
+.meta-wrap{
+  border: 1px solid var(--paper-border);
+  border-radius: 14px;
+  background: #f8fafc;
+  padding: 12px;
+}
+
 .meta-grid{
   display:grid;
-  grid-template-columns: repeat(4, minmax(0,1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr)); /* FIX: looks balanced, not “off” */
   gap: 10px;
 }
+
 .meta-grid label{
   display:grid;
   gap: 6px;
-  font-size: 12px;
-  color:#4b5563;
+  font-size: 10px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color:#6b7280;
 }
+
 .meta-grid input{
   border:1px solid var(--paper-border);
   border-radius: 10px;
   padding: 10px 12px;
   font-size: 13px;
   color: var(--ink);
+  background: #ffffff;
+  text-align: center;
+  font-weight: 800;
 }
 
 .grid-2{
@@ -145,6 +220,7 @@ body{
   padding: 14px;
   margin-top: 14px;
 }
+
 .card::before{
   content:"";
   position:absolute;
@@ -154,10 +230,11 @@ body{
   border-top-left-radius: 14px;
   border-bottom-left-radius: 14px;
 }
+
 .card h3{
   margin:0 0 10px;
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 950;
   letter-spacing: .12em;
   text-transform: uppercase;
 }
@@ -175,9 +252,11 @@ body{
   color: var(--ink);
 }
 
-.card textarea{ resize: none; }
+.card textarea{
+  resize: none;
+}
 
-/* Auto-grow textareas (no scrollbars) */
+/* Auto-grow textareas (Scope / Terms / Notes) */
 textarea.autogrow{
   overflow: hidden;
 }
@@ -203,7 +282,6 @@ textarea.autogrow{
 }
 
 .items-table thead th{
-  /* Changed from black to Endura theme */
   background: linear-gradient(90deg, var(--brand), var(--brand-dark));
   color:#fff;
   font-size: 11px;
@@ -219,6 +297,10 @@ textarea.autogrow{
   vertical-align: top;
 }
 
+.items-table tbody tr:nth-child(even) td{
+  background: #fafbfc;
+}
+
 .items-table input[type="text"], .items-table textarea{
   width:100%;
   border:none;
@@ -232,7 +314,7 @@ textarea.autogrow{
 .items-table .num{ text-align:right; }
 .items-table .center{ text-align:center; }
 .items-table .slim{ width: 1%; white-space: nowrap; }
-.items-table .line-total{ text-align:right; padding: 10px; font-weight: 900; }
+.items-table .line-total{ text-align:right; padding: 10px; font-weight: 950; }
 
 /* ===== Totals ===== */
 .totals-grid{
@@ -242,13 +324,13 @@ textarea.autogrow{
   align-items: center;
 }
 .totals-grid .row{ display: contents; }
-.totals-grid .label{ font-weight: 800; }
+.totals-grid .label{ font-weight: 900; }
 .totals-grid .spacer{ height:1px; background: #c6cedc; }
 .totals-grid .value{
   display:flex;
   justify-content:flex-end;
   gap: 8px;
-  font-weight: 900;
+  font-weight: 950;
   font-variant-numeric: tabular-nums;
 }
 .totals-grid .value input{
@@ -282,7 +364,7 @@ textarea.autogrow{
 
 .sig-line{
   border-bottom: 1px solid #cfd3e1;
-  min-height: 30px;
+  min-height: 34px;
   display:flex;
   align-items:flex-end;
   position:relative;
@@ -302,7 +384,6 @@ textarea.autogrow{
   display:grid;
   gap: 12px;
 }
-
 .sig-inline.two{
   grid-template-columns: 1fr 1fr;
 }
@@ -312,15 +393,42 @@ textarea.autogrow{
   left: 0;
   bottom: 2px;
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 900;
   color:#111827;
+}
+
+/* Signature “font” */
+.sig-line.signature{
+  min-height: 44px;
+}
+.sig-signature{
+  position:absolute;
+  left: 0;
+  bottom: -2px;
+  font-family: var(--sig-font);
+  font-size: 28px;
+  font-weight: 500;
+  color:#111827;
+  transform: rotate(-1deg);
+  opacity: 0.95;
+  white-space: nowrap;
 }
 
 /* Utilities */
 .avoid-break{ break-inside: avoid; page-break-inside: avoid; }
 
+/* Print rules */
+@page { size: Letter; margin: 0.5in; }
+
 @media print{
   body{ background:#fff; }
   .no-print{ display:none !important; }
-  .page{ box-shadow:none; border:0; margin:0; width:auto; border-radius:0; }
+  .page{
+    box-shadow:none;
+    border:0;
+    margin:0;
+    width:auto;
+    border-radius:0;
+    padding: 0.5in;
+  }
 }

@@ -57,7 +57,7 @@ export function makeDefaultQuoteData({ customer_name = "", customer_email = "" }
       project_location: "",
     },
     scope: "",
-    items: [{ item: "", description: "", qty: 1, unit_price_cents: 0, taxable: true }],
+    items: [{ description: "", qty: 1, unit_price_cents: 0, taxable: true }],
     tax_rate: 13,
     fees_cents: 0,
     deposit_mode: "auto",

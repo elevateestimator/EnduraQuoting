@@ -24,6 +24,9 @@ const taxRateEl = $("#tax-rate");
 const feesEl = $("#fees");
 const depositDueEl = $("#deposit-due");
 
+const repDateEl = $("#rep-date");
+const quoteDateInput = $('[data-bind="quote_date"]');
+
 const quotePageEl = $("#quote-page");
 
 function showMsg(text) {
@@ -61,11 +64,10 @@ function getDepositMode() {
   return $$('input[name="deposit_mode"]').find((r) => r.checked)?.value || "auto";
 }
 
-/* ===== Autosize textareas (Scope / Terms / Notes) ===== */
+/* ===== Autosize textareas ===== */
 function autosizeTextarea(el) {
   if (!el) return;
   el.style.height = "auto";
-  // +2 prevents “last line clipped” on some browsers
   el.style.height = `${el.scrollHeight + 2}px`;
 }
 
@@ -74,7 +76,6 @@ function wireAutosize(selector) {
   if (!el) return;
   const run = () => autosizeTextarea(el);
   el.addEventListener("input", run);
-  // Run now + after render
   run();
   requestAnimationFrame(run);
 }
@@ -85,6 +86,28 @@ function autosizeAll() {
   wireAutosize('[data-bind="notes"]');
 }
 
+/* ===== Signature date ===== */
+function formatDateDisplay(iso) {
+  if (!iso) return "";
+  try {
+    // Keep it “signature normal”, not ISO
+    return new Date(`${iso}T00:00:00`).toLocaleDateString("en-CA", {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function syncRepDateFromQuoteDate() {
+  if (!repDateEl) return;
+  const iso = quoteDateInput?.value || "";
+  repDateEl.textContent = formatDateDisplay(iso);
+}
+
+/* ===== Company text ===== */
 function setCompanyText() {
   $('[data-company="name"]').textContent = DEFAULT_COMPANY.name;
   $('[data-company="addr1"]').textContent = DEFAULT_COMPANY.addr1;
@@ -106,12 +129,11 @@ function getBoundValue(key) {
   return (el.value ?? "").trim();
 }
 
-/* ===== Items ===== */
+/* ===== Items (NO "Item" column) ===== */
 function buildItemRow(item = {}) {
   const tr = document.createElement("tr");
   tr.className = "item-row avoid-break";
   tr.innerHTML = `
-    <td><input type="text" class="i-item" placeholder="Item" value="${item.item ?? ""}"></td>
     <td><textarea rows="2" class="i-desc" placeholder="Description">${item.description ?? ""}</textarea></td>
     <td class="num"><input type="text" class="i-qty" inputmode="decimal" value="${item.qty ?? 1}"></td>
     <td class="num"><input type="text" class="i-price" inputmode="decimal" value="${centsToMoney(item.unit_price_cents ?? 0)}"></td>
@@ -137,12 +159,12 @@ function buildItemRow(item = {}) {
 function getItemsFromUI() {
   const rows = $$(".item-row", itemRowsEl);
   return rows.map((row) => {
-    const item = $(".i-item", row).value.trim();
     const description = $(".i-desc", row).value.trim();
     const qty = Math.max(0, parseNum($(".i-qty", row).value));
     const unit_price_cents = Math.max(0, parseMoneyToCents($(".i-price", row).value));
     const taxable = $(".i-tax", row).checked;
-    return { item, description, qty, unit_price_cents, taxable };
+
+    return { description, qty, unit_price_cents, taxable };
   });
 }
 
@@ -179,7 +201,6 @@ function recalcTotals() {
   taxAmountEl.textContent = centsToMoney(tax);
   grandTotalEl.textContent = centsToMoney(grand);
 
-  // Deposit auto 40%
   const mode = getDepositMode();
   if (mode === "auto") {
     const dep = Math.round(grand * 0.4);
@@ -203,6 +224,16 @@ function mergeDefaults(existing, fallback) {
   out.meta = { ...fallback.meta, ...(e.meta || {}) };
   out.bill_to = { ...fallback.bill_to, ...(e.bill_to || {}) };
   out.project = { ...fallback.project, ...(e.project || {}) };
+
+  // If old quotes had "item" field, ignore it gracefully
+  if (Array.isArray(out.items)) {
+    out.items = out.items.map((it) => ({
+      description: it.description ?? it.desc ?? it.item ?? "",
+      qty: it.qty ?? 1,
+      unit_price_cents: it.unit_price_cents ?? 0,
+      taxable: typeof it.taxable === "boolean" ? it.taxable : true,
+    }));
+  }
 
   return out;
 }
@@ -233,7 +264,6 @@ function fillUIFromData(qRow, data) {
   taxRateEl.value = String(data.tax_rate ?? 13);
   feesEl.value = centsToMoney(data.fees_cents ?? 0);
 
-  // Deposit mode
   const mode = data.deposit_mode || "auto";
   $$('input[name="deposit_mode"]').forEach((r) => (r.checked = r.value === mode));
   if (mode === "custom") {
@@ -241,16 +271,16 @@ function fillUIFromData(qRow, data) {
     depositDueEl.removeAttribute("readonly");
   }
 
-  // Items
   itemRowsEl.innerHTML = "";
   const items = Array.isArray(data.items) && data.items.length
     ? data.items
-    : [{ item: "", description: "", qty: 1, unit_price_cents: 0, taxable: true }];
+    : [{ description: "", qty: 1, unit_price_cents: 0, taxable: true }];
 
   for (const it of items) itemRowsEl.appendChild(buildItemRow(it));
 
   recalcTotals();
   autosizeAll();
+  syncRepDateFromQuoteDate();
 }
 
 function collectDataFromUI(qRow) {
@@ -299,7 +329,6 @@ function collectDataFromUI(qRow) {
 
 /* ===== PDF helpers ===== */
 function createPdfSandbox() {
-  // IMPORTANT: must NOT be "visually-hidden" / clipped, or html2canvas will mis-measure
   const sandbox = document.createElement("div");
   sandbox.id = "pdf-sandbox";
   sandbox.style.position = "fixed";
@@ -316,21 +345,53 @@ function createPdfSandbox() {
 function buildPdfClone() {
   const clone = quotePageEl.cloneNode(true);
 
-  // Remove screen-only elements first
   clone.querySelectorAll(".no-print").forEach((n) => n.remove());
 
-  // Remove “centered” margins so nothing shifts right
   clone.style.margin = "0";
   clone.style.boxShadow = "none";
   clone.style.border = "none";
   clone.style.borderRadius = "0";
 
-  // Items table: if colgroup has extra col, trim it to match header count
+  // Replace controls with styled blocks so PDF looks “real”, not like a screenshot of inputs
+  const replaceControl = (el) => {
+    if (el.type === "checkbox") {
+      const mark = document.createElement("span");
+      mark.textContent = el.checked ? "✓" : "—";
+      mark.style.display = "inline-block";
+      mark.style.textAlign = "center";
+      mark.style.width = "100%";
+      el.parentNode.replaceChild(mark, el);
+      return;
+    }
+
+    const inItems = !!el.closest(".items-table");
+    const isArea = el.tagName === "TEXTAREA";
+
+    const out = document.createElement("div");
+    out.textContent = el.value ?? "";
+    out.style.whiteSpace = "pre-wrap";
+    out.style.display = "block";
+
+    if (inItems) {
+      out.style.padding = "10px";
+    } else {
+      out.style.border = "1px solid #d9dee8";
+      out.style.borderRadius = "10px";
+      out.style.padding = "10px 12px";
+      out.style.background = "#ffffff";
+      out.style.fontSize = "13px";
+      out.style.color = "#0b0f14";
+      if (!isArea) out.style.textAlign = "center";
+    }
+
+    el.parentNode.replaceChild(out, el);
+  };
+
+  clone.querySelectorAll("input, textarea, select").forEach(replaceControl);
+
+  // Fix colgroup after removing the last action column in PDF clone
   const table = clone.querySelector(".items-table");
   if (table) {
-    const wrap = table.closest(".table-wrap");
-    if (wrap) wrap.style.overflow = "visible";
-
     const cg = table.querySelector("colgroup");
     const thCount = table.tHead?.rows?.[0]?.children?.length ?? 0;
     if (cg && thCount > 0) {
@@ -338,26 +399,9 @@ function buildPdfClone() {
         cg.removeChild(cg.lastElementChild);
       }
     }
+    const wrap = table.closest(".table-wrap");
+    if (wrap) wrap.style.overflow = "visible";
   }
-
-  // Replace inputs/areas with text for cleaner PDFs
-  clone.querySelectorAll("input, textarea, select").forEach((el) => {
-    if (el.type === "checkbox") {
-      const mark = document.createElement("span");
-      mark.textContent = el.checked ? "✓" : "—";
-      mark.style.display = "inline-block";
-      mark.style.textAlign = "center";
-      el.parentNode.replaceChild(mark, el);
-      return;
-    }
-
-    const isArea = el.tagName === "TEXTAREA";
-    const out = document.createElement(isArea ? "div" : "span");
-    out.textContent = el.value ?? "";
-    out.style.whiteSpace = "pre-wrap";
-    out.style.display = "block";
-    el.parentNode.replaceChild(out, el);
-  });
 
   return clone;
 }
@@ -395,7 +439,7 @@ async function main() {
 
   addItemBtn.addEventListener("click", () => {
     itemRowsEl.appendChild(
-      buildItemRow({ item: "", description: "", qty: 1, unit_price_cents: 0, taxable: true })
+      buildItemRow({ description: "", qty: 1, unit_price_cents: 0, taxable: true })
     );
     recalcTotals();
   });
@@ -403,6 +447,11 @@ async function main() {
   taxRateEl.addEventListener("input", recalcTotals);
   feesEl.addEventListener("input", recalcTotals);
   $$('input[name="deposit_mode"]').forEach((r) => r.addEventListener("change", recalcTotals));
+
+  // Keep rep signature date synced
+  quoteDateInput?.addEventListener("change", () => {
+    syncRepDateFromQuoteDate();
+  });
 
   async function saveNow() {
     const payload = collectDataFromUI(qRow);
@@ -451,13 +500,11 @@ async function main() {
     try {
       pdfBtn.disabled = true;
 
-      // Save first so DB + PDF match
       const saved = await saveNow();
       if (!saved) return;
 
       const { payload } = saved;
 
-      // Build clone inside a NON-clipped sandbox (fixes the “shift right + cut off” issue)
       const sandbox = createPdfSandbox();
       sandbox.innerHTML = "";
       const clone = buildPdfClone();
@@ -467,7 +514,8 @@ async function main() {
       const filename = `${client}_${payload.quote_code}.pdf`;
 
       const opt = {
-        margin: 0, // IMPORTANT: element already has paper padding; margins here can cause scaling/offset weirdness
+        // FIX: adds space at top of every PDF page so bubbles never touch the top
+        margin: [0.35, 0.35, 0.35, 0.35], // inches (jsPDF unit is "in")
         filename,
         image: { type: "jpeg", quality: 0.98 },
         html2canvas: {
@@ -478,7 +526,7 @@ async function main() {
           scrollY: 0,
         },
         jsPDF: { unit: "in", format: "letter", orientation: "portrait" },
-        pagebreak: { mode: ["css", "legacy"] },
+        pagebreak: { mode: ["css", "legacy"], avoid: [".avoid-break", ".card", ".signatures", ".doc-header"] },
       };
 
       await window.html2pdf().set(opt).from(clone).save();
