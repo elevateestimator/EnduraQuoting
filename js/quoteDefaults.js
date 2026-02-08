@@ -7,7 +7,10 @@ export const DEFAULT_COMPANY = {
   web: "endurametalroofing.ca",
 };
 
-// From your old quote tool’s Payment & Terms block
+export const DEFAULT_REP = {
+  name: "Jacob Docherty",
+};
+
 export const DEFAULT_TERMS = `PAYMENT SCHEDULE
 • 40% deposit due upon acceptance (invoice issued immediately).
 • 40% due at start of install.
@@ -42,25 +45,19 @@ export function makeDefaultQuoteData({ customer_name = "", customer_email = "" }
     meta: {
       quote_date: toISO(today),
       quote_expires: toISO(expires),
-      prepared_by: "",
+      prepared_by: DEFAULT_REP.name, // default estimator name
     },
     bill_to: {
       client_name: customer_name,
-      client_contact: "",
       client_phone: "",
       client_email: customer_email,
       client_addr: "",
     },
     project: {
-      project_name: "",
       project_location: "",
-      project_start: "",
-      project_overview: "",
     },
     scope: "",
-    items: [
-      { item: "", description: "", qty: 1, unit_price_cents: 0, taxable: true },
-    ],
+    items: [{ item: "", description: "", qty: 1, unit_price_cents: 0, taxable: true }],
     tax_rate: 13,
     fees_cents: 0,
     deposit_mode: "auto",

@@ -32,7 +32,7 @@
     <main class="wrap">
       <div id="msg" class="msg" hidden></div>
 
-      <!-- This is what we render into the PDF -->
+      <!-- PDF/Preview Page -->
       <section id="quote-page" class="page">
         <header class="doc-header avoid-break">
           <div class="brand-row">
@@ -53,7 +53,7 @@
             <label>Quote #<input type="text" data-bind="quote_no" readonly /></label>
             <label>Date<input type="date" data-bind="quote_date" /></label>
             <label>Expires<input type="date" data-bind="quote_expires" /></label>
-            <label>Prepared by<input type="text" placeholder="Estimator name" data-bind="prepared_by" /></label>
+            <label>Prepared by<input type="text" data-bind="prepared_by" /></label>
           </div>
         </header>
 
@@ -61,8 +61,7 @@
           <div class="card">
             <h3>Bill To</h3>
             <div class="stack-10">
-              <input type="text" placeholder="Client / Company" data-bind="client_name" />
-              <input type="text" placeholder="Contact Person" data-bind="client_contact" />
+              <input type="text" placeholder="Client / Homeowner" data-bind="client_name" />
               <input type="text" placeholder="Phone" data-bind="client_phone" />
               <input type="text" placeholder="Email" data-bind="client_email" />
               <input type="text" placeholder="Billing Address" data-bind="client_addr" />
@@ -70,19 +69,21 @@
           </div>
 
           <div class="card">
-            <h3>Project</h3>
+            <h3>Job Site</h3>
             <div class="stack-10">
-              <input type="text" placeholder="Project Name" data-bind="project_name" />
-              <input type="text" placeholder="Project Location" data-bind="project_location" />
-              <input type="date" data-bind="project_start" />
-              <textarea rows="3" placeholder="Brief project overview…" data-bind="project_overview"></textarea>
+              <input type="text" placeholder="Job site address" data-bind="project_location" />
             </div>
           </div>
         </section>
 
         <section class="card avoid-break">
           <h3>Scope of Work</h3>
-          <textarea rows="6" placeholder="Describe the work…" data-bind="scope"></textarea>
+          <textarea
+            class="autogrow"
+            rows="3"
+            placeholder="Describe the work…"
+            data-bind="scope"
+          ></textarea>
         </section>
 
         <section class="card avoid-break">
@@ -93,6 +94,16 @@
 
           <div class="table-wrap">
             <table class="items-table" aria-label="Line items">
+              <colgroup>
+                <col style="width: 16%" />
+                <col style="width: auto" />
+                <col style="width: 10%" />
+                <col style="width: 14%" />
+                <col style="width: 8%" />
+                <col style="width: 16%" />
+                <col style="width: 4%" />
+              </colgroup>
+
               <thead>
                 <tr>
                   <th>Item</th>
@@ -104,6 +115,7 @@
                   <th class="no-print slim"></th>
                 </tr>
               </thead>
+
               <tbody id="item-rows"></tbody>
             </table>
           </div>
@@ -166,35 +178,40 @@
 
         <section class="card avoid-break">
           <h3>Payment & Terms</h3>
-          <textarea rows="12" data-bind="terms"></textarea>
+          <textarea class="autogrow" rows="6" data-bind="terms"></textarea>
         </section>
 
         <section class="card avoid-break">
           <h3>Notes & Exclusions</h3>
-          <textarea rows="5" data-bind="notes" placeholder="Project-specific exclusions, colour selections, deck repairs, etc."></textarea>
+          <textarea
+            class="autogrow"
+            rows="3"
+            data-bind="notes"
+            placeholder="Project-specific exclusions, colour selections, deck repairs, etc."
+          ></textarea>
         </section>
 
         <section class="signatures avoid-break">
           <div class="sig-block">
             <div class="sig-line"><span>Client Signature</span></div>
-            <div class="sig-inline">
+            <div class="sig-inline two">
               <div class="sig-line"><span>Printed Name</span></div>
-              <div class="sig-line"><span>Title</span></div>
               <div class="sig-line"><span>Date</span></div>
             </div>
           </div>
+
           <div class="sig-block">
-            <div class="sig-line"><span>Endura Representative</span></div>
-            <div class="sig-inline">
-              <div class="sig-line"><span>Printed Name</span></div>
-              <div class="sig-line"><span>Title</span></div>
+            <div class="sig-line"><span>Endura Representative Signature</span></div>
+            <div class="sig-inline two">
+              <div class="sig-line">
+                <span>Printed Name</span>
+                <div class="sig-value">Jacob Docherty</div>
+              </div>
               <div class="sig-line"><span>Date</span></div>
             </div>
           </div>
         </section>
       </section>
-
-      <div id="pdf-sandbox" class="visually-hidden" aria-hidden="true"></div>
     </main>
 
     <script type="module" src="./quote.js"></script>

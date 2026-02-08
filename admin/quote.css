@@ -8,7 +8,9 @@
   --ink:#0b0f14;
   --paper-border:#d9dee8;
 
+  /* Endura */
   --brand:#0267b5;
+  --brand-dark:#014d89;
 }
 
 *{ box-sizing:border-box; }
@@ -80,6 +82,7 @@ body{
   font-size: 13px;
 }
 
+/* ===== The letter page ===== */
 .page{
   width: 8.5in;
   min-height: 11in;
@@ -147,7 +150,7 @@ body{
   position:absolute;
   top:0; bottom:0; left:0;
   width:4px;
-  background: linear-gradient(180deg, var(--brand), #014d89);
+  background: linear-gradient(180deg, var(--brand), var(--brand-dark));
   border-top-left-radius: 14px;
   border-bottom-left-radius: 14px;
 }
@@ -171,8 +174,15 @@ body{
   font-size: 13px;
   color: var(--ink);
 }
-.card textarea{ resize: vertical; }
 
+.card textarea{ resize: none; }
+
+/* Auto-grow textareas (no scrollbars) */
+textarea.autogrow{
+  overflow: hidden;
+}
+
+/* ===== Items & Pricing ===== */
 .row-between{
   display:flex;
   align-items:center;
@@ -185,37 +195,46 @@ body{
   border-radius: 12px;
   overflow: hidden;
 }
+
 .items-table{
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
 }
+
 .items-table thead th{
-  background: #0b0f14;
+  /* Changed from black to Endura theme */
+  background: linear-gradient(90deg, var(--brand), var(--brand-dark));
   color:#fff;
   font-size: 11px;
   letter-spacing: .10em;
   text-transform: uppercase;
   text-align:left;
   padding: 10px;
+  border-bottom: 1px solid rgba(255,255,255,.18);
 }
+
 .items-table tbody td{
   border-bottom: 1px solid var(--paper-border);
   vertical-align: top;
 }
+
 .items-table input[type="text"], .items-table textarea{
   width:100%;
   border:none;
   background: transparent;
   padding: 10px;
   font-size: 13px;
+  color: var(--ink);
 }
-.items-table textarea{ height: 64px; }
+
+.items-table textarea{ height: 64px; resize: none; }
 .items-table .num{ text-align:right; }
 .items-table .center{ text-align:center; }
 .items-table .slim{ width: 1%; white-space: nowrap; }
 .items-table .line-total{ text-align:right; padding: 10px; font-weight: 900; }
 
+/* ===== Totals ===== */
 .totals-grid{
   display:grid;
   grid-template-columns: auto 1fr 18ch;
@@ -246,18 +265,21 @@ body{
 .inline{ display:inline-flex; align-items:center; gap: 10px; }
 .label-mini{ font-size: 12px; color:#4b5563; }
 
+/* ===== Signatures ===== */
 .signatures{
   display:grid;
   grid-template-columns: 1fr 1fr;
   gap: 14px;
   margin-top: 14px;
 }
+
 .sig-block{
   border: 1px solid var(--paper-border);
   border-radius: 14px;
   padding: 14px;
   background:#fff;
 }
+
 .sig-line{
   border-bottom: 1px solid #cfd3e1;
   min-height: 30px;
@@ -266,6 +288,7 @@ body{
   position:relative;
   margin: 18px 0 8px;
 }
+
 .sig-line span{
   position:absolute;
   bottom: 100%;
@@ -274,31 +297,30 @@ body{
   font-size: 11px;
   color:#4b5563;
 }
+
 .sig-inline{
   display:grid;
-  grid-template-columns: 1fr 1fr 1fr;
   gap: 12px;
 }
 
-.visually-hidden{
-  position:absolute!important;
-  clip: rect(1px,1px,1px,1px);
-  padding:0!important;
-  border:0!important;
-  height:1px!important;
-  width:1px!important;
-  overflow:hidden;
-  white-space:nowrap;
+.sig-inline.two{
+  grid-template-columns: 1fr 1fr;
 }
 
-.avoid-break{
-  break-inside: avoid;
-  page-break-inside: avoid;
+.sig-value{
+  position:absolute;
+  left: 0;
+  bottom: 2px;
+  font-size: 13px;
+  font-weight: 800;
+  color:#111827;
 }
 
-/* Print rules */
+/* Utilities */
+.avoid-break{ break-inside: avoid; page-break-inside: avoid; }
+
 @media print{
   body{ background:#fff; }
   .no-print{ display:none !important; }
-  .page{ box-shadow:none; border:0; margin:0; width:auto; }
+  .page{ box-shadow:none; border:0; margin:0; width:auto; border-radius:0; }
 }

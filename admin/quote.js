@@ -22,10 +22,8 @@ const grandTotalEl = $("#grand-total");
 
 const taxRateEl = $("#tax-rate");
 const feesEl = $("#fees");
-
 const depositDueEl = $("#deposit-due");
 
-const pdfSandbox = $("#pdf-sandbox");
 const quotePageEl = $("#quote-page");
 
 function showMsg(text) {
@@ -47,7 +45,10 @@ function parseMoneyToCents(value) {
 
 function centsToMoney(cents) {
   const dollars = (Number(cents) || 0) / 100;
-  return dollars.toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return dollars.toLocaleString("en-CA", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 function parseNum(value) {
@@ -58,6 +59,30 @@ function parseNum(value) {
 
 function getDepositMode() {
   return $$('input[name="deposit_mode"]').find((r) => r.checked)?.value || "auto";
+}
+
+/* ===== Autosize textareas (Scope / Terms / Notes) ===== */
+function autosizeTextarea(el) {
+  if (!el) return;
+  el.style.height = "auto";
+  // +2 prevents “last line clipped” on some browsers
+  el.style.height = `${el.scrollHeight + 2}px`;
+}
+
+function wireAutosize(selector) {
+  const el = $(selector);
+  if (!el) return;
+  const run = () => autosizeTextarea(el);
+  el.addEventListener("input", run);
+  // Run now + after render
+  run();
+  requestAnimationFrame(run);
+}
+
+function autosizeAll() {
+  wireAutosize('[data-bind="scope"]');
+  wireAutosize('[data-bind="terms"]');
+  wireAutosize('[data-bind="notes"]');
 }
 
 function setCompanyText() {
@@ -81,6 +106,7 @@ function getBoundValue(key) {
   return (el.value ?? "").trim();
 }
 
+/* ===== Items ===== */
 function buildItemRow(item = {}) {
   const tr = document.createElement("tr");
   tr.className = "item-row avoid-break";
@@ -116,7 +142,6 @@ function getItemsFromUI() {
     const qty = Math.max(0, parseNum($(".i-qty", row).value));
     const unit_price_cents = Math.max(0, parseMoneyToCents($(".i-price", row).value));
     const taxable = $(".i-tax", row).checked;
-
     return { item, description, qty, unit_price_cents, taxable };
   });
 }
@@ -148,7 +173,6 @@ function recalcTotals() {
   const tax = Math.round(taxableBase * (taxRate / 100));
 
   const fees = parseMoneyToCents(feesEl.value);
-
   const grand = Math.max(0, subtotal + tax + fees);
 
   subtotalEl.textContent = centsToMoney(subtotal);
@@ -168,14 +192,13 @@ function recalcTotals() {
   return { subtotal_cents: subtotal, tax_cents: tax, fees_cents: fees, total_cents: grand };
 }
 
+/* ===== Merge defaults ===== */
 function mergeDefaults(existing, fallback) {
-  const out = structuredClone(fallback);
-
+  const out = structuredClone ? structuredClone(fallback) : JSON.parse(JSON.stringify(fallback));
   const e = existing || {};
-  // Shallow merge primitives
+
   for (const k of Object.keys(e)) out[k] = e[k];
 
-  // Merge nested objects
   out.company = { ...fallback.company, ...(e.company || {}) };
   out.meta = { ...fallback.meta, ...(e.meta || {}) };
   out.bill_to = { ...fallback.bill_to, ...(e.bill_to || {}) };
@@ -197,15 +220,11 @@ function fillUIFromData(qRow, data) {
   setBoundValue("prepared_by", data.meta.prepared_by);
 
   setBoundValue("client_name", data.bill_to.client_name);
-  setBoundValue("client_contact", data.bill_to.client_contact);
   setBoundValue("client_phone", data.bill_to.client_phone);
   setBoundValue("client_email", data.bill_to.client_email);
   setBoundValue("client_addr", data.bill_to.client_addr);
 
-  setBoundValue("project_name", data.project.project_name);
   setBoundValue("project_location", data.project.project_location);
-  setBoundValue("project_start", data.project.project_start);
-  setBoundValue("project_overview", data.project.project_overview);
 
   setBoundValue("scope", data.scope);
   setBoundValue("terms", data.terms);
@@ -224,10 +243,14 @@ function fillUIFromData(qRow, data) {
 
   // Items
   itemRowsEl.innerHTML = "";
-  const items = Array.isArray(data.items) && data.items.length ? data.items : [{ item: "", description: "", qty: 1, unit_price_cents: 0, taxable: true }];
+  const items = Array.isArray(data.items) && data.items.length
+    ? data.items
+    : [{ item: "", description: "", qty: 1, unit_price_cents: 0, taxable: true }];
+
   for (const it of items) itemRowsEl.appendChild(buildItemRow(it));
 
   recalcTotals();
+  autosizeAll();
 }
 
 function collectDataFromUI(qRow) {
@@ -241,17 +264,13 @@ function collectDataFromUI(qRow) {
 
   const bill_to = {
     client_name: getBoundValue("client_name"),
-    client_contact: getBoundValue("client_contact"),
     client_phone: getBoundValue("client_phone"),
     client_email: getBoundValue("client_email"),
     client_addr: getBoundValue("client_addr"),
   };
 
   const project = {
-    project_name: getBoundValue("project_name"),
     project_location: getBoundValue("project_location"),
-    project_start: getBoundValue("project_start"),
-    project_overview: getBoundValue("project_overview"),
   };
 
   const items = getItemsFromUI();
@@ -273,13 +292,53 @@ function collectDataFromUI(qRow) {
     deposit_cents,
     terms: getBoundValue("terms"),
     notes: getBoundValue("notes"),
-    computed: totals, // handy for debugging / later UI
+    computed: totals,
     quote_code: formatQuoteCode(qRow.quote_no, meta.quote_date),
   };
 }
 
+/* ===== PDF helpers ===== */
+function createPdfSandbox() {
+  // IMPORTANT: must NOT be "visually-hidden" / clipped, or html2canvas will mis-measure
+  const sandbox = document.createElement("div");
+  sandbox.id = "pdf-sandbox";
+  sandbox.style.position = "fixed";
+  sandbox.style.left = "-10000px";
+  sandbox.style.top = "0";
+  sandbox.style.opacity = "0";
+  sandbox.style.pointerEvents = "none";
+  sandbox.style.background = "#ffffff";
+  sandbox.style.width = "816px";  // Letter @ 96dpi
+  document.body.appendChild(sandbox);
+  return sandbox;
+}
+
 function buildPdfClone() {
   const clone = quotePageEl.cloneNode(true);
+
+  // Remove screen-only elements first
+  clone.querySelectorAll(".no-print").forEach((n) => n.remove());
+
+  // Remove “centered” margins so nothing shifts right
+  clone.style.margin = "0";
+  clone.style.boxShadow = "none";
+  clone.style.border = "none";
+  clone.style.borderRadius = "0";
+
+  // Items table: if colgroup has extra col, trim it to match header count
+  const table = clone.querySelector(".items-table");
+  if (table) {
+    const wrap = table.closest(".table-wrap");
+    if (wrap) wrap.style.overflow = "visible";
+
+    const cg = table.querySelector("colgroup");
+    const thCount = table.tHead?.rows?.[0]?.children?.length ?? 0;
+    if (cg && thCount > 0) {
+      while (cg.children.length > thCount && cg.lastElementChild) {
+        cg.removeChild(cg.lastElementChild);
+      }
+    }
+  }
 
   // Replace inputs/areas with text for cleaner PDFs
   clone.querySelectorAll("input, textarea, select").forEach((el) => {
@@ -299,14 +358,6 @@ function buildPdfClone() {
     out.style.display = "block";
     el.parentNode.replaceChild(out, el);
   });
-
-  // Remove screen-only elements
-  clone.querySelectorAll(".no-print").forEach((n) => n.remove());
-
-  // Better print feel
-  clone.style.boxShadow = "none";
-  clone.style.border = "none";
-  clone.style.borderRadius = "0";
 
   return clone;
 }
@@ -330,13 +381,12 @@ async function main() {
     return;
   }
 
-  // Merge existing data with defaults
   const defaults = makeDefaultQuoteData({
     customer_name: qRow.customer_name,
     customer_email: qRow.customer_email,
   });
-  const data = mergeDefaults(qRow.data, defaults);
 
+  const data = mergeDefaults(qRow.data, defaults);
   fillUIFromData(qRow, data);
 
   backBtn.addEventListener("click", () => {
@@ -344,7 +394,9 @@ async function main() {
   });
 
   addItemBtn.addEventListener("click", () => {
-    itemRowsEl.appendChild(buildItemRow({ item: "", description: "", qty: 1, unit_price_cents: 0, taxable: true }));
+    itemRowsEl.appendChild(
+      buildItemRow({ item: "", description: "", qty: 1, unit_price_cents: 0, taxable: true })
+    );
     recalcTotals();
   });
 
@@ -352,69 +404,91 @@ async function main() {
   feesEl.addEventListener("input", recalcTotals);
   $$('input[name="deposit_mode"]').forEach((r) => r.addEventListener("change", recalcTotals));
 
-  saveBtn.addEventListener("click", async () => {
+  async function saveNow() {
     const payload = collectDataFromUI(qRow);
 
     if (!payload.bill_to.client_name) {
       showMsg("Customer name is required (Bill To).");
-      return;
+      return null;
     }
 
+    showMsg("Saving…");
+
+    const updated = await updateQuote(quoteId, {
+      customer_name: payload.bill_to.client_name,
+      customer_email: payload.bill_to.client_email || null,
+      total_cents: payload.computed.total_cents,
+      data: payload,
+    });
+
+    qRow = updated;
+    quoteStatusEl.textContent = qRow.status || "Draft";
+    quoteCodeEl.textContent = payload.quote_code;
+
+    showMsg("Saved.");
+    setTimeout(() => showMsg(""), 800);
+
+    return { qRow, payload };
+  }
+
+  saveBtn.addEventListener("click", async () => {
     try {
-      showMsg("Saving…");
-
-      const updated = await updateQuote(quoteId, {
-        customer_name: payload.bill_to.client_name,
-        customer_email: payload.bill_to.client_email || null,
-        total_cents: payload.computed.total_cents,
-        data: payload,
-      });
-
-      qRow = updated;
-      quoteStatusEl.textContent = qRow.status || "Draft";
-      quoteCodeEl.textContent = payload.quote_code;
-
-      showMsg("Saved.");
-      setTimeout(() => showMsg(""), 900);
+      saveBtn.disabled = true;
+      await saveNow();
     } catch (e) {
       showMsg(e?.message || "Save failed.");
+    } finally {
+      saveBtn.disabled = false;
     }
   });
 
   pdfBtn.addEventListener("click", async () => {
-    // Save first so PDF matches DB
-    saveBtn.click();
-
     if (!window.html2pdf) {
-      showMsg("html2pdf library not loaded.");
+      showMsg("PDF library not loaded.");
       return;
     }
 
-    // Build a clean clone for PDF
-    pdfSandbox.innerHTML = "";
-    const clone = buildPdfClone();
-    pdfSandbox.appendChild(clone);
-
-    const quoteNo = getBoundValue("quote_no") || `Q-${qRow.quote_no}`;
-    const client = getBoundValue("client_name") || "Client";
-    const filename = `${client.replace(/[^\w\-]+/g, "_")}_${quoteNo.replace(/[^\w\-]+/g, "_")}.pdf`;
-
-    const opt = {
-      margin: [0.5, 0.5, 0.5, 0.5],
-      filename,
-      image: { type: "jpeg", quality: 0.98 },
-      html2canvas: { scale: 2, backgroundColor: "#ffffff" },
-      jsPDF: { unit: "in", format: "letter", orientation: "portrait" },
-      pagebreak: { mode: ["css", "legacy"] },
-    };
-
     try {
+      pdfBtn.disabled = true;
+
+      // Save first so DB + PDF match
+      const saved = await saveNow();
+      if (!saved) return;
+
+      const { payload } = saved;
+
+      // Build clone inside a NON-clipped sandbox (fixes the “shift right + cut off” issue)
+      const sandbox = createPdfSandbox();
+      sandbox.innerHTML = "";
+      const clone = buildPdfClone();
+      sandbox.appendChild(clone);
+
+      const client = (payload.bill_to.client_name || "Client").replace(/[^\w\-]+/g, "_");
+      const filename = `${client}_${payload.quote_code}.pdf`;
+
+      const opt = {
+        margin: 0, // IMPORTANT: element already has paper padding; margins here can cause scaling/offset weirdness
+        filename,
+        image: { type: "jpeg", quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          backgroundColor: "#ffffff",
+          useCORS: true,
+          scrollX: 0,
+          scrollY: 0,
+        },
+        jsPDF: { unit: "in", format: "letter", orientation: "portrait" },
+        pagebreak: { mode: ["css", "legacy"] },
+      };
+
       await window.html2pdf().set(opt).from(clone).save();
+
+      sandbox.remove();
     } catch (e) {
-      showMsg("PDF export failed. Check console.");
       console.error(e);
+      showMsg("PDF export failed. Check console.");
     } finally {
-      pdfSandbox.innerHTML = "";
+      pdfBtn.disabled = false;
     }
   });
 }
