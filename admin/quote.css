@@ -439,3 +439,161 @@ textarea.autogrow{
 .card.compact .stack-10{
   gap: 8px;
 }
+/* =========================
+   PAGE TIGHTEN (more content on page 1)
+   ========================= */
+.page{
+  padding: 0.62in; /* slightly tighter than before */
+}
+
+/* =========================
+   HEADER FIX (balanced, premium, aligned)
+   ========================= */
+.doc-header{
+  margin-bottom: 12px;
+}
+
+.letterhead{
+  display: grid;
+  grid-template-columns: 128px 1fr;
+  gap: 16px;
+  align-items: start; /* key: no “floating” logo */
+}
+
+.logo-col{
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding-top: 6px;
+}
+
+.doc-logo{
+  width: 128px;
+  height: auto;          /* FIX: stops stretching */
+  max-height: 128px;     /* keeps it tidy */
+  object-fit: contain;   /* extra safety */
+  display: block;
+}
+
+.head-col{
+  display: grid;
+  gap: 10px;
+}
+
+.head-top{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.head-company{
+  text-align: left;
+}
+
+.company-name{
+  font-size: 22px;
+  font-weight: 950;
+  letter-spacing: .02em;
+  line-height: 1.15;
+  color: #0b0f14;
+}
+
+.contact-line{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #374151;
+  justify-content: flex-start;
+}
+
+.contact-line span{
+  white-space: nowrap;
+}
+
+.contact-line span + span::before{
+  content: "•";
+  margin: 0 8px;
+  color: #9ca3af;
+}
+
+.doc-pill{
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: #0b0f14;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(2,103,181,.55);
+  background: #f3f4f6;
+  white-space: nowrap;
+  margin-top: 2px;
+}
+
+.accent-bar{
+  height: 4px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--brand), rgba(2,103,181,.35));
+}
+
+.meta-grid{
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)); /* clean, aligned */
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--paper-border);
+  border-radius: 14px;
+  background: #f8fafc;
+}
+
+.meta-grid label{
+  display: grid;
+  gap: 6px;
+  font-size: 10px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+.meta-grid input{
+  border: 1px solid var(--paper-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 850;
+  text-align: center;
+  background: #fff;
+}
+
+/* =========================
+   BILL/JOB ROW FIX
+   (prevents jobsite “empty stretched card”)
+   ========================= */
+.grid-2{
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 14px;
+  align-items: start; /* IMPORTANT */
+}
+
+.grid-2 > .card{
+  align-self: start; /* IMPORTANT */
+}
+
+.card.slim{
+  padding: 12px 14px;
+}
+
+.bill-fields{
+  display: grid;
+  gap: 10px;
+}
+
+.two-col{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
