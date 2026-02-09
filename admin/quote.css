@@ -521,3 +521,16 @@ textarea.autogrow{
     padding: 0.5in;
   }
 }
+/* Meta strip: value alignment (recommended) */
+.meta-strip .meta-field input{
+  text-align: center;
+}
+
+/* Safari date inputs need extra help to truly center */
+.meta-strip input[type="date"]::-webkit-datetime-edit-fields-wrapper{
+  display: flex;
+  justify-content: center;
+}
+.meta-strip input[type="date"]::-webkit-datetime-edit{
+  text-align: center;
+}
