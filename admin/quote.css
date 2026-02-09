@@ -523,27 +523,40 @@ textarea.autogrow{
 }
 
 /* =========================================================
-   FORCE Meta fields centered (fix Safari/Chrome date inputs)
+   HEADER: make meta strip span full page width (centered)
    ========================================================= */
-#quote-page .meta-grid input,
-#quote-page .meta-strip input{
+.letterhead .full-span{
+  grid-column: 1 / -1;
+}
+
+/* tighten spacing now that meta strip spans full header */
+.letterhead .accent-bar.full-span{
+  margin-top: 14px;
+}
+
+.letterhead .meta-strip.full-span{
+  margin-top: 10px;
+}
+
+/* Force center alignment for meta values (including date inputs) */
+.meta-strip .meta-field input{
   text-align: center !important;
 }
 
-/* WebKit date text alignment (Safari/Chrome) */
-#quote-page .meta-grid input[type="date"]::-webkit-date-and-time-value,
-#quote-page .meta-strip input[type="date"]::-webkit-date-and-time-value{
+/* WebKit (Safari/Chrome) date value alignment */
+.meta-strip .meta-field input[type="date"]::-webkit-date-and-time-value{
   text-align: center;
   margin: 0 auto;
 }
-
-#quote-page .meta-grid input[type="date"]::-webkit-datetime-edit-fields-wrapper,
-#quote-page .meta-strip input[type="date"]::-webkit-datetime-edit-fields-wrapper{
+.meta-strip .meta-field input[type="date"]::-webkit-datetime-edit-fields-wrapper{
   display: flex;
   justify-content: center;
 }
-
-#quote-page .meta-grid input[type="date"]::-webkit-datetime-edit,
-#quote-page .meta-strip input[type="date"]::-webkit-datetime-edit{
+.meta-strip .meta-field input[type="date"]::-webkit-datetime-edit{
   text-align: center;
+}
+
+/* Keep quote code on one line (prevents ER-2026 line break) */
+.doc-code{
+  white-space: nowrap;
 }
