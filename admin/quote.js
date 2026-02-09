@@ -2,13 +2,13 @@ import { requireAdminOrRedirect } from "../js/adminGuard.js";
 import { getQuote, updateQuote } from "../js/quotesApi.js";
 import { DEFAULT_COMPANY, makeDefaultQuoteData, formatQuoteCode } from "../js/quoteDefaults.js";
 
-const $  = (sel, ctx = document) => ctx.querySelector(sel);
+const $ = (sel, ctx = document) => ctx.querySelector(sel);
 const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
 
 /** Letter size in CSS pixels @ 96dpi */
 const PX_PER_IN = 96;
 const PAGE_W_CSS = Math.round(8.5 * PX_PER_IN); // 816
-const PAGE_H_CSS = Math.round(11  * PX_PER_IN); // 1056
+const PAGE_H_CSS = Math.round(11 * PX_PER_IN);  // 1056
 
 const backBtn = $("#back-btn");
 const saveBtn = $("#save-btn");
@@ -17,7 +17,6 @@ const pdfBtn  = $("#pdf-btn");
 const msgEl = $("#msg");
 const quoteCodeEl = $("#quote-code");
 const quoteStatusEl = $("#quote-status");
-const docQuoteCodeEl = $("#doc-quote-code");
 
 const itemRowsEl = $("#item-rows");
 const addItemBtn = $("#add-item");
@@ -84,6 +83,99 @@ function autosizeAll() {
   wireAutosize('[data-bind="terms"]');
   wireAutosize('[data-bind="notes"]');
 }
+
+
+/* ===== Scope presets (screen-only) ===== */
+const SCOPE_PRESETS = {
+  roof_prep: `• Removal and disposal of existing roofing materials (where applicable).
+• Supply and install high-heat ice & water shield at eaves, valleys, penetrations, and as required.
+• Supply and install synthetic underlayment to remaining roof areas.
+• Protect landscaping / property as required and maintain a tidy jobsite.
+• Full cleanup and disposal of debris upon completion.`,
+
+  standing_seam: `• Supply and install mechanical-lock standing seam roofing panels, installed to manufacturer specifications.
+• Panels installed with concealed clips/fasteners and mechanically locked seams.
+• All trims and accessories included (eaves/drip edge, gable trim, ridge/hip caps, valleys, transitions, and sealants as required).
+• Flash all roof penetrations (vents, plumbing stacks, etc.) for a watertight system.`,
+
+  ribbed_steel: `• Supply and install ribbed steel roofing panels, installed to manufacturer specifications.
+• Colour-matched fasteners with neoprene washers, installed at proper spacing.
+• Closure strips, butyl tape, and sealants installed where required for a watertight system.
+• All trims and accessories included (eaves/drip edge, gable trim, ridge cap, valleys, transitions, and flashings as required).`,
+
+  metal_shingles: `• Supply and install interlocking metal shingles, installed to manufacturer specifications.
+• Starter/edge components and fastening system installed as required by the manufacturer.
+• All trims and accessories included (eaves, gables, ridges/hips, valleys, transitions, and flashings as required).
+• Flash all roof penetrations for a watertight system.`,
+
+  plank_siding: `• Supply and install modern plank metal siding, installed to manufacturer specifications.
+• Weather-resistant barrier / rainscreen details applied as required for proper drainage and ventilation.
+• All trims and accessories included (starter, corners, J-trim, window/door flashings, and terminations as required).
+• Layout and fastening completed for clean, straight reveals and a professional finish.`,
+
+  soffit_fascia: `• Remove and dispose of existing soffit/fascia materials (where applicable).
+• Supply and install new soffit and fascia in selected colour/finish.
+• Vented soffit installed where required to support proper attic ventilation.
+• All corners, transitions, and fasteners included for a clean finished appearance.`,
+
+  eavestrough: `• Supply and install new seamless eavestrough and downspouts.
+• Includes hangers, corners, end caps, outlets, straps, and elbows as required.
+• Downspouts secured and directed appropriately (splash blocks or tie-in to existing drainage where applicable).
+• System pitched and checked for proper flow.`
+};
+
+function normalizeTextBlock(s) {
+  return String(s || "").replace(/\r\n/g, "\n").trim();
+}
+
+function getScopeTextarea() {
+  return document.querySelector('[data-bind="scope"]');
+}
+
+function updateScopePresetButtonStates() {
+  const ta = getScopeTextarea();
+  if (!ta) return;
+
+  const current = normalizeTextBlock(ta.value || "");
+  document.querySelectorAll('button[data-scope-preset]').forEach((btn) => {
+    const key = btn.getAttribute("data-scope-preset");
+    const block = normalizeTextBlock(SCOPE_PRESETS[key]);
+    const active = block && current.includes(block);
+    btn.classList.toggle("active", !!active);
+    btn.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+}
+
+function appendScopePreset(key) {
+  const ta = getScopeTextarea();
+  if (!ta) return;
+
+  const block = normalizeTextBlock(SCOPE_PRESETS[key]);
+  if (!block) return;
+
+  const cur = normalizeTextBlock(ta.value || "");
+  if (cur.includes(block)) return; // don't duplicate
+
+  ta.value = cur ? `${cur}\n\n${block}` : block;
+  ta.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function wireScopePresets() {
+  const presetsRoot = document.querySelector(".scope-presets");
+  const ta = getScopeTextarea();
+  if (!presetsRoot || !ta) return;
+
+  presetsRoot.addEventListener("click", (e) => {
+    const btn = e.target.closest('button[data-scope-preset]');
+    if (!btn) return;
+    appendScopePreset(btn.getAttribute("data-scope-preset"));
+    updateScopePresetButtonStates();
+  });
+
+  ta.addEventListener("input", updateScopePresetButtonStates);
+  updateScopePresetButtonStates();
+}
+
 
 /* ===== Rep signature date ===== */
 function formatDateDisplay(iso) {
@@ -239,10 +331,7 @@ function fillUIFromData(qRow, data) {
   setCompanyText();
 
   const quoteCode = formatQuoteCode(qRow.quote_no, data.meta.quote_date);
-
   quoteCodeEl.textContent = quoteCode;
-  if (docQuoteCodeEl) docQuoteCodeEl.textContent = quoteCode;
-
   quoteStatusEl.textContent = qRow.status || "Draft";
 
   setBoundValue("quote_no", quoteCode);
@@ -334,6 +423,7 @@ function collectDataFromUI(qRow) {
    - slice pages between cards
    ========================================================= */
 
+/* Load libs only if missing */
 function loadScript(src) {
   return new Promise((res, rej) => {
     const s = document.createElement("script");
@@ -459,7 +549,6 @@ function buildPdfClone() {
     }
 
     const inItems = !!el.closest(".items-table");
-    const inTotals = !!el.closest(".totals-grid");
     const isArea = el.tagName === "TEXTAREA";
 
     const out = document.createElement("div");
@@ -469,13 +558,6 @@ function buildPdfClone() {
 
     if (inItems) {
       out.style.padding = "10px";
-    } else if (inTotals) {
-      // totals should look like a document, not a form
-      out.style.border = "0";
-      out.style.padding = "0";
-      out.style.background = "transparent";
-      out.style.fontWeight = "900";
-      out.style.textAlign = "right";
     } else {
       out.style.border = "1px solid #d9dee8";
       out.style.borderRadius = "10px";
@@ -534,8 +616,7 @@ async function exportPdfManual({ filename }) {
   const pdfW = pdf.internal.pageSize.getWidth();  // 612
   const pdfH = pdf.internal.pageSize.getHeight(); // 792
 
-  // Keep a small margin so sections don't touch the top of a new page
-  const marginPt = 22; // ~0.30"
+  const marginPt = 26; // ~0.36"
   const contentW = pdfW - marginPt * 2;
   const contentH = pdfH - marginPt * 2;
 
@@ -546,7 +627,15 @@ async function exportPdfManual({ filename }) {
   const idealPageHeightPxCanvas = Math.floor(canvasW * (contentH / contentW));
   const cuts = computeCutPositionsPx(clone, scaleFactor, idealPageHeightPxCanvas);
 
-  const boundaries = [0, ...cuts.filter((c) => c > 0 && c < canvasH), canvasH];
+/*
+  IMPORTANT:
+  html2canvas captures the full clone height (including min-height).
+  If the content ends earlier, using canvasH as the final boundary can add a blank trailing page.
+  We treat the last cut as the real content bottom and slice only up to that.
+*/
+const contentBottom = cuts.length ? Math.min(cuts[cuts.length - 1], canvasH) : canvasH;
+
+const boundaries = [0, ...cuts.filter((c) => c > 0 && c < contentBottom), contentBottom];
 
   const pageCanvas = document.createElement("canvas");
   pageCanvas.width = canvasW;
@@ -558,9 +647,13 @@ async function exportPdfManual({ filename }) {
     const next = boundaries[i];
     const sliceH = next - prev;
 
+    // Guard: skip empty/tiny slices (prevents occasional blank trailing pages)
+    if (sliceH < 8) continue;
+
     pageCanvas.height = sliceH;
     const ctx = pageCanvas.getContext("2d", { alpha: false });
 
+    // white background (prevents odd transparency)
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, canvasW, sliceH);
 
@@ -580,6 +673,7 @@ async function exportPdfManual({ filename }) {
   }
 
   pdf.save(filename);
+
   sandbox.remove();
 }
 
@@ -610,6 +704,7 @@ async function main() {
 
   const data = mergeDefaults(qRow.data, defaults);
   fillUIFromData(qRow, data);
+  wireScopePresets();
 
   backBtn.addEventListener("click", () => {
     window.location.href = "./dashboard.html";
@@ -647,9 +742,7 @@ async function main() {
 
     qRow = updated;
     quoteStatusEl.textContent = qRow.status || "Draft";
-
     quoteCodeEl.textContent = payload.quote_code;
-    if (docQuoteCodeEl) docQuoteCodeEl.textContent = payload.quote_code;
 
     showMsg("Saved.");
     setTimeout(() => showMsg(""), 800);

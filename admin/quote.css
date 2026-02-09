@@ -522,41 +522,58 @@ textarea.autogrow{
   }
 }
 
-/* =========================================================
-   HEADER: make meta strip span full page width (centered)
-   ========================================================= */
-.letterhead .full-span{
-  grid-column: 1 / -1;
+/* =========================
+   Scope presets (screen-only)
+   ========================= */
+.scope-presets{
+  display: inline-grid;
+  gap: 6px;
+  justify-items: end;
 }
 
-/* tighten spacing now that meta strip spans full header */
-.letterhead .accent-bar.full-span{
-  margin-top: 14px;
+.preset-label{
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: #6b7280;
 }
 
-.letterhead .meta-strip.full-span{
-  margin-top: 10px;
-}
-
-/* Force center alignment for meta values (including date inputs) */
-.meta-strip .meta-field input{
-  text-align: center !important;
-}
-
-/* WebKit (Safari/Chrome) date value alignment */
-.meta-strip .meta-field input[type="date"]::-webkit-date-and-time-value{
-  text-align: center;
-  margin: 0 auto;
-}
-.meta-strip .meta-field input[type="date"]::-webkit-datetime-edit-fields-wrapper{
+.preset-chips{
   display: flex;
-  justify-content: center;
-}
-.meta-strip .meta-field input[type="date"]::-webkit-datetime-edit{
-  text-align: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
-/* Keep quote code on one line (prevents ER-2026 line break) */
-.doc-code{
-  white-space: nowrap;
+.chip{
+  appearance: none;
+  border: 1px solid var(--border);
+  background: #ffffff;
+  color: #0b0f14;
+  padding: 7px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: .01em;
+  cursor: pointer;
+  transition: transform .06s ease, border-color .15s ease, background .15s ease;
+}
+
+.chip:hover{
+  border-color: rgba(2,103,181,.55);
+}
+
+.chip:active{
+  transform: translateY(1px);
+}
+
+.chip.active{
+  border-color: rgba(2,103,181,.85);
+  background: rgba(2,103,181,.08);
+}
+
+/* Allow header rows (e.g., Scope) to wrap on smaller screens */
+.row-between{
+  flex-wrap: wrap;
 }
