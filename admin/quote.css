@@ -241,6 +241,16 @@ body{
   background: #ffffff;
 }
 
+/* Center the text inside date inputs (Safari/Chrome WebKit) */
+.meta-strip input[type="date"]::-webkit-datetime-edit-fields-wrapper{
+  display: flex;
+  justify-content: center;
+}
+.meta-strip input[type="date"]::-webkit-datetime-edit{
+  text-align: center;
+}
+
+
 /* ===== Cards ===== */
 .grid-2{
   display:grid;
@@ -520,17 +530,4 @@ textarea.autogrow{
     border-radius:0;
     padding: 0.5in;
   }
-}
-/* Meta strip: value alignment (recommended) */
-.meta-strip .meta-field input{
-  text-align: center;
-}
-
-/* Safari date inputs need extra help to truly center */
-.meta-strip input[type="date"]::-webkit-datetime-edit-fields-wrapper{
-  display: flex;
-  justify-content: center;
-}
-.meta-strip input[type="date"]::-webkit-datetime-edit{
-  text-align: center;
 }
