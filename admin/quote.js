@@ -2,13 +2,13 @@ import { requireAdminOrRedirect } from "../js/adminGuard.js";
 import { getQuote, updateQuote } from "../js/quotesApi.js";
 import { DEFAULT_COMPANY, makeDefaultQuoteData, formatQuoteCode } from "../js/quoteDefaults.js";
 
-const $ = (sel, ctx = document) => ctx.querySelector(sel);
+const $  = (sel, ctx = document) => ctx.querySelector(sel);
 const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
 
 /** Letter size in CSS pixels @ 96dpi */
 const PX_PER_IN = 96;
 const PAGE_W_CSS = Math.round(8.5 * PX_PER_IN); // 816
-const PAGE_H_CSS = Math.round(11 * PX_PER_IN);  // 1056
+const PAGE_H_CSS = Math.round(11  * PX_PER_IN); // 1056
 
 const backBtn = $("#back-btn");
 const saveBtn = $("#save-btn");
@@ -17,6 +17,7 @@ const pdfBtn  = $("#pdf-btn");
 const msgEl = $("#msg");
 const quoteCodeEl = $("#quote-code");
 const quoteStatusEl = $("#quote-status");
+const docQuoteCodeEl = $("#doc-quote-code");
 
 const itemRowsEl = $("#item-rows");
 const addItemBtn = $("#add-item");
@@ -238,7 +239,10 @@ function fillUIFromData(qRow, data) {
   setCompanyText();
 
   const quoteCode = formatQuoteCode(qRow.quote_no, data.meta.quote_date);
+
   quoteCodeEl.textContent = quoteCode;
+  if (docQuoteCodeEl) docQuoteCodeEl.textContent = quoteCode;
+
   quoteStatusEl.textContent = qRow.status || "Draft";
 
   setBoundValue("quote_no", quoteCode);
@@ -330,7 +334,6 @@ function collectDataFromUI(qRow) {
    - slice pages between cards
    ========================================================= */
 
-/* Load libs only if missing */
 function loadScript(src) {
   return new Promise((res, rej) => {
     const s = document.createElement("script");
@@ -456,6 +459,7 @@ function buildPdfClone() {
     }
 
     const inItems = !!el.closest(".items-table");
+    const inTotals = !!el.closest(".totals-grid");
     const isArea = el.tagName === "TEXTAREA";
 
     const out = document.createElement("div");
@@ -465,6 +469,13 @@ function buildPdfClone() {
 
     if (inItems) {
       out.style.padding = "10px";
+    } else if (inTotals) {
+      // totals should look like a document, not a form
+      out.style.border = "0";
+      out.style.padding = "0";
+      out.style.background = "transparent";
+      out.style.fontWeight = "900";
+      out.style.textAlign = "right";
     } else {
       out.style.border = "1px solid #d9dee8";
       out.style.borderRadius = "10px";
@@ -523,7 +534,8 @@ async function exportPdfManual({ filename }) {
   const pdfW = pdf.internal.pageSize.getWidth();  // 612
   const pdfH = pdf.internal.pageSize.getHeight(); // 792
 
-  const marginPt = 26; // ~0.36"
+  // Keep a small margin so sections don't touch the top of a new page
+  const marginPt = 22; // ~0.30"
   const contentW = pdfW - marginPt * 2;
   const contentH = pdfH - marginPt * 2;
 
@@ -549,7 +561,6 @@ async function exportPdfManual({ filename }) {
     pageCanvas.height = sliceH;
     const ctx = pageCanvas.getContext("2d", { alpha: false });
 
-    // white background (prevents odd transparency)
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, canvasW, sliceH);
 
@@ -569,7 +580,6 @@ async function exportPdfManual({ filename }) {
   }
 
   pdf.save(filename);
-
   sandbox.remove();
 }
 
@@ -637,7 +647,9 @@ async function main() {
 
     qRow = updated;
     quoteStatusEl.textContent = qRow.status || "Draft";
+
     quoteCodeEl.textContent = payload.quote_code;
+    if (docQuoteCodeEl) docQuoteCodeEl.textContent = payload.quote_code;
 
     showMsg("Saved.");
     setTimeout(() => showMsg(""), 800);
