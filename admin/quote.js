@@ -2,8 +2,13 @@ import { requireAdminOrRedirect } from "../js/adminGuard.js";
 import { getQuote, updateQuote } from "../js/quotesApi.js";
 import { DEFAULT_COMPANY, makeDefaultQuoteData, formatQuoteCode } from "../js/quoteDefaults.js";
 
-const $  = (sel, ctx = document) => ctx.querySelector(sel);
+const $ = (sel, ctx = document) => ctx.querySelector(sel);
 const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
+
+/** Letter size in CSS pixels @ 96dpi */
+const PX_PER_IN = 96;
+const PAGE_W_CSS = Math.round(8.5 * PX_PER_IN); // 816
+const PAGE_H_CSS = Math.round(11 * PX_PER_IN);  // 1056
 
 const backBtn = $("#back-btn");
 const saveBtn = $("#save-btn");
@@ -39,27 +44,22 @@ function showMsg(text) {
   msgEl.textContent = text;
 }
 
+/* ===== Money helpers ===== */
 function parseMoneyToCents(value) {
   const cleaned = String(value ?? "").replace(/[^0-9.-]/g, "");
   const n = Number.parseFloat(cleaned);
   if (!Number.isFinite(n)) return 0;
   return Math.round(n * 100);
 }
-
 function centsToMoney(cents) {
   const dollars = (Number(cents) || 0) / 100;
-  return dollars.toLocaleString("en-CA", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  return dollars.toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
-
 function parseNum(value) {
   const cleaned = String(value ?? "").replace(/[^0-9.-]/g, "");
   const n = Number.parseFloat(cleaned);
   return Number.isFinite(n) ? n : 0;
 }
-
 function getDepositMode() {
   return $$('input[name="deposit_mode"]').find((r) => r.checked)?.value || "auto";
 }
@@ -70,7 +70,6 @@ function autosizeTextarea(el) {
   el.style.height = "auto";
   el.style.height = `${el.scrollHeight + 2}px`;
 }
-
 function wireAutosize(selector) {
   const el = $(selector);
   if (!el) return;
@@ -79,18 +78,16 @@ function wireAutosize(selector) {
   run();
   requestAnimationFrame(run);
 }
-
 function autosizeAll() {
   wireAutosize('[data-bind="scope"]');
   wireAutosize('[data-bind="terms"]');
   wireAutosize('[data-bind="notes"]');
 }
 
-/* ===== Signature date ===== */
+/* ===== Rep signature date ===== */
 function formatDateDisplay(iso) {
   if (!iso) return "";
   try {
-    // Keep it “signature normal”, not ISO
     return new Date(`${iso}T00:00:00`).toLocaleDateString("en-CA", {
       year: "numeric",
       month: "short",
@@ -100,7 +97,6 @@ function formatDateDisplay(iso) {
     return iso;
   }
 }
-
 function syncRepDateFromQuoteDate() {
   if (!repDateEl) return;
   const iso = quoteDateInput?.value || "";
@@ -122,7 +118,6 @@ function setBoundValue(key, val) {
   if (!el) return;
   el.value = val ?? "";
 }
-
 function getBoundValue(key) {
   const el = document.querySelector(`[data-bind="${key}"]`);
   if (!el) return "";
@@ -163,7 +158,6 @@ function getItemsFromUI() {
     const qty = Math.max(0, parseNum($(".i-qty", row).value));
     const unit_price_cents = Math.max(0, parseMoneyToCents($(".i-price", row).value));
     const taxable = $(".i-tax", row).checked;
-
     return { description, qty, unit_price_cents, taxable };
   });
 }
@@ -215,9 +209,11 @@ function recalcTotals() {
 
 /* ===== Merge defaults ===== */
 function mergeDefaults(existing, fallback) {
-  const out = structuredClone ? structuredClone(fallback) : JSON.parse(JSON.stringify(fallback));
-  const e = existing || {};
+  const out = (typeof structuredClone === "function")
+    ? structuredClone(fallback)
+    : JSON.parse(JSON.stringify(fallback));
 
+  const e = existing || {};
   for (const k of Object.keys(e)) out[k] = e[k];
 
   out.company = { ...fallback.company, ...(e.company || {}) };
@@ -225,7 +221,7 @@ function mergeDefaults(existing, fallback) {
   out.bill_to = { ...fallback.bill_to, ...(e.bill_to || {}) };
   out.project = { ...fallback.project, ...(e.project || {}) };
 
-  // If old quotes had "item" field, ignore it gracefully
+  // normalize legacy item structure
   if (Array.isArray(out.items)) {
     out.items = out.items.map((it) => ({
       description: it.description ?? it.desc ?? it.item ?? "",
@@ -327,39 +323,134 @@ function collectDataFromUI(qRow) {
   };
 }
 
-/* ===== PDF helpers ===== */
+/* =========================================================
+   PDF EXPORT (manual, no sideways drift)
+   - html2canvas -> jsPDF
+   - on-screen sandbox at (0,0) but opacity 0 (no negative-left)
+   - slice pages between cards
+   ========================================================= */
+
+/* Load libs only if missing */
+function loadScript(src) {
+  return new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = src;
+    s.defer = true;
+    s.onload = res;
+    s.onerror = () => rej(new Error("Failed to load " + src));
+    document.head.appendChild(s);
+  });
+}
+
+async function ensurePdfLibs() {
+  if (!window.html2canvas) {
+    await loadScript("https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js");
+  }
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    await loadScript("https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js");
+  }
+}
+
+async function waitForAssets(root, timeoutMs = 8000) {
+  const waitFonts = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
+  const imgs = Array.from(root.querySelectorAll("img"));
+  const imgPromises = imgs.map(
+    (img) =>
+      new Promise((resolve) => {
+        if (img.complete && img.naturalWidth > 0) return resolve();
+        img.addEventListener("load", resolve, { once: true });
+        img.addEventListener("error", resolve, { once: true });
+      })
+  );
+  const timeout = new Promise((resolve) => setTimeout(resolve, timeoutMs));
+  await Promise.race([Promise.all([waitFonts, Promise.all(imgPromises)]), timeout]);
+}
+
 function createPdfSandbox() {
   const sandbox = document.createElement("div");
   sandbox.id = "pdf-sandbox";
-  sandbox.style.position = "fixed";
-  sandbox.style.left = "-10000px";
+  sandbox.style.position = "absolute";
+  sandbox.style.left = "0";
   sandbox.style.top = "0";
   sandbox.style.opacity = "0";
   sandbox.style.pointerEvents = "none";
   sandbox.style.background = "#ffffff";
-  sandbox.style.width = "816px";  // Letter @ 96dpi
+  sandbox.style.width = `${PAGE_W_CSS}px`;
+  sandbox.style.minHeight = `${PAGE_H_CSS}px`;
   document.body.appendChild(sandbox);
   return sandbox;
+}
+
+function computeCutPositionsPx(clone, scaleFactor, idealPageHeightPxCanvas) {
+  const selectors = [".doc-header", ".grid-2", ".card", ".signatures", ".table-wrap", ".items-table", ".avoid-break"];
+  const rect = clone.getBoundingClientRect();
+
+  const bottomsCss = new Set([0]);
+  selectors.forEach((sel) => {
+    clone.querySelectorAll(sel).forEach((el) => {
+      const r = el.getBoundingClientRect();
+      const bottomCss = r.bottom - rect.top;
+      if (bottomCss > 0) bottomsCss.add(Math.round(bottomCss));
+    });
+  });
+
+  const bottomsCanvas = Array.from(bottomsCss)
+    .map((css) => Math.round(css * scaleFactor))
+    .sort((a, b) => a - b);
+
+  const maxBottom = bottomsCanvas[bottomsCanvas.length - 1] || Math.round(clone.offsetHeight * scaleFactor);
+
+  const cuts = [];
+  let y = 0;
+  const minStep = Math.round(220 * scaleFactor);
+
+  while (y + 1 < maxBottom) {
+    const target = y + idealPageHeightPxCanvas;
+    let candidate = Math.min(target, maxBottom);
+
+    for (let i = bottomsCanvas.length - 1; i >= 0; i--) {
+      const b = bottomsCanvas[i];
+      if (b <= target && b > y + minStep) {
+        candidate = b;
+        break;
+      }
+    }
+
+    if (candidate <= y) candidate = Math.min(y + idealPageHeightPxCanvas, maxBottom);
+    cuts.push(candidate);
+    y = candidate;
+
+    if (maxBottom - y <= 5) break;
+  }
+
+  return cuts;
 }
 
 function buildPdfClone() {
   const clone = quotePageEl.cloneNode(true);
 
+  // Remove screen-only controls (add/remove buttons etc.)
   clone.querySelectorAll(".no-print").forEach((n) => n.remove());
 
+  // Hard-pin dimensions to avoid any “layout drift”
+  clone.style.width = `${PAGE_W_CSS}px`;
+  clone.style.minHeight = `${PAGE_H_CSS}px`;
   clone.style.margin = "0";
   clone.style.boxShadow = "none";
-  clone.style.border = "none";
+  clone.style.border = "0";
   clone.style.borderRadius = "0";
+  clone.style.background = "#ffffff";
+  clone.style.boxSizing = "border-box";
+  clone.style.padding = getComputedStyle(quotePageEl).padding;
 
-  // Replace controls with styled blocks so PDF looks “real”, not like a screenshot of inputs
-  const replaceControl = (el) => {
+  // Replace inputs/textareas with plain blocks (clean PDF)
+  clone.querySelectorAll("input, textarea, select").forEach((el) => {
     if (el.type === "checkbox") {
       const mark = document.createElement("span");
       mark.textContent = el.checked ? "✓" : "—";
       mark.style.display = "inline-block";
-      mark.style.textAlign = "center";
       mark.style.width = "100%";
+      mark.style.textAlign = "center";
       el.parentNode.replaceChild(mark, el);
       return;
     }
@@ -385,11 +476,9 @@ function buildPdfClone() {
     }
 
     el.parentNode.replaceChild(out, el);
-  };
+  });
 
-  clone.querySelectorAll("input, textarea, select").forEach(replaceControl);
-
-  // Fix colgroup after removing the last action column in PDF clone
+  // Fix items table colgroup after removing delete column
   const table = clone.querySelector(".items-table");
   if (table) {
     const cg = table.querySelector("colgroup");
@@ -406,6 +495,85 @@ function buildPdfClone() {
   return clone;
 }
 
+async function exportPdfManual({ filename }) {
+  await ensurePdfLibs();
+
+  const sandbox = createPdfSandbox();
+  sandbox.innerHTML = "";
+
+  const clone = buildPdfClone();
+  sandbox.appendChild(clone);
+
+  await waitForAssets(clone);
+
+  const scale = 2;
+  const canvas = await window.html2canvas(clone, {
+    scale,
+    useCORS: true,
+    allowTaint: true,
+    backgroundColor: "#ffffff",
+    scrollX: 0,
+    scrollY: 0,
+    windowWidth: PAGE_W_CSS,
+  });
+
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ unit: "pt", format: "letter", orientation: "portrait" });
+
+  const pdfW = pdf.internal.pageSize.getWidth();  // 612
+  const pdfH = pdf.internal.pageSize.getHeight(); // 792
+
+  const marginPt = 26; // ~0.36"
+  const contentW = pdfW - marginPt * 2;
+  const contentH = pdfH - marginPt * 2;
+
+  const canvasW = canvas.width;
+  const canvasH = canvas.height;
+
+  const scaleFactor = canvasW / clone.offsetWidth;
+  const idealPageHeightPxCanvas = Math.floor(canvasW * (contentH / contentW));
+  const cuts = computeCutPositionsPx(clone, scaleFactor, idealPageHeightPxCanvas);
+
+  const boundaries = [0, ...cuts.filter((c) => c > 0 && c < canvasH), canvasH];
+
+  const pageCanvas = document.createElement("canvas");
+  pageCanvas.width = canvasW;
+
+  let pageIndex = 0;
+
+  for (let i = 1; i < boundaries.length; i++) {
+    const prev = boundaries[i - 1];
+    const next = boundaries[i];
+    const sliceH = next - prev;
+
+    pageCanvas.height = sliceH;
+    const ctx = pageCanvas.getContext("2d", { alpha: false });
+
+    // white background (prevents odd transparency)
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvasW, sliceH);
+
+    ctx.drawImage(canvas, 0, prev, canvasW, sliceH, 0, 0, canvasW, sliceH);
+
+    const imgData = pageCanvas.toDataURL("image/jpeg", 0.98);
+    const imgHpt = (sliceH / canvasW) * contentW;
+
+    if (pageIndex > 0) pdf.addPage();
+
+    pdf.setFillColor(255, 255, 255);
+    pdf.rect(0, 0, pdfW, pdfH, "F");
+
+    pdf.addImage(imgData, "JPEG", marginPt, marginPt, contentW, imgHpt);
+
+    pageIndex++;
+  }
+
+  pdf.save(filename);
+
+  sandbox.remove();
+}
+
+/* ===== Main ===== */
 async function main() {
   await requireAdminOrRedirect({ redirectTo: "../index.html" });
 
@@ -438,9 +606,7 @@ async function main() {
   });
 
   addItemBtn.addEventListener("click", () => {
-    itemRowsEl.appendChild(
-      buildItemRow({ description: "", qty: 1, unit_price_cents: 0, taxable: true })
-    );
+    itemRowsEl.appendChild(buildItemRow({ description: "", qty: 1, unit_price_cents: 0, taxable: true }));
     recalcTotals();
   });
 
@@ -448,7 +614,6 @@ async function main() {
   feesEl.addEventListener("input", recalcTotals);
   $$('input[name="deposit_mode"]').forEach((r) => r.addEventListener("change", recalcTotals));
 
-  // Keep rep signature date synced
   quoteDateInput?.addEventListener("change", () => {
     syncRepDateFromQuoteDate();
   });
@@ -492,11 +657,6 @@ async function main() {
   });
 
   pdfBtn.addEventListener("click", async () => {
-    if (!window.html2pdf) {
-      showMsg("PDF library not loaded.");
-      return;
-    }
-
     try {
       pdfBtn.disabled = true;
 
@@ -505,33 +665,10 @@ async function main() {
 
       const { payload } = saved;
 
-      const sandbox = createPdfSandbox();
-      sandbox.innerHTML = "";
-      const clone = buildPdfClone();
-      sandbox.appendChild(clone);
-
       const client = (payload.bill_to.client_name || "Client").replace(/[^\w\-]+/g, "_");
       const filename = `${client}_${payload.quote_code}.pdf`;
 
-      const opt = {
-        // FIX: adds space at top of every PDF page so bubbles never touch the top
-        margin: [0.35, 0.35, 0.35, 0.35], // inches (jsPDF unit is "in")
-        filename,
-        image: { type: "jpeg", quality: 0.98 },
-        html2canvas: {
-          scale: 2,
-          backgroundColor: "#ffffff",
-          useCORS: true,
-          scrollX: 0,
-          scrollY: 0,
-        },
-        jsPDF: { unit: "in", format: "letter", orientation: "portrait" },
-        pagebreak: { mode: ["css", "legacy"], avoid: [".avoid-break", ".card", ".signatures", ".doc-header"] },
-      };
-
-      await window.html2pdf().set(opt).from(clone).save();
-
-      sandbox.remove();
+      await exportPdfManual({ filename });
     } catch (e) {
       console.error(e);
       showMsg("PDF export failed. Check console.");

@@ -113,8 +113,8 @@ body{
 
 .doc-logo{
   width: 170px;
-  height: 170px;
-  object-fit: contain;
+  height: auto;      /* key fix */
+  max-height: 170px; /* keeps it from getting huge */
 }
 
 .header-main{
@@ -210,6 +210,7 @@ body{
   display:grid;
   grid-template-columns: 1fr 1fr;
   gap: 14px;
+  align-items: start; /* key fix */
 }
 
 .card{
@@ -431,4 +432,10 @@ textarea.autogrow{
     border-radius:0;
     padding: 0.5in;
   }
+}
+.card.compact{
+  padding: 12px 14px;
+}
+.card.compact .stack-10{
+  gap: 8px;
 }
