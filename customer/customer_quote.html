@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Endura Metal Roofing Ltd. — Quote</title>
+    <link rel="stylesheet" href="./quote.css" />
+  </head>
+
+  <body>
+    <header class="sitebar no-print">
+      <div class="sitebrand">
+        <img class="site-logo" src="../assets/logo.jpg" alt="Endura Metal Roofing Ltd." />
+        <div class="sitebrand-text">
+          <div class="sitebrand-title">Endura Metal Roofing Ltd.</div>
+          <div class="sitebrand-sub">
+            <span id="v-quote-code">—</span>
+            <span class="dot">•</span>
+            <span id="v-quote-status">—</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="site-actions">
+        <button id="download-btn" class="btn" type="button">Download PDF</button>
+        <button id="accept-jump-btn" class="btn brand" type="button">Accept &amp; Sign</button>
+      </div>
+    </header>
+
+    <main class="container">
+      <div id="banner" class="banner" hidden></div>
+
+      <div id="loading" class="loading">
+        Loading your quote…
+      </div>
+
+      <!-- Quote display -->
+      <section id="quote-page" class="page" hidden>
+        <header class="doc-header avoid-break">
+          <div class="letterhead">
+            <div class="logo-col">
+              <div class="logo-box">
+                <img src="../assets/logo.jpg" alt="Endura Metal Roofing Ltd." class="doc-logo" />
+              </div>
+            </div>
+
+            <div class="company-col">
+              <div class="company-row">
+                <div class="company-block">
+                  <div class="company-name" id="v-company-name"></div>
+
+                  <div class="company-contact">
+                    <span id="v-company-addr"></span>
+                    <span id="v-company-phone"></span>
+                    <span id="v-company-email"></span>
+                    <span id="v-company-web"></span>
+                  </div>
+                </div>
+
+                <div class="doc-block">
+                  <div class="doc-pill">QUOTE</div>
+                  <div class="doc-code" id="v-doc-quote-code">—</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="accent-bar full-span"></div>
+
+            <div class="meta-strip full-span">
+              <div class="meta-field">
+                <span>Quote #</span>
+                <div class="meta-val" id="v-meta-quote"></div>
+              </div>
+
+              <div class="meta-field">
+                <span>Date</span>
+                <div class="meta-val" id="v-meta-date"></div>
+              </div>
+
+              <div class="meta-field">
+                <span>Expires</span>
+                <div class="meta-val" id="v-meta-expires"></div>
+              </div>
+
+              <div class="meta-field">
+                <span>Prepared by</span>
+                <div class="meta-val" id="v-meta-prepared"></div>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <section class="grid-2 avoid-break">
+          <div class="card slim">
+            <h3>Bill To</h3>
+            <div class="kv">
+              <div class="kv-line" id="v-bill-name"></div>
+              <div class="kv-line" id="v-bill-phone"></div>
+              <div class="kv-line" id="v-bill-email"></div>
+              <div class="kv-line" id="v-bill-addr"></div>
+            </div>
+          </div>
+
+          <div class="card slim">
+            <h3>Job Site</h3>
+            <div class="kv">
+              <div class="kv-line" id="v-jobsite"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card avoid-break">
+          <h3>Scope of Work</h3>
+          <div class="pre" id="v-scope"></div>
+        </section>
+
+        <section class="card avoid-break">
+          <h3>Items &amp; Pricing</h3>
+          <div class="table-wrap">
+            <table class="items-table" aria-label="Line items">
+              <colgroup>
+                <col style="width: auto" />
+                <col style="width: 11%" />
+                <col style="width: 17%" />
+                <col style="width: 8%" />
+                <col style="width: 17%" />
+              </colgroup>
+
+              <thead>
+                <tr>
+                  <th>Description</th>
+                  <th class="num">Qty</th>
+                  <th class="num">Rate</th>
+                  <th class="center">Tax</th>
+                  <th class="num">Line Total</th>
+                </tr>
+              </thead>
+
+              <tbody id="v-item-rows"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card totals avoid-break">
+          <h3>Summary</h3>
+
+          <div class="totals-grid">
+            <div class="row">
+              <div class="label">Subtotal</div>
+              <div class="spacer"></div>
+              <div class="value"><span class="curr">$</span><span class="amt" id="v-subtotal">0.00</span></div>
+            </div>
+
+            <div class="row">
+              <div class="label">Tax</div>
+              <div class="spacer"></div>
+              <div class="value"><span class="curr">$</span><span class="amt" id="v-tax">0.00</span></div>
+            </div>
+
+            <div class="row">
+              <div class="label">Additional Fees</div>
+              <div class="spacer"></div>
+              <div class="value"><span class="curr">$</span><span class="amt" id="v-fees">0.00</span></div>
+            </div>
+
+            <div class="row total">
+              <div class="label">Total</div>
+              <div class="spacer"></div>
+              <div class="value"><span class="curr">$</span><span class="amt" id="v-total">0.00</span></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card avoid-break">
+          <h3>Deposit</h3>
+          <div class="deposit-row">
+            <div class="deposit-label">Deposit Due</div>
+            <div class="deposit-value" id="v-deposit">$0.00</div>
+          </div>
+        </section>
+
+        <section class="card avoid-break">
+          <h3>Payment &amp; Terms</h3>
+          <div class="pre" id="v-terms"></div>
+        </section>
+
+        <section class="card avoid-break">
+          <h3>Notes &amp; Exclusions</h3>
+          <div class="pre" id="v-notes"></div>
+        </section>
+
+        <section class="signatures avoid-break">
+          <div class="sig-block">
+            <div class="sig-line signature">
+              <span>Client Signature</span>
+              <div class="sig-signature" id="v-client-signature"></div>
+            </div>
+
+            <div class="sig-inline two">
+              <div class="sig-line">
+                <span>Printed Name</span>
+                <div class="sig-value" id="v-client-name"></div>
+              </div>
+              <div class="sig-line">
+                <span>Date</span>
+                <div class="sig-value" id="v-client-date"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sig-block">
+            <div class="sig-line signature">
+              <span>Endura Representative Signature</span>
+              <div class="sig-signature" id="v-rep-signature">Jacob Docherty</div>
+            </div>
+
+            <div class="sig-inline two">
+              <div class="sig-line">
+                <span>Printed Name</span>
+                <div class="sig-value">Jacob Docherty</div>
+              </div>
+              <div class="sig-line">
+                <span>Date</span>
+                <div class="sig-value" id="v-rep-date"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <!-- Acceptance -->
+      <section id="accept-section" class="accept-card no-print" hidden>
+        <div class="accept-head">
+          <h2>Accept &amp; Sign</h2>
+          <div class="pill" id="accept-pill">Ready</div>
+        </div>
+
+        <p class="accept-help">
+          Review the quote above. When you're ready, type your name to sign and accept.
+        </p>
+
+        <div class="accept-grid">
+          <label>
+            Printed name
+            <input id="signer-name" type="text" autocomplete="name" placeholder="Your full name" />
+          </label>
+
+          <label>
+            Email (optional)
+            <input id="signer-email" type="email" autocomplete="email" placeholder="you@email.com" />
+          </label>
+        </div>
+
+        <label class="check">
+          <input id="agree" type="checkbox" />
+          <span>I accept this quote, including scope, pricing, and terms.</span>
+        </label>
+
+        <button id="accept-submit" class="btn brand wide" type="button">
+          Sign &amp; Accept Quote
+        </button>
+
+        <p class="accept-foot">
+          Once accepted, you'll be able to download a signed PDF copy.
+        </p>
+      </section>
+    </main>
+
+    <script type="module" src="./quote.js"></script>
+  </body>
+</html>

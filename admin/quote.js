@@ -13,6 +13,7 @@ const PAGE_H_CSS = Math.round(11  * PX_PER_IN); // 1056
 const backBtn = $("#back-btn");
 const saveBtn = $("#save-btn");
 const pdfBtn  = $("#pdf-btn");
+const sendBtn = $("#send-btn");
 
 const msgEl = $("#msg");
 const quoteCodeEl = $("#quote-code");
@@ -44,6 +45,22 @@ function showMsg(text) {
   msgEl.hidden = false;
   msgEl.textContent = text;
 }
+
+async function postJSON(url, body) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body || {}),
+  });
+  let data = null;
+  try { data = await res.json(); } catch { data = null; }
+  if (!res.ok) {
+    const msg = (data && (data.error || data.message)) || `Request failed (${res.status})`;
+    throw new Error(msg);
+  }
+  return data;
+}
+
 
 /* ===== Money helpers ===== */
 function parseMoneyToCents(value) {
@@ -754,6 +771,44 @@ async function main() {
       saveBtn.disabled = false;
     }
   });
+  sendBtn?.addEventListener("click", async () => {
+    try {
+      sendBtn.disabled = true;
+
+      const saved = await saveNow();
+      if (!saved) return;
+
+      const { payload } = saved;
+
+      if (!payload.bill_to.client_email) {
+        showMsg("Customer email is required to send.");
+        return;
+      }
+
+      showMsg("Sending email…");
+
+      const result = await postJSON("/api/send-quote-link", {
+        quote_id: quoteId,
+      });
+
+      // Update UI if API returns status
+      if (result?.status) quoteStatusEl.textContent = result.status;
+
+      // Copy link (nice touch)
+      if (result?.view_url && navigator.clipboard?.writeText) {
+        try { await navigator.clipboard.writeText(result.view_url); } catch {}
+      }
+
+      showMsg("Sent. Customer link copied to clipboard.");
+      setTimeout(() => showMsg(""), 1400);
+    } catch (e) {
+      showMsg(e?.message || "Send failed.");
+    } finally {
+      sendBtn.disabled = false;
+    }
+  });
+
+
 
   pdfBtn.addEventListener("click", async () => {
     try {
