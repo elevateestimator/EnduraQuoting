@@ -522,16 +522,57 @@ textarea.autogrow{
   }
 }
 
-/* =========================
-   Scope presets (screen-only)
-   ========================= */
-.scope-presets{
-  display: inline-grid;
-  gap: 6px;
-  justify-items: end;
+/* =========================================================
+   HEADER: make meta strip span full page width (centered)
+   ========================================================= */
+.letterhead .full-span{
+  grid-column: 1 / -1;
 }
 
-.preset-label{
+/* tighten spacing now that meta strip spans full header */
+.letterhead .accent-bar.full-span{
+  margin-top: 14px;
+}
+
+.letterhead .meta-strip.full-span{
+  margin-top: 10px;
+}
+
+/* Force center alignment for meta values (including date inputs) */
+.meta-strip .meta-field input{
+  text-align: center !important;
+}
+
+/* WebKit (Safari/Chrome) date value alignment */
+.meta-strip .meta-field input[type="date"]::-webkit-date-and-time-value{
+  text-align: center;
+  margin: 0 auto;
+}
+.meta-strip .meta-field input[type="date"]::-webkit-datetime-edit-fields-wrapper{
+  display: flex;
+  justify-content: center;
+}
+.meta-strip .meta-field input[type="date"]::-webkit-datetime-edit{
+  text-align: center;
+}
+
+/* Keep quote code on one line (prevents ER-2026 line break) */
+.doc-code{
+  white-space: nowrap;
+}
+
+/* =========================================================
+   Scope presets (screen only)
+   ========================================================= */
+.scope-presets{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 0 10px;
+}
+
+.scope-presets-title{
   font-size: 10px;
   font-weight: 950;
   letter-spacing: .12em;
@@ -539,41 +580,35 @@ textarea.autogrow{
   color: #6b7280;
 }
 
-.preset-chips{
-  display: flex;
+.chip-row{
+  display:flex;
   flex-wrap: wrap;
   gap: 8px;
-  justify-content: flex-end;
 }
 
 .chip{
-  appearance: none;
   border: 1px solid var(--border);
   background: #ffffff;
-  color: #0b0f14;
+  color: #111827;
   padding: 7px 10px;
   border-radius: 999px;
   font-size: 12px;
-  font-weight: 950;
-  letter-spacing: .01em;
+  font-weight: 900;
   cursor: pointer;
-  transition: transform .06s ease, border-color .15s ease, background .15s ease;
+  line-height: 1;
+  transition: transform .06s ease, box-shadow .12s ease, border-color .12s ease, background .12s ease;
 }
 
 .chip:hover{
   border-color: rgba(2,103,181,.55);
+  box-shadow: 0 8px 18px rgba(2,103,181,.10);
 }
 
 .chip:active{
   transform: translateY(1px);
 }
 
-.chip.active{
-  border-color: rgba(2,103,181,.85);
+.chip.added{
   background: rgba(2,103,181,.08);
-}
-
-/* Allow header rows (e.g., Scope) to wrap on smaller screens */
-.row-between{
-  flex-wrap: wrap;
+  border-color: rgba(2,103,181,.55);
 }
