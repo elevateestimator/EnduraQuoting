@@ -612,3 +612,30 @@ textarea.autogrow{
   background: rgba(2,103,181,.08);
   border-color: rgba(2,103,181,.55);
 }
+
+/* =========================================================
+   Logo crop/size fix (logo.jpg has built-in whitespace)
+   ========================================================= */
+.letterhead{
+  grid-template-columns: 132px 1fr; /* tighter left column */
+  gap: 16px;
+}
+
+.logo-box{
+  width: 132px;
+  height: 96px;          /* prevents tall header from logo whitespace */
+  padding: 10px;         /* keep a small clean inset */
+  overflow: hidden;      /* crops the whitespace */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Fill the box and crop whitespace (not the actual mark) */
+.doc-logo{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 58%;
+  transform: scale(1.18);
+}

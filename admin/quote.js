@@ -93,8 +93,7 @@ const SCOPE_PRESETS = {
 • Sweep the deck clean and inspect roof sheathing. Any required deck repairs or replacement sheathing will be discussed and quoted as needed.`,
 
   icewater_full: `• Supply & install full-coverage high-temperature self-adhered ice & water membrane over the entire roof deck.
-• Proper overlaps, sealing at laps, and detailing at eaves, valleys, penetrations, and wall transitions.
-• No synthetic underlayment will be used.`,
+• Proper overlaps, sealing at laps, and detailing at eaves, valleys, penetrations, and wall transitions.`,
 
   standing_seam: `• Supply & install a mechanical-lock standing seam metal roofing system fabricated to roof measurements.
 • Concealed clip attachment with allowances for thermal expansion; fastened per manufacturer specifications.
