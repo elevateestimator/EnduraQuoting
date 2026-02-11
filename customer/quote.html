@@ -193,7 +193,7 @@
           <div class="sig-block">
             <div class="sig-line signature">
               <span>Client Signature</span>
-              <div class="sig-signature" id="v-client-signature"></div>
+              <img class="sig-image" id="v-client-signature-img" alt="Client signature" hidden />
             </div>
 
             <div class="sig-inline two">
@@ -229,6 +229,8 @@
       </section>
 
       <!-- Acceptance -->
+      
+      <!-- Acceptance -->
       <section id="accept-section" class="accept-card no-print" hidden>
         <div class="accept-head">
           <h2>Accept &amp; Sign</h2>
@@ -236,36 +238,49 @@
         </div>
 
         <p class="accept-help">
-          Review the quote above. When you're ready, type your name to sign and accept.
+          When you're ready, tap <strong>Sign Now</strong> and draw your signature.
+          This confirms acceptance of the scope, pricing, and terms in this quote.
         </p>
 
-        <div class="accept-grid">
-          <label>
-            Printed name
-            <input id="signer-name" type="text" autocomplete="name" placeholder="Your full name" />
-          </label>
-
-          <label>
-            Email (optional)
-            <input id="signer-email" type="email" autocomplete="email" placeholder="you@email.com" />
-          </label>
-        </div>
-
-        <label class="check">
-          <input id="agree" type="checkbox" />
-          <span>I accept this quote, including scope, pricing, and terms.</span>
-        </label>
-
-        <button id="accept-submit" class="btn brand wide" type="button">
-          Sign &amp; Accept Quote
+        <button id="sign-now-btn" class="btn brand wide" type="button">
+          Sign Now
         </button>
 
         <p class="accept-foot">
-          Once accepted, you'll be able to download a signed PDF copy.
+          You can download a PDF copy at any time.
         </p>
       </section>
     </main>
 
+
     <script type="module" src="./quote.js"></script>
+  
+    <!-- Signature modal (screen only) -->
+    <div id="sig-modal" class="modal-overlay no-print" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="sig-title">
+        <div class="modal-head">
+          <div class="modal-title" id="sig-title">Draw your signature</div>
+          <button id="sig-close" class="icon-btn" type="button" aria-label="Close">✕</button>
+        </div>
+
+        <div class="modal-sub">
+          Signing as <strong id="sig-name">Client</strong>
+        </div>
+
+        <div class="sig-pad">
+          <canvas id="sig-canvas" aria-label="Signature pad"></canvas>
+        </div>
+
+        <div class="modal-actions">
+          <button id="sig-clear" class="btn" type="button">Clear</button>
+          <button id="sig-submit" class="btn brand" type="button">Sign &amp; Accept</button>
+        </div>
+
+        <div class="modal-note">
+          By signing, you accept this quote including scope, pricing, and terms.
+        </div>
+      </div>
+    </div>
+
   </body>
 </html>
