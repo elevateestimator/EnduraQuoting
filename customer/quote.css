@@ -842,14 +842,19 @@ textarea.autogrow{
   .sitebar{ flex-direction: column; align-items: stretch; }
   .site-actions{ width: 100%; }
   .site-actions .btn{ flex: 1; }
-  .accept-grid{ grid-template-columns: 1fr; }
-
-  /* Document becomes single-column friendly on mobile */
-  .letterhead{ grid-template-columns: 1fr; }
+  .accept-grid{ grid-template-columns: 1fr; }  /* Document becomes single-column friendly on mobile (CENTERED) */
+  .letterhead{ grid-template-columns: 1fr; text-align: center; }
+  .logo-col{ justify-content: center; }
   .logo-box{ width: 150px; margin: 0 auto; }
-  .company-row{ flex-direction: column; align-items: flex-start; }
-  .doc-block{ align-items: flex-start; }
+  .company-row{ flex-direction: column; align-items: center; justify-content: flex-start; }
+  .company-block{ text-align: center; }
+  .company-name{ text-align: center; }
+  .company-contact{ flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+  .company-contact span + span::before{ content:""; margin: 0; }
+  .doc-block{ align-items: center; text-align: center; }
+  .doc-code{ text-align: center; }
   .meta-strip{ grid-template-columns: 1fr 1fr; }
+  .meta-field{ justify-items: center; text-align: center; }
 
   .grid-2{ grid-template-columns: 1fr; }
   .signatures{ grid-template-columns: 1fr; }

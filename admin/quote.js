@@ -2,23 +2,21 @@ import { requireAdminOrRedirect } from "../js/adminGuard.js";
 import { getQuote, updateQuote } from "../js/quotesApi.js";
 import { DEFAULT_COMPANY, makeDefaultQuoteData, formatQuoteCode } from "../js/quoteDefaults.js";
 
-const $  = (sel, ctx = document) => ctx.querySelector(sel);
+const $ = (sel, ctx = document) => ctx.querySelector(sel);
 const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
 
 /** Letter size in CSS pixels @ 96dpi */
 const PX_PER_IN = 96;
 const PAGE_W_CSS = Math.round(8.5 * PX_PER_IN); // 816
-const PAGE_H_CSS = Math.round(11  * PX_PER_IN); // 1056
+const PAGE_H_CSS = Math.round(11 * PX_PER_IN);  // 1056
 
 const backBtn = $("#back-btn");
 const saveBtn = $("#save-btn");
 const pdfBtn  = $("#pdf-btn");
-const sendBtn = $("#send-btn");
 
 const msgEl = $("#msg");
 const quoteCodeEl = $("#quote-code");
 const quoteStatusEl = $("#quote-status");
-const docQuoteCodeEl = $("#doc-quote-code");
 
 const itemRowsEl = $("#item-rows");
 const addItemBtn = $("#add-item");
@@ -32,6 +30,11 @@ const feesEl = $("#fees");
 const depositDueEl = $("#deposit-due");
 
 const repDateEl = $("#rep-date");
+
+// Client acceptance (signature captured on customer page)
+const clientSigImg = $("#client-signature-img");
+const clientSignedNameEl = $("#client-signed-name");
+const clientSignedDateEl = $("#client-signed-date");
 const quoteDateInput = $('[data-bind="quote_date"]');
 
 const quotePageEl = $("#quote-page");
@@ -45,22 +48,6 @@ function showMsg(text) {
   msgEl.hidden = false;
   msgEl.textContent = text;
 }
-
-async function postJSON(url, body) {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body || {}),
-  });
-  let data = null;
-  try { data = await res.json(); } catch { data = null; }
-  if (!res.ok) {
-    const msg = (data && (data.error || data.message)) || `Request failed (${res.status})`;
-    throw new Error(msg);
-  }
-  return data;
-}
-
 
 /* ===== Money helpers ===== */
 function parseMoneyToCents(value) {
@@ -102,80 +89,6 @@ function autosizeAll() {
   wireAutosize('[data-bind="notes"]');
 }
 
-
-/* ===== Scope presets (screen only) ===== */
-const SCOPE_PRESETS = {
-  removal: `• Protect landscaping and property; set up safety and debris control.
-• Remove and dispose of existing roofing materials as required (shingles/underlayment/fasteners).
-• Sweep the deck clean and inspect roof sheathing. Any required deck repairs or replacement sheathing will be discussed and quoted as needed.`,
-
-  icewater_full: `• Supply & install full-coverage high-temperature self-adhered ice & water membrane over the entire roof deck.
-• Proper overlaps, sealing at laps, and detailing at eaves, valleys, penetrations, and wall transitions.`,
-
-  standing_seam: `• Supply & install a mechanical-lock standing seam metal roofing system fabricated to roof measurements.
-• Concealed clip attachment with allowances for thermal expansion; fastened per manufacturer specifications.
-• Install all trims and accessories required for a complete watertight system (eaves/drip edge, gable/rake trim, ridge cap, valleys, wall/chimney flashings, pipe boots, closures, and sealants as required).`,
-
-  ribbed_steel: `• Supply & install ribbed steel roofing panels (through-fastened) with colour-matched fasteners and neoprene washers.
-• Install closures, ridge cap, gable trim, eave trim, valleys, and penetrations flashed/sealed for a watertight finish.`,
-
-  metal_shingles: `• Supply & install a metal shingle roofing system including starter, field shingles, ridge/hip caps, and required trims.
-• Detail valleys, eaves, gables, and roof penetrations per manufacturer specifications for a clean, watertight assembly.`,
-
-  plank_siding: `• Supply & install modern plank metal siding including starter, panels, corners, J-trim, and all required flashings.
-• Integrate with openings and transitions; fasten per manufacturer specifications for straight, clean lines and a finished appearance.`,
-
-  soffit_fascia: `• Supply & install new soffit and fascia system (vented where required) for a clean finished edge.
-• Install J-channel/F-channel and trims as required; secure and seal joints for a crisp, finished appearance.`,
-
-  eavestrough: `• Supply & install seamless eavestrough and downspouts with hidden hangers, outlets, elbows, straps, and end caps.
-• Set proper pitch for drainage and seal all joints to help prevent leaks.`
-};
-
-function normText(s) {
-  return String(s || "").replace(/\r\n/g, "\n").trim();
-}
-
-function updatePresetButtonStates(scopeValue) {
-  const cur = normText(scopeValue);
-  document.querySelectorAll("[data-scope-preset]").forEach((btn) => {
-    const key = btn.getAttribute("data-scope-preset");
-    const snippet = normText(SCOPE_PRESETS[key]);
-    const exists = snippet && cur.includes(snippet);
-    btn.classList.toggle("added", !!exists);
-  });
-}
-
-function appendScopePreset(key) {
-  const scopeEl = document.querySelector('[data-bind="scope"]');
-  if (!scopeEl) return;
-
-  const snippet = normText(SCOPE_PRESETS[key]);
-  if (!snippet) return;
-
-  const cur = normText(scopeEl.value);
-  if (cur.includes(snippet)) return;
-
-  const next = cur ? `${cur}\n\n${snippet}` : snippet;
-  scopeEl.value = next;
-
-  // keep the textarea fully visible
-  autosizeTextarea(scopeEl);
-  updatePresetButtonStates(scopeEl.value);
-}
-
-function wireScopePresets() {
-  const scopeEl = document.querySelector('[data-bind="scope"]');
-  if (!scopeEl) return;
-
-  document.querySelectorAll("[data-scope-preset]").forEach((btn) => {
-    btn.addEventListener("click", () => appendScopePreset(btn.getAttribute("data-scope-preset")));
-  });
-
-  updatePresetButtonStates(scopeEl.value);
-  scopeEl.addEventListener("input", () => updatePresetButtonStates(scopeEl.value));
-}
-
 /* ===== Rep signature date ===== */
 function formatDateDisplay(iso) {
   if (!iso) return "";
@@ -193,6 +106,33 @@ function syncRepDateFromQuoteDate() {
   if (!repDateEl) return;
   const iso = quoteDateInput?.value || "";
   repDateEl.textContent = formatDateDisplay(iso);
+}
+
+
+/* ===== Client acceptance (if signed) ===== */
+function renderClientAcceptance(data, qRow) {
+  const acc = data?.acceptance || null;
+  if (!clientSigImg || !clientSignedNameEl || !clientSignedDateEl) return;
+
+  if (acc?.accepted_at) {
+    const name = (acc.name || data?.bill_to?.client_name || qRow?.customer_name || "Client").trim();
+    const dateIso = String(acc.accepted_at).slice(0, 10);
+    const src = acc.signature_image_data_url || acc.signature_data_url || "";
+    if (src) {
+      clientSigImg.src = src;
+      clientSigImg.hidden = false;
+    } else {
+      clientSigImg.src = "";
+      clientSigImg.hidden = true;
+    }
+    clientSignedNameEl.textContent = name;
+    clientSignedDateEl.textContent = formatDateDisplay(dateIso);
+  } else {
+    clientSigImg.src = "";
+    clientSigImg.hidden = true;
+    clientSignedNameEl.textContent = "";
+    clientSignedDateEl.textContent = "";
+  }
 }
 
 /* ===== Company text ===== */
@@ -330,10 +270,7 @@ function fillUIFromData(qRow, data) {
   setCompanyText();
 
   const quoteCode = formatQuoteCode(qRow.quote_no, data.meta.quote_date);
-
   quoteCodeEl.textContent = quoteCode;
-  if (docQuoteCodeEl) docQuoteCodeEl.textContent = quoteCode;
-
   quoteStatusEl.textContent = qRow.status || "Draft";
 
   setBoundValue("quote_no", quoteCode);
@@ -372,9 +309,10 @@ function fillUIFromData(qRow, data) {
   recalcTotals();
   autosizeAll();
   syncRepDateFromQuoteDate();
+  renderClientAcceptance(data, qRow);
 }
 
-function collectDataFromUI(qRow) {
+function collectDataFromUI(qRow, existingAcceptance = null) {
   const totals = recalcTotals();
 
   const meta = {
@@ -413,6 +351,7 @@ function collectDataFromUI(qRow) {
     deposit_cents,
     terms: getBoundValue("terms"),
     notes: getBoundValue("notes"),
+    acceptance: existingAcceptance || undefined,
     computed: totals,
     quote_code: formatQuoteCode(qRow.quote_no, meta.quote_date),
   };
@@ -425,6 +364,7 @@ function collectDataFromUI(qRow) {
    - slice pages between cards
    ========================================================= */
 
+/* Load libs only if missing */
 function loadScript(src) {
   return new Promise((res, rej) => {
     const s = document.createElement("script");
@@ -550,7 +490,6 @@ function buildPdfClone() {
     }
 
     const inItems = !!el.closest(".items-table");
-    const inTotals = !!el.closest(".totals-grid");
     const isArea = el.tagName === "TEXTAREA";
 
     const out = document.createElement("div");
@@ -560,13 +499,6 @@ function buildPdfClone() {
 
     if (inItems) {
       out.style.padding = "10px";
-    } else if (inTotals) {
-      // totals should look like a document, not a form
-      out.style.border = "0";
-      out.style.padding = "0";
-      out.style.background = "transparent";
-      out.style.fontWeight = "900";
-      out.style.textAlign = "right";
     } else {
       out.style.border = "1px solid #d9dee8";
       out.style.borderRadius = "10px";
@@ -625,8 +557,7 @@ async function exportPdfManual({ filename }) {
   const pdfW = pdf.internal.pageSize.getWidth();  // 612
   const pdfH = pdf.internal.pageSize.getHeight(); // 792
 
-  // Keep a small margin so sections don't touch the top of a new page
-  const marginPt = 22; // ~0.30"
+  const marginPt = 26; // ~0.36"
   const contentW = pdfW - marginPt * 2;
   const contentH = pdfH - marginPt * 2;
 
@@ -637,16 +568,7 @@ async function exportPdfManual({ filename }) {
   const idealPageHeightPxCanvas = Math.floor(canvasW * (contentH / contentW));
   const cuts = computeCutPositionsPx(clone, scaleFactor, idealPageHeightPxCanvas);
 
-  // IMPORTANT: avoid trailing blank PDF pages.
-  // `cuts` always ends at the last real content bottom (maxBottom), so we use that
-  // instead of the full canvas height (which can include extra whitespace).
-  const contentEnd = cuts.length ? cuts[cuts.length - 1] : canvasH;
-  const midCuts = cuts.length > 1 ? cuts.slice(0, -1) : [];
-
-  const boundaries = [0, ...midCuts, contentEnd]
-    .map((v) => Math.max(0, Math.min(v, canvasH)))
-    .filter((v, i, arr) => i === 0 || v > arr[i - 1] + 2);
-
+  const boundaries = [0, ...cuts.filter((c) => c > 0 && c < canvasH), canvasH];
 
   const pageCanvas = document.createElement("canvas");
   pageCanvas.width = canvasW;
@@ -658,12 +580,10 @@ async function exportPdfManual({ filename }) {
     const next = boundaries[i];
     const sliceH = next - prev;
 
-    // Skip tiny slices (can happen from rounding and looks like a blank page)
-    if (sliceH < Math.round(24 * scale)) continue;
-
     pageCanvas.height = sliceH;
     const ctx = pageCanvas.getContext("2d", { alpha: false });
 
+    // white background (prevents odd transparency)
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, canvasW, sliceH);
 
@@ -683,6 +603,7 @@ async function exportPdfManual({ filename }) {
   }
 
   pdf.save(filename);
+
   sandbox.remove();
 }
 
@@ -713,7 +634,6 @@ async function main() {
 
   const data = mergeDefaults(qRow.data, defaults);
   fillUIFromData(qRow, data);
-  wireScopePresets();
 
   backBtn.addEventListener("click", () => {
     window.location.href = "./dashboard.html";
@@ -733,7 +653,14 @@ async function main() {
   });
 
   async function saveNow() {
-    const payload = collectDataFromUI(qRow);
+    // Preserve any customer acceptance signature so admin saves don't wipe it
+    let existingAcceptance = qRow?.data?.acceptance || null;
+    try {
+      const latest = await getQuote(quoteId);
+      existingAcceptance = latest?.data?.acceptance || existingAcceptance;
+    } catch {}
+
+    const payload = collectDataFromUI(qRow, existingAcceptance);
 
     if (!payload.bill_to.client_name) {
       showMsg("Customer name is required (Bill To).");
@@ -751,9 +678,7 @@ async function main() {
 
     qRow = updated;
     quoteStatusEl.textContent = qRow.status || "Draft";
-
     quoteCodeEl.textContent = payload.quote_code;
-    if (docQuoteCodeEl) docQuoteCodeEl.textContent = payload.quote_code;
 
     showMsg("Saved.");
     setTimeout(() => showMsg(""), 800);
@@ -771,44 +696,6 @@ async function main() {
       saveBtn.disabled = false;
     }
   });
-  sendBtn?.addEventListener("click", async () => {
-    try {
-      sendBtn.disabled = true;
-
-      const saved = await saveNow();
-      if (!saved) return;
-
-      const { payload } = saved;
-
-      if (!payload.bill_to.client_email) {
-        showMsg("Customer email is required to send.");
-        return;
-      }
-
-      showMsg("Sending email…");
-
-      const result = await postJSON("/api/send-quote-link", {
-        quote_id: quoteId,
-      });
-
-      // Update UI if API returns status
-      if (result?.status) quoteStatusEl.textContent = result.status;
-
-      // Copy link (nice touch)
-      if (result?.view_url && navigator.clipboard?.writeText) {
-        try { await navigator.clipboard.writeText(result.view_url); } catch {}
-      }
-
-      showMsg("Sent. Customer link copied to clipboard.");
-      setTimeout(() => showMsg(""), 1400);
-    } catch (e) {
-      showMsg(e?.message || "Send failed.");
-    } finally {
-      sendBtn.disabled = false;
-    }
-  });
-
-
 
   pdfBtn.addEventListener("click", async () => {
     try {
