@@ -444,7 +444,11 @@ function openSigModal({ customerName }) {
   if (sigNameEl) sigNameEl.textContent = customerName || "Client";
   sigModal.hidden = false;
   document.body.style.overflow = "hidden";
-  setupSignaturePad();
+
+  // Wait one frame so layout is updated before measuring canvas size
+  requestAnimationFrame(() => {
+    setupSignaturePad();
+  });
 }
 
 function closeSigModal() {
@@ -567,11 +571,13 @@ async function main() {
     });
 
     // Signature pad handlers
-    sigCanvas.onpointerdown = onSigPointerDown;
-    sigCanvas.onpointermove = onSigPointerMove;
-    sigCanvas.onpointerup = onSigPointerUp;
-    sigCanvas.onpointercancel = onSigPointerUp;
-    sigCanvas.onpointerleave = onSigPointerUp;
+    if (sigCanvas) {
+      sigCanvas.onpointerdown = onSigPointerDown;
+      sigCanvas.onpointermove = onSigPointerMove;
+      sigCanvas.onpointerup = onSigPointerUp;
+      sigCanvas.onpointercancel = onSigPointerUp;
+      sigCanvas.onpointerleave = onSigPointerUp;
+    }
 
     sigClearBtn?.addEventListener("click", clearSignature);
 
@@ -634,7 +640,7 @@ async function main() {
 
     // Ensure modal canvas scales properly when device rotates
     window.addEventListener("resize", () => {
-      if (!sigModal.hidden) setupSignaturePad();
+      if (sigModal && !sigModal.hidden) setupSignaturePad();
     });
   } catch (e) {
     console.error(e);

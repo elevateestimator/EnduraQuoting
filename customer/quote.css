@@ -31,6 +31,9 @@
 }
 
 *{ box-sizing:border-box; }
+
+/* Ensure the HTML `hidden` attribute actually hides elements (overrides display rules) */
+[hidden]{ display:none !important; }
 html{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
 body{
@@ -894,6 +897,8 @@ textarea.autogrow{
   padding: 16px;
   z-index: 60;
 }
+.modal-overlay[hidden]{ display:none !important; }
+
 
 .modal{
   width: min(560px, 100%);
