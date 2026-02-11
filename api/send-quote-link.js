@@ -283,8 +283,8 @@ function buildEmailHtml({
                   <tr>
                     <td class="logo-wrap" align="center" bgcolor="#ffffff"
                       style="background:#ffffff;padding:18px 22px 14px;text-align:center;">
-                      <table role="presentation" cellpadding="0" cellspacing="0" class="logo-shell" bgcolor="#ffffff"
-                        style="background:#ffffff;border:1px solid #e6e9f1;border-radius:18px;overflow:hidden;">
+                      <table role="presentation" align="center" cellpadding="0" cellspacing="0" class="logo-shell" bgcolor="#ffffff"
+                        style="margin:0 auto;background:#ffffff;border:1px solid #e6e9f1;border-radius:18px;overflow:hidden;">
                         <tr>
                           <td align="center" style="padding:12px 14px;">
                             <!-- Light logo -->
@@ -344,7 +344,7 @@ function buildEmailHtml({
                           <td align="center"
                             style="border-radius:16px;background:linear-gradient(90deg,${brand},${brandDark});">
                             <a href="${safeViewUrl}"
-                              style="display:inline-block;width:100%;padding:18px 18px;border-radius:16px;
+                              style="display:block;padding:18px 18px;border-radius:16px;text-align:center;
                                      font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
                                      font-weight:950;font-size:16px;letter-spacing:.2px;text-decoration:none;
                                      color:#ffffff;-webkit-text-fill-color:#ffffff;">
