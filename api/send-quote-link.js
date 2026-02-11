@@ -4,8 +4,10 @@ import { createClient } from "@supabase/supabase-js";
  * POST /api/send-quote-link
  * Body: { quote_id: string }
  *
- * Sends a branded email (Postmark) with a "View Quote" button that links
- * to the customer quote page (mobile-friendly).
+ * Sends a polished, "QuickBooks-style" light-mode email (Postmark) with a View Quote button.
+ * Note: Some clients (notably Gmail iOS) use a "full invert" dark-mode algorithm that can't be
+ * fully disabled, but we use multiple defensive techniques (bgcolor + inline + linear-gradient)
+ * to strongly bias toward a white/light render.
  */
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -64,7 +66,10 @@ export default async function handler(req, res) {
     const logoUrl = `${origin}/assets/logo.jpg`;
 
     const meta = quote.data?.meta || {};
-    const quoteCode = quote.data?.quote_code || `ER-${String(meta?.quote_date || "").slice(0,4) || "0000"}-${String(quote.quote_no || "").padStart(4,"0")}`;
+    const quoteCode =
+      quote.data?.quote_code ||
+      `ER-${String(meta?.quote_date || "").slice(0, 4) || "0000"}-${String(quote.quote_no || "").padStart(4, "0")}`;
+
     const expires = meta?.quote_expires || "";
     const preparedBy = meta?.prepared_by || "Jacob Docherty";
 
@@ -76,7 +81,8 @@ export default async function handler(req, res) {
 
     const customerName = quote.customer_name || "there";
 
-    const subject = `Your Quote is Ready — ${quoteCode}`;
+    // Make it obvious you've deployed the new template (you can later simplify this subject if desired).
+    const subject = `Endura Quote Ready — ${quoteCode}`;
 
     const htmlBody = buildEmailHtml({
       logoUrl,
@@ -93,26 +99,20 @@ export default async function handler(req, res) {
     });
 
     const textBody =
-`Hi ${customerName},
-
-Your quote (${quoteCode}) is ready.
-
-View and accept your quote here:
-${viewUrl}
-
-Total: ${totalCad}
-Expires: ${expires || "—"}
-Prepared by: ${preparedBy}
-
-Thank you,
-Endura Metal Roofing Ltd.`;
+      `Hi ${customerName},\n\n` +
+      `Your quote (${quoteCode}) is ready.\n\n` +
+      `View, download a PDF, and accept/sign online:\n${viewUrl}\n\n` +
+      `Total: ${totalCad}\n` +
+      `Expires: ${expires || "—"}\n` +
+      `Prepared by: ${preparedBy}\n\n` +
+      `Thank you,\nEndura Metal Roofing Ltd.`;
 
     const pmRes = await fetch("https://api.postmarkapp.com/email", {
       method: "POST",
       headers: {
         "X-Postmark-Server-Token": POSTMARK_SERVER_TOKEN,
         "Content-Type": "application/json",
-        "Accept": "application/json",
+        Accept: "application/json",
       },
       body: JSON.stringify({
         From: POSTMARK_FROM_EMAIL,
@@ -152,6 +152,14 @@ function escapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
+/**
+ * "QuickBooks-style" light email
+ * - Pure tables + inline styles for high compatibility
+ * - Forces white/light backgrounds using:
+ *    1) bgcolor attributes
+ *    2) inline background-color
+ *    3) inline background-image: linear-gradient(#fff,#fff) (helps with some forced-invert clients)
+ */
 function buildEmailHtml({
   logoUrl,
   viewUrl,
@@ -177,48 +185,85 @@ function buildEmailHtml({
 
   const footerLine = [safeCompany, safePhone, safeEmail, safeWeb].filter(Boolean).join(" • ");
 
+  // Colors
+  const brand = "#0267b5";
+  const ink = "#111827";
+  const muted = "#6b7280";
+  const border = "#e5e7eb";
+  const soft = "#f8fafc";
+
+  // NOTE: Keep CSS small + safe. Rely on inline styles for critical stuff.
   return `<!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width" />
-    <meta name="color-scheme" content="light">
-    <meta name="supported-color-schemes" content="light">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- Strong nudge toward LIGHT rendering in clients that support it -->
+    <meta name="color-scheme" content="light" />
+    <meta name="supported-color-schemes" content="light" />
+
     <title>${safeCompany} — Quote</title>
+
+    <style>
+      :root { color-scheme: light; supported-color-schemes: light; }
+      body { margin:0 !important; padding:0 !important; background:${"#ffffff"} !important; }
+      /* Outlook.com / Outlook app hooks */
+      [data-ogsc] .bg { background:${"#ffffff"} !important; }
+      [data-ogsc] .card { background:${"#ffffff"} !important; }
+      [data-ogsc] .text { color:${ink} !important; }
+    </style>
+
+    <!--[if mso]>
+      <style>
+        body, table, td, a { font-family: Arial, sans-serif !important; }
+      </style>
+    <![endif]-->
   </head>
 
-  <body style="margin:0;padding:0;background:#f3f6fb;">
+  <body class="bg" bgcolor="#ffffff" style="margin:0;padding:0;background:#ffffff;background-image:linear-gradient(#ffffff,#ffffff);">
     <!-- Preheader (hidden) -->
     <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
-      Your quote is ready — view, download a PDF, and accept/sign online.
+      Your quote is ready — review online, download a PDF, and accept/sign digitally.
     </div>
 
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f6fb;padding:26px 12px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+      class="bg" bgcolor="#ffffff"
+      style="width:100%;background:#ffffff;background-image:linear-gradient(#ffffff,#ffffff);padding:28px 12px;">
       <tr>
-        <td align="center">
-          <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:600px;background:#ffffff;border:1px solid #e6e9f1;border-radius:16px;overflow:hidden;">
-            <!-- Thin brand bar -->
+        <td align="center" style="padding:0;margin:0;">
+          <!-- Container -->
+          <table role="presentation" cellpadding="0" cellspacing="0" width="640"
+            class="card" bgcolor="#ffffff"
+            style="width:640px;max-width:640px;background:#ffffff;background-image:linear-gradient(#ffffff,#ffffff);border:1px solid ${border};border-radius:20px;overflow:hidden;">
+            <!-- Top brand rule -->
             <tr>
-              <td style="height:4px;background:#0267b5;"></td>
+              <td height="6" bgcolor="${brand}" style="height:6px;background:${brand};background-image:linear-gradient(${brand},${brand});line-height:6px;font-size:0;">&nbsp;</td>
             </tr>
 
-            <!-- Header -->
+            <!-- Header: logo + pill -->
             <tr>
-              <td style="padding:18px 18px 8px;">
+              <td style="padding:22px 24px 10px;background:#ffffff;background-image:linear-gradient(#ffffff,#ffffff);">
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                   <tr>
-                    <td style="vertical-align:middle;">
-                      <!-- Logo on white (important for dark mode) -->
-                      <table role="presentation" cellpadding="0" cellspacing="0" style="border:1px solid #e6e9f1;border-radius:14px;background:#ffffff;">
+                    <td valign="middle" style="padding:0;margin:0;">
+                      <!-- Logo: keep it on white no matter what -->
+                      <table role="presentation" cellpadding="0" cellspacing="0" bgcolor="#ffffff"
+                        style="background:#ffffff;background-image:linear-gradient(#ffffff,#ffffff);border:1px solid ${border};border-radius:14px;">
                         <tr>
                           <td style="padding:10px 12px;">
-                            <img src="${logoUrl}" alt="${safeCompany}" width="170" style="display:block;height:auto;border:0;outline:none;text-decoration:none;" />
+                            <img src="${logoUrl}" alt="${safeCompany}" width="160"
+                              style="display:block;width:160px;max-width:160px;height:auto;border:0;outline:none;text-decoration:none;" />
                           </td>
                         </tr>
                       </table>
                     </td>
-                    <td style="vertical-align:middle;text-align:right;">
-                      <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-weight:900;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#111827;border:1px solid #d9dee8;background:#f8fafc;display:inline-block;padding:8px 12px;border-radius:999px;">
+
+                    <td valign="middle" align="right" style="padding:0;margin:0;">
+                      <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+                                  font-weight:900;font-size:12px;letter-spacing:.18em;text-transform:uppercase;
+                                  color:${ink};border:1px solid ${border};background:${soft};
+                                  padding:8px 12px;border-radius:999px;display:inline-block;">
                         QUOTE
                       </div>
                     </td>
@@ -227,15 +272,16 @@ function buildEmailHtml({
               </td>
             </tr>
 
-            <!-- Greeting -->
+            <!-- Heading + intro -->
             <tr>
-              <td style="padding: 8px 18px 0;">
-                <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0b0f14;">
-                  <div style="font-weight:950;font-size:18px;line-height:1.25;margin:0 0 6px;">
-                    Hi ${safeName},
+              <td style="padding:0 24px 18px;background:#ffffff;background-image:linear-gradient(#ffffff,#ffffff);">
+                <div class="text" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${ink};">
+                  <div style="font-size:24px;font-weight:950;line-height:1.2;margin:0 0 6px;">
+                    Your quote is ready
                   </div>
-                  <div style="font-size:14px;line-height:1.55;color:#374151;">
-                    Your quote is ready. Review it on desktop or mobile, download a PDF copy, and accept/sign online.
+                  <div style="font-size:14px;line-height:1.6;color:${muted};">
+                    Hi ${safeName} — you can review the quote on desktop or mobile, download a PDF copy,
+                    and accept/sign online in one step.
                   </div>
                 </div>
               </td>
@@ -243,43 +289,52 @@ function buildEmailHtml({
 
             <!-- Summary card -->
             <tr>
-              <td style="padding: 14px 18px 0;">
-                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e6e9f1;border-radius:14px;background:#f8fafc;">
+              <td style="padding:0 24px 18px;background:#ffffff;background-image:linear-gradient(#ffffff,#ffffff);">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${soft}"
+                  style="border:1px solid ${border};border-radius:16px;overflow:hidden;background:${soft};background-image:linear-gradient(${soft},${soft});">
                   <tr>
-                    <td style="padding:12px 12px;">
+                    <td style="padding:16px 16px;">
                       <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                         <tr>
-                          <td style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#6b7280;letter-spacing:.12em;text-transform:uppercase;font-weight:900;">
+                          <td style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+                                     font-size:12px;color:${muted};letter-spacing:.12em;text-transform:uppercase;font-weight:900;">
                             Quote #
                           </td>
-                          <td style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#6b7280;letter-spacing:.12em;text-transform:uppercase;font-weight:900;text-align:right;">
+                          <td align="right" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+                                     font-size:12px;color:${muted};letter-spacing:.12em;text-transform:uppercase;font-weight:900;">
                             Total
                           </td>
                         </tr>
                         <tr>
-                          <td style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:16px;font-weight:950;color:#0b0f14;padding-top:6px;">
+                          <td style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+                                     font-size:16px;font-weight:950;color:${ink};padding-top:6px;">
                             ${safeCode}
                           </td>
-                          <td style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:16px;font-weight:950;color:#0267b5;text-align:right;padding-top:6px;">
+                          <td align="right" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+                                     font-size:20px;font-weight:950;color:${brand};padding-top:4px;">
                             ${safeTotal}
                           </td>
                         </tr>
 
-                        <tr><td colspan="2" style="height:10px;"></td></tr>
+                        <tr><td colspan="2" height="14" style="height:14px;line-height:14px;font-size:0;">&nbsp;</td></tr>
 
                         <tr>
-                          <td style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#6b7280;letter-spacing:.12em;text-transform:uppercase;font-weight:900;">
+                          <td style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+                                     font-size:12px;color:${muted};letter-spacing:.12em;text-transform:uppercase;font-weight:900;">
                             Expires
                           </td>
-                          <td style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#6b7280;letter-spacing:.12em;text-transform:uppercase;font-weight:900;text-align:right;">
+                          <td align="right" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+                                     font-size:12px;color:${muted};letter-spacing:.12em;text-transform:uppercase;font-weight:900;">
                             Prepared by
                           </td>
                         </tr>
                         <tr>
-                          <td style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:13px;font-weight:900;color:#0b0f14;padding-top:6px;">
+                          <td style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+                                     font-size:13px;font-weight:900;color:${ink};padding-top:6px;">
                             ${safeExpires}
                           </td>
-                          <td style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:13px;font-weight:900;color:#0b0f14;text-align:right;padding-top:6px;">
+                          <td align="right" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+                                     font-size:13px;font-weight:900;color:${ink};padding-top:6px;">
                             ${safePrepared}
                           </td>
                         </tr>
@@ -292,13 +347,17 @@ function buildEmailHtml({
 
             <!-- CTA -->
             <tr>
-              <td style="padding: 18px 18px 8px;">
-                <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+              <td style="padding:0 24px 10px;background:#ffffff;background-image:linear-gradient(#ffffff,#ffffff);" align="center">
+                <table role="presentation" cellpadding="0" cellspacing="0">
                   <tr>
-                    <td align="center">
+                    <td align="center" bgcolor="${brand}"
+                      style="background:${brand};background-image:linear-gradient(${brand},${brand});border-radius:12px;">
                       <a href="${viewUrl}"
-                         style="display:inline-block;background:#0267b5;color:#ffffff;text-decoration:none;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-weight:950;padding:12px 18px;border-radius:12px;">
-                        View Quote
+                        style="display:inline-block;padding:14px 22px;
+                               font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+                               font-size:15px;font-weight:950;letter-spacing:.01em;
+                               color:#ffffff;text-decoration:none;border-radius:12px;">
+                        View quote &amp; sign
                       </a>
                     </td>
                   </tr>
@@ -308,25 +367,30 @@ function buildEmailHtml({
 
             <!-- Fallback link -->
             <tr>
-              <td style="padding: 0 18px 18px;">
-                <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:12px;line-height:1.5;color:#6b7280;">
+              <td style="padding:0 24px 18px;background:#ffffff;background-image:linear-gradient(#ffffff,#ffffff);">
+                <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+                            font-size:12px;line-height:1.6;color:${muted};text-align:center;">
                   If the button doesn’t work, copy and paste this link:<br />
-                  <span style="color:#111827;word-break:break-all;">${viewUrl}</span>
+                  <span style="color:${ink};word-break:break-all;">${viewUrl}</span>
                 </div>
               </td>
             </tr>
 
             <!-- Footer -->
             <tr>
-              <td style="padding: 14px 18px 18px;border-top:1px solid #e6e9f1;background:#ffffff;">
-                <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:12px;line-height:1.5;color:#6b7280;">
+              <td style="padding:16px 24px 20px;border-top:1px solid ${border};
+                         background:#ffffff;background-image:linear-gradient(#ffffff,#ffffff);">
+                <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+                            font-size:12px;line-height:1.7;color:${muted};">
+                  Questions? Reply to this email.<br />
                   ${footerLine}
                 </div>
               </td>
             </tr>
           </table>
 
-          <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#9ca3af;font-size:12px;margin-top:10px;">
+          <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+                      font-size:11px;line-height:1.6;color:#9ca3af;margin-top:12px;">
             © ${new Date().getFullYear()} ${safeCompany}
           </div>
         </td>
