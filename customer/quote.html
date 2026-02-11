@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Endura Metal Roofing Ltd. — Quote</title>
-    <link rel="stylesheet" href="./quote.css?v=4" />
+    <link rel="stylesheet" href="./quote.css?v=5" />
   </head>
 
   <body>
@@ -116,30 +116,37 @@
 
         <section class="card avoid-break">
           <h3>Items &amp; Pricing</h3>
-          <div class="table-wrap">
-            <table class="items-table" aria-label="Line items">
-              <colgroup>
-                <col style="width: auto" />
-                <col style="width: 11%" />
-                <col style="width: 17%" />
-                <col style="width: 8%" />
-                <col style="width: 17%" />
-              </colgroup>
+          
+          <div class="items-desktop">
+            <div class="table-wrap">
+              <table class="items-table" aria-label="Line items">
+                <colgroup>
+                  <col style="width: auto" />
+                  <col style="width: 11%" />
+                  <col style="width: 17%" />
+                  <col style="width: 8%" />
+                  <col style="width: 17%" />
+                </colgroup>
 
-              <thead>
-                <tr>
-                  <th>Description</th>
-                  <th class="num">Qty</th>
-                  <th class="num">Rate</th>
-                  <th class="center">Tax</th>
-                  <th class="num">Line Total</th>
-                </tr>
-              </thead>
+                <thead>
+                  <tr>
+                    <th>Description</th>
+                    <th class="num">Qty</th>
+                    <th class="num">Rate</th>
+                    <th class="center">Tax</th>
+                    <th class="num">Line Total</th>
+                  </tr>
+                </thead>
 
-              <tbody id="v-item-rows"></tbody>
-            </table>
+                <tbody id="v-item-rows"></tbody>
+              </table>
+            </div>
           </div>
+
+          <!-- Mobile-friendly item cards -->
+          <div class="items-mobile" id="v-item-cards"></div>
         </section>
+
 
         <section class="card totals avoid-break">
           <h3>Summary</h3>
@@ -278,6 +285,6 @@
       </div>
     </div>
 
-    <script type="module" src="./quote.js?v=4"></script>
+    <script type="module" src="./quote.js?v=5"></script>
   </body>
 </html>

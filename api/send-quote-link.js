@@ -170,33 +170,55 @@ function buildEmailHtml({
   const safeTotal = escapeHtml(totalCad);
   const safeExpires = escapeHtml(expires || "—");
   const safePrepared = escapeHtml(preparedBy || "—");
+  const safeCompany = escapeHtml(companyName);
+  const safePhone = escapeHtml(phone || "");
+  const safeEmail = escapeHtml(email || "");
+  const safeWeb = escapeHtml(web || "");
+
+  const footerLine = [safeCompany, safePhone, safeEmail, safeWeb].filter(Boolean).join(" • ");
 
   return `<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width" />
-    <title>${companyName} — Quote</title>
+    <meta name="color-scheme" content="light">
+    <meta name="supported-color-schemes" content="light">
+    <title>${safeCompany} — Quote</title>
   </head>
-  <body style="margin:0;padding:0;background:#f2f5f9;">
-    <!-- Preheader -->
+
+  <body style="margin:0;padding:0;background:#f3f6fb;">
+    <!-- Preheader (hidden) -->
     <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
-      Your quote is ready — view, download PDF, and accept online.
+      Your quote is ready — view, download a PDF, and accept/sign online.
     </div>
 
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f2f5f9;padding:24px 12px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f6fb;padding:26px 12px;">
       <tr>
         <td align="center">
-          <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:600px;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e6e9f1;">
+          <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:600px;background:#ffffff;border:1px solid #e6e9f1;border-radius:16px;overflow:hidden;">
+            <!-- Thin brand bar -->
             <tr>
-              <td style="padding:18px 18px 10px;">
+              <td style="height:4px;background:#0267b5;"></td>
+            </tr>
+
+            <!-- Header -->
+            <tr>
+              <td style="padding:18px 18px 8px;">
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                   <tr>
                     <td style="vertical-align:middle;">
-                      <img src="${logoUrl}" alt="${companyName}" width="140" style="display:block;height:auto;border:0;outline:none;text-decoration:none;" />
+                      <!-- Logo on white (important for dark mode) -->
+                      <table role="presentation" cellpadding="0" cellspacing="0" style="border:1px solid #e6e9f1;border-radius:14px;background:#ffffff;">
+                        <tr>
+                          <td style="padding:10px 12px;">
+                            <img src="${logoUrl}" alt="${safeCompany}" width="170" style="display:block;height:auto;border:0;outline:none;text-decoration:none;" />
+                          </td>
+                        </tr>
+                      </table>
                     </td>
                     <td style="vertical-align:middle;text-align:right;">
-                      <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-weight:900;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#ffffff;background:linear-gradient(90deg,#0267b5,#014d89);display:inline-block;padding:8px 12px;border-radius:999px;">
+                      <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-weight:900;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#111827;border:1px solid #d9dee8;background:#f8fafc;display:inline-block;padding:8px 12px;border-radius:999px;">
                         QUOTE
                       </div>
                     </td>
@@ -205,30 +227,26 @@ function buildEmailHtml({
               </td>
             </tr>
 
+            <!-- Greeting -->
             <tr>
-              <td style="padding:0 18px 10px;">
-                <div style="height:4px;border-radius:4px;background:linear-gradient(90deg,#0267b5,rgba(2,103,181,.25));"></div>
-              </td>
-            </tr>
-
-            <tr>
-              <td style="padding: 6px 18px 0;">
+              <td style="padding: 8px 18px 0;">
                 <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0b0f14;">
                   <div style="font-weight:950;font-size:18px;line-height:1.25;margin:0 0 6px;">
                     Hi ${safeName},
                   </div>
                   <div style="font-size:14px;line-height:1.55;color:#374151;">
-                    Your quote is ready. You can review it on desktop or mobile, download a PDF copy, and accept/sign online.
+                    Your quote is ready. Review it on desktop or mobile, download a PDF copy, and accept/sign online.
                   </div>
                 </div>
               </td>
             </tr>
 
+            <!-- Summary card -->
             <tr>
               <td style="padding: 14px 18px 0;">
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e6e9f1;border-radius:14px;background:#f8fafc;">
                   <tr>
-                    <td style="padding:12px;">
+                    <td style="padding:12px 12px;">
                       <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                         <tr>
                           <td style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#6b7280;letter-spacing:.12em;text-transform:uppercase;font-weight:900;">
@@ -272,13 +290,14 @@ function buildEmailHtml({
               </td>
             </tr>
 
+            <!-- CTA -->
             <tr>
-              <td style="padding: 16px 18px 10px;">
+              <td style="padding: 18px 18px 8px;">
                 <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
                   <tr>
                     <td align="center">
                       <a href="${viewUrl}"
-                         style="display:inline-block;background:linear-gradient(90deg,#0267b5,#014d89);color:#ffffff;text-decoration:none;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-weight:950;padding:12px 18px;border-radius:12px;">
+                         style="display:inline-block;background:#0267b5;color:#ffffff;text-decoration:none;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-weight:950;padding:12px 18px;border-radius:12px;">
                         View Quote
                       </a>
                     </td>
@@ -287,6 +306,7 @@ function buildEmailHtml({
               </td>
             </tr>
 
+            <!-- Fallback link -->
             <tr>
               <td style="padding: 0 18px 18px;">
                 <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:12px;line-height:1.5;color:#6b7280;">
@@ -296,17 +316,18 @@ function buildEmailHtml({
               </td>
             </tr>
 
+            <!-- Footer -->
             <tr>
-              <td style="padding: 14px 18px 18px;background:#0b1020;">
-                <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:12px;line-height:1.5;color:rgba(255,255,255,.78);">
-                  ${escapeHtml(companyName)} • ${escapeHtml(phone)} • ${escapeHtml(email)} • ${escapeHtml(web)}
+              <td style="padding: 14px 18px 18px;border-top:1px solid #e6e9f1;background:#ffffff;">
+                <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:12px;line-height:1.5;color:#6b7280;">
+                  ${footerLine}
                 </div>
               </td>
             </tr>
           </table>
 
           <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#9ca3af;font-size:12px;margin-top:10px;">
-            © ${new Date().getFullYear()} ${escapeHtml(companyName)}
+            © ${new Date().getFullYear()} ${safeCompany}
           </div>
         </td>
       </tr>

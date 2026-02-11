@@ -95,12 +95,27 @@ function escapeHtml(s) {
    ========================================================= */
 function buildItemsRows(items = []) {
   const tbody = $("#v-item-rows");
-  tbody.innerHTML = "";
+  const cards = $("#v-item-cards");
+
+  if (tbody) tbody.innerHTML = "";
+  if (cards) cards.innerHTML = "";
 
   if (!items.length) {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `<td colspan="5" style="padding:12px;color:#6b7280;">No line items</td>`;
-    tbody.appendChild(tr);
+    if (tbody) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td colspan="5" style="padding:12px;color:#6b7280;">No line items</td>`;
+      tbody.appendChild(tr);
+    }
+    if (cards) {
+      const empty = document.createElement("div");
+      empty.className = "item-card";
+      empty.innerHTML = `
+        <div class="item-card-head">
+          <div class="item-card-title" style="color:#6b7280;font-weight:900;">No line items</div>
+        </div>
+      `;
+      cards.appendChild(empty);
+    }
     return;
   }
 
@@ -110,15 +125,48 @@ function buildItemsRows(items = []) {
     const taxable = !!it.taxable;
     const lineTotal = Math.round(qty * rateC);
 
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td><div style="padding:10px;white-space:pre-wrap;">${escapeHtml(it.description || "")}</div></td>
-      <td class="num"><div style="padding:10px;">${qty || ""}</div></td>
-      <td class="num"><div style="padding:10px;">$${money(rateC)}</div></td>
-      <td class="center"><div style="padding:10px;">${taxable ? "✓" : "—"}</div></td>
-      <td class="num"><div style="padding:10px;font-weight:950;">$${money(lineTotal)}</div></td>
-    `;
-    tbody.appendChild(tr);
+    // Desktop table row
+    if (tbody) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><div style="padding:10px;white-space:pre-wrap;">${escapeHtml(it.description || "")}</div></td>
+        <td class="num"><div style="padding:10px;white-space:nowrap;">${qty || ""}</div></td>
+        <td class="num"><div style="padding:10px;white-space:nowrap;">$${money(rateC)}</div></td>
+        <td class="center"><div style="padding:10px;white-space:nowrap;">${taxable ? "✓" : "—"}</div></td>
+        <td class="num"><div style="padding:10px;font-weight:950;white-space:nowrap;">$${money(lineTotal)}</div></td>
+      `;
+      tbody.appendChild(tr);
+    }
+
+    // Mobile card
+    if (cards) {
+      const card = document.createElement("div");
+      card.className = "item-card";
+      card.innerHTML = `
+        <div class="item-card-head">
+          <div class="item-card-title">${escapeHtml(it.description || "") || "Line item"}</div>
+        </div>
+        <div class="item-card-meta">
+          <div class="item-kv">
+            <div class="k">Qty</div>
+            <div class="v">${qty || "—"}</div>
+          </div>
+          <div class="item-kv">
+            <div class="k">Rate</div>
+            <div class="v">$${money(rateC)}</div>
+          </div>
+          <div class="item-kv">
+            <div class="k">Tax</div>
+            <div class="v">${taxable ? "Yes" : "No"}</div>
+          </div>
+          <div class="item-kv total">
+            <div class="k">Line total</div>
+            <div class="v">$${money(lineTotal)}</div>
+          </div>
+        </div>
+      `;
+      cards.appendChild(card);
+    }
   }
 }
 
@@ -343,7 +391,9 @@ function buildPdfClone() {
     .meta-strip{ grid-template-columns: 1.4fr 1fr 1fr 1.2fr !important; }
     .grid-2{ grid-template-columns: 1.25fr 0.75fr !important; }
     .signatures{ grid-template-columns: 1fr 1fr !important; }
-  `;
+    .items-desktop{ display:block !important; }
+    .items-mobile{ display:none !important; }
+`;
   clone.prepend(style);
 
   return clone;
