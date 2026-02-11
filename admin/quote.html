@@ -3,15 +3,12 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Quote Builder</title>
+    <title>Endura — Quote</title>
     <link rel="stylesheet" href="./quote.css" />
-    <script
-      defer
-      src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"
-    ></script>
   </head>
 
   <body>
+    <!-- Top app bar (screen only) -->
     <header class="topbar no-print">
       <div class="brand">
         <img class="logo" src="../assets/logo.jpg" alt="Endura" />
@@ -26,9 +23,10 @@
       </div>
 
       <div class="actions">
-        <button id="back-btn" class="btn ghost">Back</button>
-        <button id="save-btn" class="btn primary">Save</button>
-        <button id="pdf-btn" class="btn">Download PDF</button>
+        <button id="back-btn" class="btn ghost" type="button">Back</button>
+        <button id="save-btn" class="btn primary" type="button">Save</button>
+        <button id="pdf-btn" class="btn" type="button">Download PDF</button>
+        <button id="send-btn" class="btn brand" type="button">Send to Customer</button>
       </div>
     </header>
 
@@ -37,90 +35,124 @@
 
       <!-- This is the page we capture into PDF -->
       <section id="quote-page" class="page">
-        <!-- Premium Header -->
+        <!-- Letterhead -->
         <header class="doc-header avoid-break">
-  <div class="letterhead">
-    <div class="logo-col">
-      <img
-        src="../assets/logo.jpg"
-        alt="Endura Metal Roofing Ltd."
-        class="doc-logo"
-      />
-    </div>
+          <div class="letterhead">
+            <div class="logo-col">
+              <div class="logo-box">
+                <img
+                  src="../assets/logo.jpg"
+                  alt="Endura Metal Roofing Ltd."
+                  class="doc-logo"
+                />
+              </div>
+            </div>
 
-    <div class="head-col">
-      <div class="head-top">
-        <div class="head-company">
-          <div class="company-name" data-company="name"></div>
+            <div class="company-col">
+              <div class="company-row">
+                <div class="company-block">
+                  <div class="company-name" data-company="name"></div>
 
-          <div class="contact-line">
-            <span data-company="addr1"></span>
-            <span data-company="addr2"></span>
-            <span data-company="phone"></span>
-            <span data-company="email"></span>
-            <span data-company="web"></span>
+                  <div class="company-contact">
+                    <span data-company="addr1"></span>
+                    <span data-company="addr2"></span>
+                    <span data-company="phone"></span>
+                    <span data-company="email"></span>
+                    <span data-company="web"></span>
+                  </div>
+                </div>
+
+                <div class="doc-block">
+                  <div class="doc-pill">QUOTE</div>
+                  <div class="doc-code" id="doc-quote-code">…</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="accent-bar full-span"></div>
+
+            <div class="meta-strip full-span">
+              <div class="meta-field">
+                <span>Quote #</span>
+                <input type="text" data-bind="quote_no" readonly />
+              </div>
+
+              <div class="meta-field">
+                <span>Date</span>
+                <input type="date" data-bind="quote_date" />
+              </div>
+
+              <div class="meta-field">
+                <span>Expires</span>
+                <input type="date" data-bind="quote_expires" />
+              </div>
+
+              <div class="meta-field">
+                <span>Prepared by</span>
+                <input type="text" data-bind="prepared_by" />
+              </div>
+            </div>
           </div>
-        </div>
+        </header>
 
-        <div class="doc-pill">QUOTE</div>
-      </div>
-
-      <div class="accent-bar"></div>
-
-      <div class="meta-grid">
-        <label>
-          Quote #
-          <input type="text" data-bind="quote_no" readonly />
-        </label>
-
-        <label>
-          Date
-          <input type="date" data-bind="quote_date" />
-        </label>
-
-        <label>
-          Expires
-          <input type="date" data-bind="quote_expires" />
-        </label>
-
-        <label>
-          Prepared by
-          <input type="text" data-bind="prepared_by" />
-        </label>
-      </div>
-    </div>
-  </div>
-</header>
-
-        <!-- Parties / Jobsite -->
+        <!-- Customer / Job -->
         <section class="grid-2 avoid-break">
-  <div class="card slim">
-    <h3>Bill To</h3>
+          <div class="card">
+            <h3>Bill To</h3>
 
-    <div class="bill-fields">
-      <input type="text" placeholder="Client / Homeowner" data-bind="client_name" />
+            <div class="bill-fields">
+              <input
+                type="text"
+                placeholder="Client / Homeowner"
+                data-bind="client_name"
+              />
 
-      <div class="two-col">
-        <input type="text" placeholder="Phone" data-bind="client_phone" />
-        <input type="text" placeholder="Email" data-bind="client_email" />
-      </div>
+              <div class="two-col">
+                <input type="text" placeholder="Phone" data-bind="client_phone" />
+                <input type="text" placeholder="Email" data-bind="client_email" />
+              </div>
 
-      <input type="text" placeholder="Billing Address" data-bind="client_addr" />
-    </div>
-  </div>
+              <input
+                type="text"
+                placeholder="Billing Address"
+                data-bind="client_addr"
+              />
+            </div>
+          </div>
 
-  <div class="card slim">
-    <h3>Job Site</h3>
+          <div class="card">
+            <h3>Job Site</h3>
 
-    <div class="bill-fields">
-      <input type="text" placeholder="Job site address" data-bind="project_location" />
-    </div>
-  </div>
-</section>
+            <div class="job-fields">
+              <input
+                type="text"
+                placeholder="Installation address"
+                data-bind="project_location"
+              />
+              <p class="helper">
+                Installation address (if different from billing).
+              </p>
+            </div>
+          </div>
+        </section>
 
         <!-- Scope -->
         <section class="card avoid-break">
           <h3>Scope of Work</h3>
+          <div class="scope-presets no-print">
+            <div class="scope-presets-title">Quick add</div>
+            <div class="chip-row">
+              <button type="button" class="chip" data-scope-preset="removal">Removal &amp; Disposal</button>
+              <button type="button" class="chip" data-scope-preset="icewater_full">Full Ice &amp; Water (Entire Roof)</button>
+              <button type="button" class="chip" data-scope-preset="standing_seam">Mechanical-Lock Standing Seam</button>
+              <button type="button" class="chip" data-scope-preset="ribbed_steel">Ribbed Steel Panels</button>
+              <button type="button" class="chip" data-scope-preset="metal_shingles">Metal Shingles</button>
+              <button type="button" class="chip" data-scope-preset="plank_siding">Modern Plank Metal Siding</button>
+              <button type="button" class="chip" data-scope-preset="soffit_fascia">Soffit &amp; Fascia</button>
+              <button type="button" class="chip" data-scope-preset="eavestrough">Eavestrough &amp; Downspouts</button>
+            </div>
+          </div>
+
           <textarea
             class="autogrow"
             rows="3"
@@ -134,7 +166,7 @@
           <div class="row-between">
             <h3>Items & Pricing</h3>
             <button id="add-item" class="btn small no-print" type="button">
-              + Item
+              + Add Item
             </button>
           </div>
 
@@ -173,22 +205,19 @@
             <div class="row">
               <div class="label">Subtotal</div>
               <div class="spacer"></div>
-              <div class="value"><span>$</span><span id="subtotal">0.00</span></div>
+              <div class="value">
+                <span class="curr">$</span><span class="amt" id="subtotal">0.00</span>
+              </div>
             </div>
 
             <div class="row">
               <div class="label">Tax Rate</div>
               <div class="spacer"></div>
               <div class="value">
-                <span class="ghost">$</span>
-                <span>
-                  <input
-                    id="tax-rate"
-                    type="text"
-                    inputmode="decimal"
-                    value="13"
-                    class="short"
-                  />%
+                <span class="curr curr-placeholder">$</span>
+                <span class="amt amt-input">
+                  <input id="tax-rate" type="text" inputmode="decimal" value="13" class="short" />
+                  <span class="suffix">%</span>
                 </span>
               </div>
             </div>
@@ -196,22 +225,28 @@
             <div class="row">
               <div class="label">Tax</div>
               <div class="spacer"></div>
-              <div class="value"><span>$</span><span id="tax-amount">0.00</span></div>
+              <div class="value">
+                <span class="curr">$</span><span class="amt" id="tax-amount">0.00</span>
+              </div>
             </div>
 
             <div class="row">
               <div class="label">Additional Fees</div>
               <div class="spacer"></div>
               <div class="value">
-                <span>$</span>
-                <span><input id="fees" type="text" inputmode="decimal" placeholder="0.00" /></span>
+                <span class="curr">$</span>
+                <span class="amt amt-input">
+                  <input id="fees" type="text" inputmode="decimal" placeholder="0.00" />
+                </span>
               </div>
             </div>
 
             <div class="row total">
               <div class="label">Total</div>
               <div class="spacer"></div>
-              <div class="value"><span>$</span><span id="grand-total">0.00</span></div>
+              <div class="value">
+                <span class="curr">$</span><span class="amt" id="grand-total">0.00</span>
+              </div>
             </div>
           </div>
         </section>
