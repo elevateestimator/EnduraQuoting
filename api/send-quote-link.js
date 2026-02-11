@@ -4,12 +4,15 @@ import { createClient } from "@supabase/supabase-js";
  * POST /api/send-quote-link
  * Body: { quote_id: string }
  *
- * Sends a polished, centered, QuickBooks-style email (Postmark) with a
- * single strong CTA to view/sign online (no PDF attachment).
+ * Polished, customer-first email (Postmark):
+ * - Centered layout on mobile + desktop
+ * - Single strong CTA ("View quote & sign")
+ * - NO pricing in the email
+ * - Reply-To: jacob@endurametalroofing.ca
+ * - Dark mode: swaps logo to /assets/blacklogo.png and blends logo background
  *
- * Dark mode:
- * - Uses prefers-color-scheme to switch theme AND swap to /assets/blacklogo.png.
- * - Clients that don't support the media query will show the light logo.
+ * Note: Not all email clients fully support prefers-color-scheme.
+ * Apple Mail and Outlook support it well; Gmail may ignore the swap.
  */
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -82,7 +85,7 @@ export default async function handler(req, res) {
     const customerName = quote.customer_name || "there";
     const companyName = quote.data?.company?.name || "Endura Metal Roofing Ltd.";
 
-    // Subject change makes it obvious you're seeing the new template
+    // Subject makes it obvious you're seeing this new template
     const subject = `Your Endura Quote is Ready — ${quoteCode}`;
 
     const htmlBody = buildEmailHtml({
@@ -123,6 +126,7 @@ ${companyName}`;
       body: JSON.stringify({
         From: POSTMARK_FROM_EMAIL,
         To: toEmail,
+        ReplyTo: "jacob@endurametalroofing.ca",
         Subject: subject,
         HtmlBody: htmlBody,
         TextBody: textBody,
@@ -187,7 +191,6 @@ function buildEmailHtml({
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="x-apple-disable-message-reformatting" />
 
-    <!-- Let clients know we support BOTH. We'll style both explicitly. -->
     <meta name="color-scheme" content="light dark" />
     <meta name="supported-color-schemes" content="light dark" />
 
@@ -202,38 +205,45 @@ function buildEmailHtml({
         .px { padding-left: 18px !important; padding-right: 18px !important; }
         .cta { width: 100% !important; }
         .cta a { display:block !important; }
-        .cols { display:block !important; width:100% !important; }
-        .col { display:block !important; width:100% !important; padding:0 !important; }
-        .sp-12 { height:12px !important; line-height:12px !important; }
+        .h1 { font-size: 22px !important; }
+        .sub { font-size: 14px !important; }
       }
 
-      /* Default: light logo visible */
-      .logo-dark { display:none; max-height:0; overflow:hidden; }
-
-      /* Dark mode theme + swap logo */
+      /* ===== Logo swapping =====
+         Default: show light logo.
+         Dark mode: show dark logo.
+      */
+      .logo-dark { display:none; max-height:0; overflow:hidden; mso-hide:all; }
+      .logo-light { display:block; }
       @media (prefers-color-scheme: dark) {
+        .logo-light { display:none !important; max-height:0 !important; overflow:hidden !important; }
+        .logo-dark  { display:block !important; max-height:none !important; overflow:visible !important; }
+
         body, .bg { background:#0b1020 !important; }
         .card { background:#0f172a !important; border-color: rgba(255,255,255,0.14) !important; }
+        .txt { color:#e8eefc !important; }
         .muted { color: rgba(232,238,252,0.72) !important; }
-        .txt { color: #e8eefc !important; }
-        .chip { background: rgba(255,255,255,0.06) !important; border-color: rgba(255,255,255,0.14) !important; }
-        .footer { background: rgba(255,255,255,0.06) !important; border-color: rgba(255,255,255,0.14) !important; }
-        .link { color: #93c5fd !important; }
+        .detail { background: rgba(255,255,255,0.06) !important; border-color: rgba(255,255,255,0.14) !important; }
+        .divider { border-color: rgba(255,255,255,0.14) !important; }
+        .link { color:#93c5fd !important; }
 
-        .logo-light { display:none !important; max-height:0 !important; overflow:hidden !important; }
-        .logo-dark { display:block !important; max-height:none !important; overflow:visible !important; }
+        /* Make logo background BLEND with dark mode */
+        .logo-wrap { background:#000000 !important; }
+        .logo-shell { background:#000000 !important; border-color: rgba(255,255,255,0.18) !important; }
       }
 
       /* Outlook (new) dark mode hooks */
       [data-ogsc] body, [data-ogsc] .bg { background:#0b1020 !important; }
       [data-ogsc] .card { background:#0f172a !important; border-color: rgba(255,255,255,0.14) !important; }
+      [data-ogsc] .txt { color:#e8eefc !important; }
       [data-ogsc] .muted { color: rgba(232,238,252,0.72) !important; }
-      [data-ogsc] .txt { color: #e8eefc !important; }
-      [data-ogsc] .chip { background: rgba(255,255,255,0.06) !important; border-color: rgba(255,255,255,0.14) !important; }
-      [data-ogsc] .footer { background: rgba(255,255,255,0.06) !important; border-color: rgba(255,255,255,0.14) !important; }
-
+      [data-ogsc] .detail { background: rgba(255,255,255,0.06) !important; border-color: rgba(255,255,255,0.14) !important; }
+      [data-ogsc] .divider { border-color: rgba(255,255,255,0.14) !important; }
+      [data-ogsc] .link { color:#93c5fd !important; }
+      [data-ogsc] .logo-wrap { background:#000000 !important; }
+      [data-ogsc] .logo-shell { background:#000000 !important; border-color: rgba(255,255,255,0.18) !important; }
       [data-ogsc] .logo-light { display:none !important; }
-      [data-ogsc] .logo-dark { display:block !important; max-height:none !important; }
+      [data-ogsc] .logo-dark  { display:block !important; max-height:none !important; }
     </style>
 
     <!--[if mso]>
@@ -250,28 +260,13 @@ function buildEmailHtml({
     </div>
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
-      class="bg" bgcolor="#f5f7fb" style="width:100%;background:#f5f7fb;padding:28px 12px;">
+      class="bg" bgcolor="#f5f7fb" style="width:100%;background:#f5f7fb;padding:26px 12px;">
       <tr>
         <td align="center" style="padding:0;margin:0;">
 
           <table role="presentation" class="container" width="640" cellpadding="0" cellspacing="0"
             style="width:640px;max-width:640px;">
 
-            <!-- Logo -->
-            <tr>
-              <td align="center" style="padding:0 6px 16px;">
-                <span class="logo-light">
-                  <img src="${logoLightUrl}" width="180" alt="${safeCompany}"
-                    style="display:block;width:180px;max-width:180px;height:auto;margin:0 auto;border:0;outline:none;text-decoration:none;" />
-                </span>
-                <span class="logo-dark">
-                  <img src="${logoDarkUrl}" width="180" alt="${safeCompany}"
-                    style="display:block;width:180px;max-width:180px;height:auto;margin:0 auto;border:0;outline:none;text-decoration:none;" />
-                </span>
-              </td>
-            </tr>
-
-            <!-- Main card -->
             <tr>
               <td class="card" bgcolor="#ffffff"
                 style="background:#ffffff;border:1px solid #e6e9f1;border-radius:22px;overflow:hidden;">
@@ -283,30 +278,58 @@ function buildEmailHtml({
                   </tr>
                 </table>
 
+                <!-- Logo header (BLENDS with logo background) -->
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                  <!-- Headline -->
                   <tr>
-                    <td class="px" align="center" style="padding:22px 26px 10px;text-align:center;">
-                      <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;">
+                    <td class="logo-wrap" align="center" bgcolor="#ffffff"
+                      style="background:#ffffff;padding:18px 22px 14px;text-align:center;">
+                      <table role="presentation" cellpadding="0" cellspacing="0" class="logo-shell" bgcolor="#ffffff"
+                        style="background:#ffffff;border:1px solid #e6e9f1;border-radius:18px;overflow:hidden;">
+                        <tr>
+                          <td align="center" style="padding:12px 14px;">
+                            <!-- Light logo -->
+                            <img class="logo-light" src="${logoLightUrl}" width="200" alt="${safeCompany}"
+                              style="display:block;width:200px;max-width:200px;height:auto;margin:0 auto;border:0;outline:none;text-decoration:none;" />
+                            <!-- Dark logo -->
+                            <img class="logo-dark" src="${logoDarkUrl}" width="200" alt="${safeCompany}"
+                              style="display:none;width:200px;max-width:200px;height:auto;margin:0 auto;border:0;outline:none;text-decoration:none;" />
+                          </td>
+                        </tr>
+                      </table>
+
+                      <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin-top:12px;">
                         <div class="muted" style="font-size:12px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;color:#6b7280;">
-                          Quote ready
+                          Quote
                         </div>
-                        <div class="txt" style="margin-top:10px;font-size:26px;font-weight:950;line-height:1.2;color:#0b0f14;">
+                        <div class="txt" style="margin-top:6px;font-size:14px;font-weight:950;letter-spacing:.10em;color:#0b0f14;word-break:break-word;">
+                          ${safeCode}
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                </table>
+
+                <!-- Copy -->
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td class="px" align="center" style="padding:18px 26px 10px;text-align:center;">
+                      <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;">
+                        <div class="txt h1" style="font-size:26px;font-weight:950;line-height:1.2;color:#0b0f14;">
                           Review &amp; sign online
                         </div>
-                        <div class="muted" style="margin-top:10px;font-size:14px;line-height:1.65;color:#4b5563;max-width:520px;">
-                          Hi ${safeName}. Your quote is ready to review on desktop or mobile. When you’re ready, accept &amp; sign right on the page.
+                        <div class="muted sub" style="margin-top:10px;font-size:14px;line-height:1.65;color:#4b5563;max-width:520px;">
+                          Hi ${safeName}. Tap the button below to view your quote on mobile or desktop — then accept &amp; sign right on the page.
                         </div>
                       </div>
                     </td>
                   </tr>
 
-                  <!-- CTA (front & center) -->
+                  <!-- CTA -->
                   <tr>
                     <td align="center" style="padding:12px 26px 8px;">
                       <!--[if mso]>
                         <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="${safeViewUrl}"
-                          style="height:52px;v-text-anchor:middle;width:360px;" arcsize="16%"
+                          style="height:54px;v-text-anchor:middle;width:420px;" arcsize="16%"
                           strokecolor="${brand}" fillcolor="${brand}">
                           <w:anchorlock/>
                           <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:16px;font-weight:bold;">
@@ -316,12 +339,12 @@ function buildEmailHtml({
                       <![endif]-->
 
                       <!--[if !mso]><!-- -->
-                      <table role="presentation" cellpadding="0" cellspacing="0" class="cta" style="margin:0 auto;width:360px;max-width:100%;">
+                      <table role="presentation" cellpadding="0" cellspacing="0" class="cta" style="margin:0 auto;width:420px;max-width:100%;">
                         <tr>
                           <td align="center"
                             style="border-radius:16px;background:linear-gradient(90deg,${brand},${brandDark});">
                             <a href="${safeViewUrl}"
-                              style="display:inline-block;width:100%;padding:16px 18px;border-radius:16px;
+                              style="display:inline-block;width:100%;padding:18px 18px;border-radius:16px;
                                      font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
                                      font-weight:950;font-size:16px;letter-spacing:.2px;text-decoration:none;
                                      color:#ffffff;-webkit-text-fill-color:#ffffff;">
@@ -345,43 +368,35 @@ function buildEmailHtml({
                     </td>
                   </tr>
 
-                  <!-- Small details (no price) -->
+                  <!-- Details (CENTERED, mobile-safe) -->
                   <tr>
                     <td class="px" align="center" style="padding:0 26px 22px;text-align:center;">
                       <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
-                        style="border:1px solid #e6e9f1;border-radius:18px;overflow:hidden;">
+                        class="detail" bgcolor="#f8fafc"
+                        style="background:#f8fafc;border:1px solid #e6e9f1;border-radius:18px;overflow:hidden;max-width:520px;">
                         <tr>
-                          <td class="chip cols" style="padding:14px 16px;background:#f8fafc;">
-                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                              <tr>
-                                <td class="col" align="center" style="width:33.33%;padding:0 8px;">
-                                  <div class="muted" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:11px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:#6b7280;">
-                                    Quote #
-                                  </div>
-                                  <div class="txt" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:14px;font-weight:950;color:#0b0f14;margin-top:6px;">
-                                    ${safeCode}
-                                  </div>
-                                </td>
+                          <td align="center" style="padding:14px 16px;text-align:center;">
+                            <div class="muted" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:11px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:#6b7280;">
+                              Expires
+                            </div>
+                            <div class="txt" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:15px;font-weight:950;color:#0b0f14;margin-top:6px;">
+                              ${safeExpires}
+                            </div>
+                          </td>
+                        </tr>
 
-                                <td class="col" align="center" style="width:33.33%;padding:0 8px;">
-                                  <div class="muted" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:11px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:#6b7280;">
-                                    Expires
-                                  </div>
-                                  <div class="txt" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:14px;font-weight:950;color:#0b0f14;margin-top:6px;">
-                                    ${safeExpires}
-                                  </div>
-                                </td>
+                        <tr>
+                          <td class="divider" style="border-top:1px solid #e6e9f1;"></td>
+                        </tr>
 
-                                <td class="col" align="center" style="width:33.33%;padding:0 8px;">
-                                  <div class="muted" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:11px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:#6b7280;">
-                                    Prepared by
-                                  </div>
-                                  <div class="txt" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:14px;font-weight:950;color:#0b0f14;margin-top:6px;">
-                                    ${safePrepared}
-                                  </div>
-                                </td>
-                              </tr>
-                            </table>
+                        <tr>
+                          <td align="center" style="padding:14px 16px;text-align:center;">
+                            <div class="muted" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:11px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:#6b7280;">
+                              Prepared by
+                            </div>
+                            <div class="txt" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:15px;font-weight:950;color:#0b0f14;margin-top:6px;">
+                              ${safePrepared}
+                            </div>
                           </td>
                         </tr>
                       </table>
@@ -390,8 +405,11 @@ function buildEmailHtml({
 
                   <!-- Footer -->
                   <tr>
-                    <td class="footer" align="center" bgcolor="#f3f4f6"
-                      style="background:#f3f4f6;border-top:1px solid #e6e9f1;padding:14px 24px;text-align:center;">
+                    <td class="divider" style="border-top:1px solid #e6e9f1;"></td>
+                  </tr>
+
+                  <tr>
+                    <td align="center" style="padding:14px 24px 18px;text-align:center;">
                       <div class="muted" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:12px;line-height:1.55;color:#6b7280;">
                         Questions? Reply to this email or call <span class="txt" style="color:#0b0f14;font-weight:950;">${safePhone}</span>
                         <br />
