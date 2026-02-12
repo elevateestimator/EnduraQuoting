@@ -330,7 +330,7 @@ function buildEmailHtml({
                   <tr>
                     <td align="center" style="padding:12px 26px 8px;">
                       <!--[if mso]>
-                        <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="${safeViewUrl}"
+                        <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${safeViewUrl}"
                           style="height:54px;v-text-anchor:middle;width:420px;" arcsize="16%"
                           strokecolor="${brand}" fillcolor="${brand}">
                           <w:anchorlock/>
@@ -343,8 +343,8 @@ function buildEmailHtml({
                       <!--[if !mso]><!-- -->
                       <table role="presentation" cellpadding="0" cellspacing="0" class="cta" style="margin:0 auto;width:420px;max-width:100%;">
                         <tr>
-                          <td align="center"
-                            style="border-radius:16px;background:linear-gradient(90deg,${brand},${brandDark});">
+                          <td align="center" bgcolor="${brand}"
+                            style="border-radius:16px;background-color:${brand};background:${brand};background-image:linear-gradient(90deg,${brand},${brandDark});">
                             <a href="${safeViewUrl}"
                               style="display:block;padding:18px 18px;border-radius:16px;text-align:center;
                                      font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;

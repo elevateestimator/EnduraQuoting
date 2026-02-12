@@ -83,11 +83,16 @@ export default async function handler(req, res) {
     const existingAcc = quote.data?.acceptance;
     if (existingAcc?.accepted_at) {
       // Don't spam emails if they refresh / double-tap
-      res.status(200).json({ ok: true, accepted_at: existingAcc.accepted_at, already_accepted: true });
+      res.status(200).json({ ok: true, accepted_at: existingAcc.accepted_at, accepted_date: existingAcc.accepted_date || null, already_accepted: true });
       return;
     }
 
     const accepted_at = new Date().toISOString();
+
+    // Prefer a client-provided local date (prevents UTC rollover issues).
+    // Expected format: YYYY-MM-DD
+    const bodyAcceptedDate = (req.body && req.body.accepted_date) ? String(req.body.accepted_date) : "";
+    const accepted_date = isYmd(bodyAcceptedDate) ? bodyAcceptedDate : formatYmdInTimeZone(new Date(), process.env.DEFAULT_TIMEZONE || "America/Toronto");
 
     const data = quote.data || {};
     const billName = data?.bill_to?.client_name;
@@ -95,6 +100,7 @@ export default async function handler(req, res) {
 
     data.acceptance = {
       accepted_at,
+      accepted_date,
       name: signerName,
       signature_image_data_url: signature_data_url,
     };
@@ -128,7 +134,7 @@ export default async function handler(req, res) {
       const companyEmail = company?.email || "jacob@endurametalroofing.ca";
       const web = company?.web || "endurametalroofing.ca";
 
-      const acceptedDatePretty = formatDateTimePretty(accepted_at);
+      const acceptedDatePretty = formatYmdPretty(accepted_date);
 
       // 1) Email YOU (admin) when signed
       emailResults.admin.attempted = true;
@@ -241,6 +247,33 @@ async function sendPostmark({ token, payload }) {
   return { ok: true };
 }
 
+
+function isYmd(s) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(s || ""));
+}
+
+function formatYmdInTimeZone(dateObj, timeZone) {
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(dateObj);
+
+    const map = {};
+    for (const p of parts) map[p.type] = p.value;
+    const y = map.year || "0000";
+    const m = map.month || "01";
+    const d = map.day || "01";
+    return `${y}-${m}-${d}`;
+  } catch {
+    // Fallback: UTC date (still better than throwing)
+    return new Date(dateObj).toISOString().slice(0, 10);
+  }
+}
+
+
 function escapeHtml(s) {
   return String(s || "")
     .replaceAll("&", "&amp;")
@@ -248,6 +281,19 @@ function escapeHtml(s) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function formatYmdPretty(ymd) {
+  if (!ymd) return "—";
+  try {
+    return new Date(`${ymd}T00:00:00`).toLocaleDateString("en-CA", {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+    });
+  } catch {
+    return ymd;
+  }
 }
 
 function formatDateTimePretty(iso) {
@@ -410,9 +456,21 @@ function buildCustomerAcceptedHtml({
                 <!-- CTA -->
                 <tr>
                   <td align="center" style="padding:16px 26px 8px;">
+                    <!--[if mso]>
+                      <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word"
+                        href="${safeViewUrl}" style="height:54px;v-text-anchor:middle;width:420px;" arcsize="16%"
+                        strokecolor="${brand}" fillcolor="${brand}">
+                        <w:anchorlock/>
+                        <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:16px;font-weight:bold;">
+                          View signed quote
+                        </center>
+                      </v:roundrect>
+                    <![endif]-->
+
+                    <!--[if !mso]><!-- -->
                     <table role="presentation" cellpadding="0" cellspacing="0" class="cta" style="margin:0 auto;width:420px;max-width:100%;">
                       <tr>
-                        <td align="center" style="border-radius:16px;background:linear-gradient(90deg,${brand},${brandDark});">
+                        <td align="center" bgcolor="${brand}" style="border-radius:16px;background-color:${brand};background:${brand};">
                           <a href="${safeViewUrl}"
                             style="display:block;padding:18px 18px;border-radius:16px;text-align:center;
                                    font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
@@ -423,26 +481,8 @@ function buildCustomerAcceptedHtml({
                         </td>
                       </tr>
                     </table>
-                    <div class="muted" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:12px;line-height:1.6;color:#6b7280;margin-top:10px;text-align:center;">
-                      (You can download the PDF from the quote page.)
-                    </div>
+                    <!--<![endif]-->
                   </td>
-                </tr>
-
-                <!-- Footer -->
-                <tr><td class="divider" style="border-top:1px solid #e6e9f1;"></td></tr>
-                <tr>
-                  <td align="center" style="padding:14px 24px 18px;text-align:center;">
-                    <div class="muted" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:12px;line-height:1.55;color:#6b7280;">
-                      Questions? Reply to this email or call <span class="txt" style="color:#0b0f14;font-weight:950;">${safePhone}</span>
-                      <br />
-                      <span style="color:#9ca3af;">${safeCompany} • ${safeEmail} • ${safeWeb}</span>
-                    </div>
-                  </td>
-                </tr>
-              </table>
-
-            </td>
           </tr>
 
           <tr>
@@ -573,9 +613,21 @@ function buildAdminSignedHtml({
 
                 <tr>
                   <td align="center" style="padding:12px 26px 8px;">
+                    <!--[if mso]>
+                      <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word"
+                        href="${safeAdminUrl}" style="height:54px;v-text-anchor:middle;width:420px;" arcsize="16%"
+                        strokecolor="${brand}" fillcolor="${brand}">
+                        <w:anchorlock/>
+                        <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:16px;font-weight:bold;">
+                          Open in Admin
+                        </center>
+                      </v:roundrect>
+                    <![endif]-->
+
+                    <!--[if !mso]><!-- -->
                     <table role="presentation" cellpadding="0" cellspacing="0" class="cta" style="margin:0 auto;width:420px;max-width:100%;">
                       <tr>
-                        <td align="center" style="border-radius:16px;background:linear-gradient(90deg,${brand},${brandDark});">
+                        <td align="center" bgcolor="${brand}" style="border-radius:16px;background-color:${brand};background:${brand};">
                           <a href="${safeAdminUrl}"
                             style="display:block;padding:18px 18px;border-radius:16px;text-align:center;
                                    font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
@@ -586,24 +638,8 @@ function buildAdminSignedHtml({
                         </td>
                       </tr>
                     </table>
-
-                    <div class="muted" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:12px;line-height:1.6;color:#6b7280;margin-top:10px;text-align:center;">
-                      Customer link: <span class="link" style="color:${brand};word-break:break-all;">${safeViewUrl}</span>
-                    </div>
+                    <!--<![endif]-->
                   </td>
-                </tr>
-
-                <tr><td class="divider" style="border-top:1px solid #e6e9f1;"></td></tr>
-                <tr>
-                  <td align="center" style="padding:14px 24px 18px;text-align:center;">
-                    <div class="muted" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:12px;line-height:1.55;color:#6b7280;">
-                      ${safeCompany}
-                    </div>
-                  </td>
-                </tr>
-              </table>
-
-            </td>
           </tr>
         </table>
       </td>

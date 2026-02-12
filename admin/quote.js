@@ -194,6 +194,25 @@ function formatDateDisplay(iso) {
     return iso;
   }
 }
+
+
+function acceptedDateIsoFromAcceptance(acc) {
+  if (!acc) return "";
+  if (acc.accepted_date && /^\d{4}-\d{2}-\d{2}$/.test(acc.accepted_date)) return acc.accepted_date;
+  if (acc.accepted_date_local && /^\d{4}-\d{2}-\d{2}$/.test(acc.accepted_date_local)) return acc.accepted_date_local;
+  if (acc.accepted_at) {
+    const d = new Date(acc.accepted_at);
+    if (!Number.isNaN(d.getTime())) {
+      // Use local date (admin machine timezone)
+      const parts = new Intl.DateTimeFormat("en-CA", { year:"numeric", month:"2-digit", day:"2-digit" }).formatToParts(d);
+      const map = {};
+      for (const p of parts) map[p.type] = p.value;
+      return `${map.year}-${map.month}-${map.day}`;
+    }
+  }
+  return "";
+}
+
 function syncRepDateFromQuoteDate() {
   if (!repDateEl) return;
   const iso = quoteDateInput?.value || "";
@@ -208,7 +227,7 @@ function renderClientAcceptance(data, qRow) {
 
   if (acc?.accepted_at) {
     const name = (acc.name || data?.bill_to?.client_name || qRow?.customer_name || "Client").trim();
-    const dateIso = String(acc.accepted_at).slice(0, 10);
+    const dateIso = acceptedDateIsoFromAcceptance(acc);
     const src = acc.signature_image_data_url || acc.signature_data_url || "";
 
     if (src) {

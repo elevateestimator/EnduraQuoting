@@ -62,6 +62,32 @@ function fmtDate(iso) {
   }
 }
 
+
+function ymdFromDate(d) {
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(d);
+    const map = {};
+    for (const p of parts) map[p.type] = p.value;
+    return `${map.year}-${map.month}-${map.day}`;
+  } catch {
+    return new Date(d).toISOString().slice(0, 10);
+  }
+}
+
+function acceptedDateIsoFromAcceptance(acc) {
+  if (!acc) return "";
+  if (acc.accepted_date && /^\d{4}-\d{2}-\d{2}$/.test(acc.accepted_date)) return acc.accepted_date;
+  if (acc.accepted_date_local && /^\d{4}-\d{2}-\d{2}$/.test(acc.accepted_date_local)) return acc.accepted_date_local;
+  if (acc.accepted_at) {
+    const d = new Date(acc.accepted_at);
+    if (!Number.isNaN(d.getTime())) return ymdFromDate(d); // local timezone
+  }
+  return "";
+}
 async function getJSON(url) {
   const res = await fetch(url, { method: "GET" });
   let data = null;
@@ -243,7 +269,7 @@ function fillQuote(quote) {
 
   if (acceptance?.accepted_at) {
     const name = acceptance.name || bill.client_name || quote.customer_name || "Client";
-    const dateIso = (acceptance.accepted_at || "").slice(0, 10);
+    const dateIso = acceptedDateIsoFromAcceptance(acceptance);
 
     const src = acceptance.signature_image_data_url || acceptance.signature_data_url || "";
     if (sigImg && src) {
@@ -651,6 +677,7 @@ async function main() {
         const out = await postJSON("/api/accept-quote", {
           quote_id: id,
           signature_data_url,
+          accepted_date: ymdFromDate(new Date()),
         });
 
         // Update doc signature fields
@@ -660,7 +687,7 @@ async function main() {
         }
 
         $("#v-client-name").textContent = customerName || "Client";
-        $("#v-client-date").textContent = fmtDate(out.accepted_at.slice(0, 10));
+        $("#v-client-date").textContent = fmtDate(out.accepted_date || acceptedDateIsoFromAcceptance({ accepted_at: out.accepted_at }));
 
         vQuoteStatus.textContent = "Accepted";
         $("#accept-pill").textContent = "Accepted";
@@ -683,8 +710,14 @@ async function main() {
 
     // If already accepted, lock CTAs
     if (isAccepted) {
-      $("#accept-pill").textContent = "Accepted";
-      acceptBtn.disabled = true;
+      $("#accept-pill").textContent = "Signed";
+      acceptSectionEl.hidden = true;
+      if (acceptBtn) {
+        acceptBtn.textContent = "Signed";
+        acceptBtn.disabled = true;
+        acceptBtn.classList.remove("brand");
+        acceptBtn.classList.add("signed");
+      }
       if (signNowBtn) signNowBtn.disabled = true;
     }
 

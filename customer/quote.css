@@ -91,6 +91,15 @@ body{
   background: linear-gradient(90deg, var(--brand), var(--brand-dark));
   color:#ffffff;
 }
+
+.btn.signed{
+  border: 1px solid rgba(16,185,129,0.38);
+  background: rgba(16,185,129,0.14);
+  color: rgba(255,255,255,0.95);
+}
+
+.btn.signed:hover{ filter:none; }
+
 .btn.brand:hover{ filter: brightness(0.96); }
 
 .btn.ghost{ background: transparent; }
