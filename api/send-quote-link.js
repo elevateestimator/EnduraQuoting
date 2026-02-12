@@ -37,6 +37,7 @@ export default async function handler(req, res) {
     const POSTMARK_SERVER_TOKEN = process.env.POSTMARK_SERVER_TOKEN;
     const POSTMARK_FROM_EMAIL = process.env.POSTMARK_FROM_EMAIL;
     const POSTMARK_MESSAGE_STREAM = process.env.POSTMARK_MESSAGE_STREAM || "outbound";
+    const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL || "jacob@endurametalroofing.ca";
     if (!POSTMARK_SERVER_TOKEN || !POSTMARK_FROM_EMAIL) {
       res.status(500).json({ error: "Missing POSTMARK_SERVER_TOKEN or POSTMARK_FROM_EMAIL" });
       return;
@@ -126,6 +127,7 @@ ${companyName}`;
       body: JSON.stringify({
         From: POSTMARK_FROM_EMAIL,
         To: toEmail,
+        Bcc: ADMIN_NOTIFY_EMAIL,
         ReplyTo: "jacob@endurametalroofing.ca",
         Subject: subject,
         HtmlBody: htmlBody,
