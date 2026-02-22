@@ -1,15 +1,13 @@
 import { supabase } from "./js/api.js";
 
-const form = document.getElementById("login-form");
+const form = document.getElementById("signup-form");
+const companyEl = document.getElementById("company");
 const emailEl = document.getElementById("email");
 const passEl = document.getElementById("password");
+const pass2El = document.getElementById("password2");
 const submitBtn = document.getElementById("submit");
 const msgEl = document.getElementById("msg");
 const toggleBtn = document.getElementById("toggle-password");
-const forgotBtn = document.getElementById("forgot-btn");
-const yearEl = document.getElementById("year");
-
-yearEl.textContent = String(new Date().getFullYear());
 
 function setMessage(text, type = "") {
   msgEl.textContent = text || "";
@@ -18,12 +16,13 @@ function setMessage(text, type = "") {
 
 function setLoading(isLoading) {
   submitBtn.disabled = isLoading;
-  submitBtn.textContent = isLoading ? "Signing in…" : "Sign in";
+  submitBtn.textContent = isLoading ? "Creating…" : "Create account";
 }
 
 toggleBtn.addEventListener("click", () => {
   const isPassword = passEl.type === "password";
   passEl.type = isPassword ? "text" : "password";
+  pass2El.type = isPassword ? "text" : "password";
   toggleBtn.textContent = isPassword ? "Hide" : "Show";
 });
 
@@ -35,41 +34,6 @@ async function redirectIfAlreadyLoggedIn() {
   }
 }
 
-forgotBtn.addEventListener("click", async () => {
-  setMessage("");
-
-  const email = emailEl.value.trim();
-  if (!email) {
-    setMessage("Enter your email first, then click “Forgot password?”.", "error");
-    emailEl.focus();
-    return;
-  }
-
-  forgotBtn.disabled = true;
-  forgotBtn.textContent = "Sending…";
-
-  try {
-    const redirectTo = `${window.location.origin}/reset.html`;
-
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo,
-    });
-
-    if (error) {
-      setMessage(error.message, "error");
-      return;
-    }
-
-    setMessage("Password reset email sent. Check your inbox.", "ok");
-  } catch (err) {
-    console.error(err);
-    setMessage("Unexpected error. Check console.", "error");
-  } finally {
-    forgotBtn.disabled = false;
-    forgotBtn.textContent = "Forgot password?";
-  }
-});
-
 (async () => {
   await redirectIfAlreadyLoggedIn();
 
@@ -77,20 +41,44 @@ forgotBtn.addEventListener("click", async () => {
     e.preventDefault();
     setMessage("");
 
+    const companyName = companyEl.value.trim();
     const email = emailEl.value.trim();
     const password = passEl.value;
+    const password2 = pass2El.value;
+
+    if (!companyName) {
+      setMessage("Enter your company name.", "error");
+      companyEl.focus();
+      return;
+    }
 
     if (!email || !password) {
       setMessage("Enter your email + password.", "error");
       return;
     }
 
+    if (password.length < 8) {
+      setMessage("Password must be at least 8 characters.", "error");
+      return;
+    }
+
+    if (password !== password2) {
+      setMessage("Passwords do not match.", "error");
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const emailRedirectTo = `${window.location.origin}/index.html`;
+
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          emailRedirectTo,
+          data: { company_name: companyName },
+        },
       });
 
       if (error) {
@@ -98,7 +86,13 @@ forgotBtn.addEventListener("click", async () => {
         return;
       }
 
-      setMessage("Signed in. Redirecting…", "ok");
+      // If email confirmations are ON, session may be null.
+      if (!data?.session) {
+        setMessage("Account created. Check your email to confirm, then sign in.", "ok");
+        return;
+      }
+
+      setMessage("Account created. Redirecting…", "ok");
       window.location.href = "./admin/dashboard.html";
     } catch (err) {
       console.error(err);

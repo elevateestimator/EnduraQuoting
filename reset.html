@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
-    <title>Elevate Estimator — Sign in</title>
+    <title>Elevate Estimator — Reset password</title>
     <link rel="stylesheet" href="./index.css" />
   </head>
 
@@ -13,7 +13,6 @@
       <section class="card">
         <header class="header">
           <div class="brand">
-            <!-- Put your light logo at: /assets/elevate-estimator-logo-light.png -->
             <img
               class="logo"
               src="./assets/elevate-estimator-logo-light.png"
@@ -21,31 +20,20 @@
             />
           </div>
 
-          <span class="badge">Elevate Estimator</span>
-          <h1 style="margin-top:10px;">Sign in</h1>
-          <p>Access your dashboard to create, send, and manage quotes.</p>
+          <span class="badge">Password reset</span>
+          <h1 style="margin-top:10px;">Choose a new password</h1>
+          <p>Enter a new password for your account.</p>
         </header>
 
-        <form id="login-form" class="form" autocomplete="on" novalidate>
+        <form id="reset-form" class="form" autocomplete="on" novalidate>
           <label class="field">
-            <span>Email</span>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              placeholder="you@company.com"
-              required
-            />
-          </label>
-
-          <label class="field">
-            <span>Password</span>
+            <span>New password</span>
             <div class="password-row">
               <input
                 id="password"
                 name="password"
                 type="password"
-                placeholder="••••••••••"
+                placeholder="Minimum 8 characters"
                 required
               />
               <button
@@ -59,26 +47,28 @@
             </div>
           </label>
 
-          <button id="submit" class="primary" type="submit">Sign in</button>
+          <label class="field">
+            <span>Confirm new password</span>
+            <input
+              id="password2"
+              name="password2"
+              type="password"
+              placeholder="Repeat password"
+              required
+            />
+          </label>
+
+          <button id="submit" class="primary" type="submit">Update password</button>
 
           <div class="links" aria-label="account links">
-            <button id="forgot-btn" class="link" type="button">
-              Forgot password?
-            </button>
-            <a class="link" href="./signup.html">Create account</a>
+            <a class="link" href="./index.html">Back to sign in</a>
           </div>
 
           <div id="msg" class="msg" role="status" aria-live="polite"></div>
         </form>
-
-        <hr class="hr" />
-
-        <footer class="footer">
-          <small>© <span id="year"></span> Elevate Estimator</small>
-        </footer>
       </section>
     </main>
 
-    <script type="module" src="./index.js"></script>
+    <script type="module" src="./reset.js"></script>
   </body>
 </html>
