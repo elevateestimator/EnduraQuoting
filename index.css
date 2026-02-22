@@ -1,17 +1,24 @@
 :root{
   color-scheme: light;
+
   --bg: #f5f7fb;
   --card: #ffffff;
   --border: rgba(15, 23, 42, 0.12);
+
   --text: #0b1020;
   --muted: #55647a;
+
   --danger: #b42318;
   --ok: #027a48;
+
   --brand: #1f4ed8;
   --brand2: #014d89;
-  --shadow: 0 24px 70px rgba(15, 23, 42, 0.14);
-  --logo-scale: 1.16;
-  --logo-offset-y: -10px;
+
+  --shadow: 0 26px 90px rgba(15, 23, 42, 0.14);
+
+  /* Logo crop tuning (your PNG has extra whitespace). Adjust if needed. */
+  --logo-scale: 1.24;
+  --logo-offset-y: -18px;
 }
 
 *{ box-sizing: border-box; }
@@ -32,30 +39,43 @@ body{
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 34px 16px;
+  padding: 28px 16px;
 }
 
 .card{
+  position: relative;
+  overflow: hidden;
+
   width: 100%;
-  max-width: 420px;
+  max-width: 460px;
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 18px;
-  padding: 20px;
+  border-radius: 22px;
+  padding: 26px 24px 22px;
   box-shadow: var(--shadow);
+}
+
+.card::before{
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  height: 6px;
+  background: linear-gradient(90deg, var(--brand), var(--brand2));
 }
 
 .brand{
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 8px;
+  margin: 8px 0 6px;
 }
 
 /* Crops the extra whitespace built into many logo PNGs */
 .logo-frame{
-  width: min(300px, 100%);
-  height: 76px;
+  width: min(320px, 100%);
+  height: 62px;
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -66,49 +86,53 @@ body{
   width: 100%;
   height: auto;
   display: block;
-  transform: translateY(var(--logo-offset-y, -10px)) scale(var(--logo-scale, 1.16));
+  transform: translateY(var(--logo-offset-y)) scale(var(--logo-scale));
   transform-origin: center;
 }
 
 .header{
   text-align: center;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
 .header h1{
-  margin: 0 0 4px;
-  font-size: 22px;
+  margin: 6px 0 8px;
+  font-size: 30px;
+  line-height: 1.1;
   letter-spacing: 0.2px;
 }
 
 .header p{
-  margin: 0;
+  margin: 0 auto;
+  max-width: 34ch;
   color: var(--muted);
-  font-size: 14px;
-  line-height: 1.45;
+  font-size: 15px;
+  line-height: 1.55;
 }
 
 .form{
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 
 .field{
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .field span{
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
+  font-weight: 700;
+  letter-spacing: 0.2px;
 }
 
 input{
   width: 100%;
-  padding: 12px 12px;
-  border-radius: 12px;
+  padding: 14px 14px;
+  border-radius: 14px;
   border: 1px solid rgba(15, 23, 42, 0.14);
   background: #ffffff;
   color: var(--text);
@@ -119,26 +143,37 @@ input::placeholder{
   color: rgba(15, 23, 42, 0.35);
 }
 
+/* Keep autofill from changing the “premium” look */
+input:-webkit-autofill{
+  -webkit-box-shadow: 0 0 0 40px #ffffff inset !important;
+  -webkit-text-fill-color: var(--text) !important;
+  transition: background-color 9999s ease-in-out 0s;
+}
+
 input:focus{
   border-color: rgba(31, 78, 216, 0.55);
-  box-shadow: 0 0 0 3px rgba(31, 78, 216, 0.14);
+  box-shadow: 0 0 0 4px rgba(31, 78, 216, 0.14);
 }
 
 .password-row{
   display: flex;
   gap: 10px;
-  align-items: center;
+  align-items: stretch;
 }
 
 .toggle{
+  display: flex;
+  align-items: center;
+  justify-content: center;
   white-space: nowrap;
-  padding: 10px 12px;
-  border-radius: 12px;
+  padding: 0 16px;
+  border-radius: 14px;
   border: 1px solid rgba(15, 23, 42, 0.14);
   background: rgba(15, 23, 42, 0.03);
   color: var(--text);
   cursor: pointer;
-  font-weight: 700;
+  font-weight: 800;
+  min-width: 84px;
 }
 
 .toggle:hover{
@@ -146,14 +181,17 @@ input:focus{
 }
 
 .primary{
-  padding: 12px 14px;
-  border-radius: 12px;
+  margin-top: 4px;
+  padding: 16px 16px;
+  border-radius: 18px;
   border: 0;
   background: linear-gradient(135deg, var(--brand), var(--brand2));
   color: #ffffff;
-  font-weight: 800;
+  font-weight: 900;
+  font-size: 16px;
+  letter-spacing: 0.2px;
   cursor: pointer;
-  box-shadow: 0 10px 22px rgba(31, 78, 216, 0.18);
+  box-shadow: 0 14px 26px rgba(31, 78, 216, 0.18);
 }
 
 .primary:disabled{
@@ -162,7 +200,7 @@ input:focus{
 }
 
 .links{
-  margin-top: 8px;
+  margin-top: 10px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -175,53 +213,67 @@ input:focus{
   border: 0;
   padding: 0;
   color: var(--brand);
-  font-weight: 800;
-  font-size: 13px;
+  font-weight: 900;
+  font-size: 14px;
   cursor: pointer;
   text-decoration: none;
 }
 
-.link:hover{
-  text-decoration: underline;
-}
+.link:hover{ text-decoration: underline; }
 
+/* Message: only visible when set */
 .msg{
-  min-height: 18px;
-  margin-top: 10px;
+  margin-top: 12px;
   font-size: 13px;
-  color: var(--muted);
   text-align: center;
+  line-height: 1.45;
+  display: none;
+  padding: 10px 12px;
+  border-radius: 14px;
 }
 
-.msg.error{ color: var(--danger); }
-.msg.ok{ color: var(--ok); }
-
-.footer{
-  margin-top: 14px;
-  color: var(--muted);
-  font-size: 12px;
-  text-align: center;
+.msg:empty{ display: none; padding: 0; margin-top: 0; }
+.msg.ok{
+  display: block;
+  color: var(--ok);
+  background: rgba(2, 122, 72, 0.08);
+  border: 1px solid rgba(2, 122, 72, 0.22);
+}
+.msg.error{
+  display: block;
+  color: var(--danger);
+  background: rgba(180, 35, 24, 0.08);
+  border: 1px solid rgba(180, 35, 24, 0.22);
 }
 
 .hr{
-  margin: 14px 0 10px;
+  margin: 18px 0 12px;
   height: 1px;
   background: rgba(15, 23, 42, 0.08);
   border: 0;
 }
 
+.footer{
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+
 .small{
+  margin: 0;
   font-size: 12px;
   color: var(--muted);
   text-align: center;
-  line-height: 1.45;
+  line-height: 1.55;
 }
-
-@media (max-width: 420px){
-  .links{ flex-direction: column; align-items: stretch; }
-  .link{ text-align: center; }
-}
-
 
 /* Safety: if any old markup still includes .badge, hide it */
 .badge{ display:none !important; }
+
+@media (max-width: 420px){
+  .card{ padding: 24px 18px 20px; }
+  .header h1{ font-size: 28px; }
+  .links{ flex-direction: column; align-items: stretch; }
+  .link{ text-align: center; }
+}
