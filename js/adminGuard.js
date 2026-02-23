@@ -1,20 +1,18 @@
-import { supabase, isAdminEmail } from "./api.js";
+import { supabase } from "./api.js";
 
-export async function requireAdminOrRedirect({
-  redirectTo = "../index.html",
-} = {}) {
-  const { data, error } = await supabase.auth.getSession();
-
-  if (error) {
-    window.location.href = redirectTo;
-    return null;
-  }
-
+/**
+ * SaaS-friendly auth guard:
+ * - Requires ANY authenticated user (no email allowlist).
+ * - If not logged in, redirect to `redirectTo`.
+ *
+ * Keep the exported function name the same so existing admin pages
+ * that import `requireAdminOrRedirect` will keep working.
+ */
+export async function requireAdminOrRedirect({ redirectTo = "../index.html" } = {}) {
+  const { data } = await supabase.auth.getSession();
   const session = data?.session;
-  const email = session?.user?.email;
 
-  if (!session || !isAdminEmail(email)) {
-    await supabase.auth.signOut();
+  if (!session) {
     window.location.href = redirectTo;
     return null;
   }
