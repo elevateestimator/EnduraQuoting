@@ -1,25 +1,67 @@
 import { supabase } from "../js/api.js";
-import { requireAdminOrRedirect } from "../js/adminGuard.js";
-import { listQuotes, createQuote, duplicateQuoteById, cancelQuote } from "../js/quotesApi.js";
+import { listQuotes, createQuote } from "../js/quotesApi.js";
 import { makeDefaultQuoteData } from "../js/quoteDefaults.js";
+
+/**
+ * Dashboard v1:
+ * - Overview layout (admin/owner first)
+ * - Only shows Recent Quotes (no full-table view)
+ * - “Quotes / Customers” buttons are placeholders for now
+ */
 
 const userEmailEl = document.getElementById("user-email");
 const errorBox = document.getElementById("error-box");
-const quotesBody = document.getElementById("quotes-body");
-const emptyState = document.getElementById("empty-state");
 
-const refreshBtn = document.getElementById("refresh-btn");
 const createBtn = document.getElementById("create-btn");
+const createBtnHero = document.getElementById("create-btn-hero");
+const qaCreate = document.getElementById("qa-create");
+
 const logoutBtn = document.getElementById("logout-btn");
 
+// Placeholder navigation buttons (no pages yet)
+const navQuotes = document.getElementById("nav-quotes");
+const navCustomers = document.getElementById("nav-customers");
+const btnAllQuotes = document.getElementById("btn-all-quotes");
+const btnCustomers = document.getElementById("btn-customers");
+const btnAllQuotesHero = document.getElementById("btn-all-quotes-hero");
+const btnCustomersHero = document.getElementById("btn-customers-hero");
+const btnViewAllRecent = document.getElementById("btn-view-all-recent");
+const qaQuotes = document.getElementById("qa-quotes");
+const qaCustomers = document.getElementById("qa-customers");
+
+const toastEl = document.getElementById("toast");
+
+// Recent quotes
+const recentLoading = document.getElementById("recent-loading");
+const recentEmpty = document.getElementById("recent-empty");
+const recentList = document.getElementById("recent-list");
+
+// KPIs
+const kpiDraft = document.getElementById("kpi-draft");
+const kpiSent = document.getElementById("kpi-sent");
+const kpiAccepted = document.getElementById("kpi-accepted");
+const kpiPipeline = document.getElementById("kpi-pipeline");
+
+// Dialog
 const createDialog = document.getElementById("create-dialog");
 const createForm = document.getElementById("create-form");
 const createCancelBtn = document.getElementById("create-cancel");
 const createSubmitBtn = document.getElementById("create-submit");
 const createMsg = document.getElementById("create-msg");
-
 const customerNameEl = document.getElementById("customer_name");
 const customerEmailEl = document.getElementById("customer_email");
+
+let toastTimer = null;
+
+function toast(msg) {
+  if (!toastEl) return;
+  toastEl.textContent = msg;
+  toastEl.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    toastEl.hidden = true;
+  }, 2400);
+}
 
 function setError(message) {
   if (!message) {
@@ -46,146 +88,133 @@ function formatMoney(cents = 0, currency = "CAD") {
   return new Intl.NumberFormat("en-CA", { style: "currency", currency }).format(dollars);
 }
 
-function formatDate(iso) {
+function formatDateShort(iso) {
   try {
-    return new Date(iso).toLocaleString("en-CA", {
-      year: "numeric", month: "short", day: "2-digit",
-      hour: "2-digit", minute: "2-digit",
+    return new Date(iso).toLocaleDateString("en-CA", {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
     });
   } catch {
     return iso ?? "";
   }
 }
 
-function statusClass(status) {
-  const s = String(status || "").toLowerCase();
-  if (s === "draft") return "draft";
+function normalizeStatus(status) {
+  const s = String(status || "").trim().toLowerCase();
+  if (["accepted", "signed"].includes(s)) return "accepted";
+  if (["viewed"].includes(s)) return "viewed";
+  if (["sent"].includes(s)) return "sent";
+  if (["cancelled", "canceled"].includes(s)) return "cancelled";
+  return s || "draft";
+}
+
+function badgeClass(status) {
+  const s = normalizeStatus(status);
+  if (s === "accepted") return "accepted";
+  if (s === "signed") return "signed";
   if (s === "sent") return "sent";
   if (s === "viewed") return "viewed";
-  if (s === "signed") return "signed";
   if (s === "cancelled") return "cancelled";
   return "draft";
 }
 
-function canCancel(status) {
-  const s = String(status || "").toLowerCase();
-  return s !== "signed" && s !== "cancelled";
+function prettyStatus(status) {
+  const s = normalizeStatus(status);
+  if (s === "accepted") return "Accepted";
+  if (s === "signed") return "Signed";
+  if (s === "viewed") return "Viewed";
+  if (s === "sent") return "Sent";
+  if (s === "cancelled") return "Cancelled";
+  return "Draft";
 }
 
-function clearTable() {
-  quotesBody.innerHTML = "";
-}
+function renderRecentItem(q) {
+  const item = document.createElement("div");
+  item.className = "recent-item";
 
-function renderRow(q) {
-  const tr = document.createElement("tr");
-
-  const tdQuote = document.createElement("td");
-  const openLink = document.createElement("a");
-  openLink.href = `./quote.html?id=${q.id}`;
-  openLink.textContent = `Q-${q.quote_no}`;
-  openLink.style.color = "inherit";
-  openLink.style.fontWeight = "800";
-  openLink.style.textDecoration = "underline";
-  tdQuote.appendChild(openLink);
-
-  const tdCustomer = document.createElement("td");
-  const name = q.customer_name || "(No name)";
-  const email = q.customer_email ? ` • ${q.customer_email}` : "";
-  tdCustomer.textContent = name + email;
-
-  const tdTotal = document.createElement("td");
-  tdTotal.textContent = formatMoney(q.total_cents ?? 0, q.currency ?? "CAD");
-
-  const tdStatus = document.createElement("td");
-  const badge = document.createElement("span");
-  badge.className = `badge ${statusClass(q.status)}`;
-  badge.textContent = q.status;
-  tdStatus.appendChild(badge);
-
-  const tdCreated = document.createElement("td");
-  tdCreated.textContent = formatDate(q.created_at);
-
-  const tdActions = document.createElement("td");
-  const actions = document.createElement("div");
-  actions.className = "row-actions";
-
-  const btnOpen = document.createElement("button");
-  btnOpen.className = "btn small";
-  btnOpen.textContent = "Open";
-  btnOpen.addEventListener("click", () => {
+  item.addEventListener("click", () => {
     window.location.href = `./quote.html?id=${q.id}`;
   });
-  actions.appendChild(btnOpen);
 
-  const btnNewVersion = document.createElement("button");
-  btnNewVersion.className = "btn small";
-  btnNewVersion.textContent = "New Version";
-  btnNewVersion.addEventListener("click", async () => {
-    const ok = window.confirm(`Create a new Draft version copied from Q-${q.quote_no}?`);
-    if (!ok) return;
+  const left = document.createElement("div");
+  left.className = "recent-left";
 
-    try {
-      setError("");
-      btnNewVersion.disabled = true;
-      const newQ = await duplicateQuoteById(q.id);
-      window.location.href = `./quote.html?id=${newQ.id}`;
-    } catch (e) {
-      setError(e?.message || "Failed to create new version.");
-    } finally {
-      btnNewVersion.disabled = false;
-    }
-  });
-  actions.appendChild(btnNewVersion);
+  const top = document.createElement("div");
+  top.className = "recent-top";
 
-  if (canCancel(q.status)) {
-    const btnCancel = document.createElement("button");
-    btnCancel.className = "btn small danger";
-    btnCancel.textContent = "Cancel";
-    btnCancel.addEventListener("click", async () => {
-      const ok = window.confirm(`Cancel Q-${q.quote_no}? (This does not delete it.)`);
-      if (!ok) return;
+  const code = document.createElement("div");
+  code.className = "quote-code";
+  code.textContent = `Q-${q.quote_no}`;
 
-      try {
-        setError("");
-        btnCancel.disabled = true;
-        await cancelQuote(q.id);
-        await loadQuotes();
-      } catch (e) {
-        setError(e?.message || "Failed to cancel quote.");
-      } finally {
-        btnCancel.disabled = false;
-      }
-    });
-    actions.appendChild(btnCancel);
-  }
+  const badge = document.createElement("span");
+  badge.className = `badge ${badgeClass(q.status)}`;
+  badge.textContent = prettyStatus(q.status);
 
-  tdActions.appendChild(actions);
+  top.appendChild(code);
+  top.appendChild(badge);
 
-  tr.appendChild(tdQuote);
-  tr.appendChild(tdCustomer);
-  tr.appendChild(tdTotal);
-  tr.appendChild(tdStatus);
-  tr.appendChild(tdCreated);
-  tr.appendChild(tdActions);
+  const customer = document.createElement("div");
+  customer.className = "customer";
+  customer.textContent = q.customer_name || "(No customer name)";
 
-  return tr;
+  left.appendChild(top);
+  left.appendChild(customer);
+
+  const right = document.createElement("div");
+  right.className = "recent-right";
+
+  const amt = document.createElement("div");
+  amt.className = "amount";
+  amt.textContent = formatMoney(q.total_cents ?? 0, q.currency ?? "CAD");
+
+  const date = document.createElement("div");
+  date.className = "date";
+  date.textContent = formatDateShort(q.created_at);
+
+  right.appendChild(amt);
+  right.appendChild(date);
+
+  item.appendChild(left);
+  item.appendChild(right);
+
+  return item;
 }
 
-async function loadQuotes() {
-  setError("");
-  emptyState.hidden = true;
-  clearTable();
+function updateKPIs(quotes) {
+  const counts = { draft: 0, sent: 0, accepted: 0 };
+  let pipeline = 0;
 
-  try {
-    const quotes = await listQuotes({ limit: 200 });
-    if (!quotes.length) {
-      emptyState.hidden = false;
-      return;
+  for (const q of quotes) {
+    const s = normalizeStatus(q.status);
+
+    if (s === "accepted") counts.accepted += 1;
+    else if (s === "sent" || s === "viewed") counts.sent += 1;
+    else if (s === "draft") counts.draft += 1;
+
+    // Simple pipeline: include Draft+Sent+Viewed (exclude cancelled)
+    if (s !== "cancelled" && s !== "accepted") {
+      pipeline += Number(q.total_cents || 0);
     }
-    for (const q of quotes) quotesBody.appendChild(renderRow(q));
-  } catch (e) {
-    setError((e?.message || "Failed to load quotes.") + " (Confirm your quotes table + RLS policy exist.)");
   }
+
+  kpiDraft.textContent = String(counts.draft);
+  kpiSent.textContent = String(counts.sent);
+  kpiAccepted.textContent = String(counts.accepted);
+  kpiPipeline.textContent = formatMoney(pipeline, "CAD");
+}
+
+async function requireSessionOrRedirect() {
+  const { data, error } = await supabase.auth.getSession();
+  if (error) {
+    console.warn("getSession error", error);
+  }
+  const session = data?.session;
+  if (!session) {
+    window.location.href = "../index.html";
+    return null;
+  }
+  return session;
 }
 
 async function logout() {
@@ -197,24 +226,86 @@ function setCreateMsg(text) {
   createMsg.textContent = text || "";
 }
 
+function wireComingSoonButtons() {
+  const comingSoon = [
+    navQuotes,
+    navCustomers,
+    btnAllQuotes,
+    btnCustomers,
+    btnAllQuotesHero,
+    btnCustomersHero,
+    btnViewAllRecent,
+    qaQuotes,
+    qaCustomers,
+  ].filter(Boolean);
+
+  for (const el of comingSoon) {
+    el.addEventListener("click", () => {
+      // Keeps the dashboard “design complete” without 404s yet
+      toast("Coming next — this page isn’t built yet.");
+    });
+  }
+}
+
+function wireCreateButtons() {
+  const opens = [createBtn, createBtnHero, qaCreate].filter(Boolean);
+  for (const b of opens) {
+    b.addEventListener("click", () => {
+      setCreateMsg("");
+      customerNameEl.value = "";
+      customerEmailEl.value = "";
+      openDialog(createDialog);
+      customerNameEl.focus();
+    });
+  }
+}
+
+async function loadRecentQuotes() {
+  setError("");
+  recentEmpty.hidden = true;
+  recentList.innerHTML = "";
+  recentLoading.hidden = false;
+
+  try {
+    // Load more than we display so KPIs feel “real”
+    const quotes = await listQuotes({ limit: 200 });
+
+    recentLoading.hidden = true;
+
+    if (!quotes?.length) {
+      recentEmpty.hidden = false;
+      updateKPIs([]);
+      return;
+    }
+
+    // Sort newest first and render only a small list
+    const sorted = [...quotes].sort((a, b) => {
+      const da = new Date(a.created_at).getTime();
+      const db = new Date(b.created_at).getTime();
+      return db - da;
+    });
+
+    const recent = sorted.slice(0, 6);
+    for (const q of recent) recentList.appendChild(renderRecentItem(q));
+
+    updateKPIs(sorted);
+  } catch (e) {
+    recentLoading.hidden = true;
+    setError(e?.message || "Failed to load quotes.");
+  }
+}
+
 async function init() {
-  const session = await requireAdminOrRedirect({ redirectTo: "../index.html" });
+  wireComingSoonButtons();
+  wireCreateButtons();
+
+  logoutBtn.addEventListener("click", logout);
+  createCancelBtn.addEventListener("click", () => closeDialog(createDialog));
+
+  const session = await requireSessionOrRedirect();
   if (!session) return;
 
   userEmailEl.textContent = session.user.email || "";
-
-  refreshBtn.addEventListener("click", loadQuotes);
-  logoutBtn.addEventListener("click", logout);
-
-  createBtn.addEventListener("click", () => {
-    setCreateMsg("");
-    customerNameEl.value = "";
-    customerEmailEl.value = "";
-    openDialog(createDialog);
-    customerNameEl.focus();
-  });
-
-  createCancelBtn.addEventListener("click", () => closeDialog(createDialog));
 
   createForm.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -234,6 +325,7 @@ async function init() {
 
       // Create “shell” quote with default payload
       const data = makeDefaultQuoteData({ customer_name, customer_email });
+
       const q = await createQuote({
         customer_name,
         customer_email,
@@ -243,18 +335,16 @@ async function init() {
       });
 
       closeDialog(createDialog);
-
-      // Go straight into the quote builder page
       window.location.href = `./quote.html?id=${q.id}`;
-    } catch (e2) {
-      setCreateMsg(e2?.message || "Failed to create quote.");
+    } catch (err) {
+      setCreateMsg(err?.message || "Failed to create quote.");
     } finally {
       createSubmitBtn.disabled = false;
-      createSubmitBtn.textContent = "Create & Open";
+      createSubmitBtn.textContent = "Create & open";
     }
   });
 
-  await loadQuotes();
+  await loadRecentQuotes();
 }
 
 init();
