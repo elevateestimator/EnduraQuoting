@@ -21,13 +21,18 @@ const logoutBtn = document.getElementById("logout-btn");
 // Placeholder navigation buttons (no pages yet)
 const navQuotes = document.getElementById("nav-quotes");
 const navCustomers = document.getElementById("nav-customers");
+const navProducts = document.getElementById("nav-products");
+const navSettings = document.getElementById("nav-settings");
 const btnAllQuotes = document.getElementById("btn-all-quotes");
 const btnCustomers = document.getElementById("btn-customers");
 const btnAllQuotesHero = document.getElementById("btn-all-quotes-hero");
 const btnCustomersHero = document.getElementById("btn-customers-hero");
+const btnProductsHero = document.getElementById("btn-products-hero");
 const btnViewAllRecent = document.getElementById("btn-view-all-recent");
 const qaQuotes = document.getElementById("qa-quotes");
 const qaCustomers = document.getElementById("qa-customers");
+const qaProducts = document.getElementById("qa-products");
+const qaSettings = document.getElementById("qa-settings");
 
 const toastEl = document.getElementById("toast");
 
@@ -227,24 +232,15 @@ function setCreateMsg(text) {
 }
 
 function wireComingSoonButtons() {
-  const comingSoon = [
-    navQuotes,
-    navCustomers,
-    btnAllQuotes,
-    btnCustomers,
-    btnAllQuotesHero,
-    btnCustomersHero,
-    btnViewAllRecent,
-    qaQuotes,
-    qaCustomers,
-  ].filter(Boolean);
-
-  for (const el of comingSoon) {
-    el.addEventListener("click", () => {
-      // Keeps the dashboard “design complete” without 404s yet
+  const els = Array.from(document.querySelectorAll('[data-soon="1"]'));
+  for (const el of els) {
+    el.addEventListener("click", (e) => {
+      // Prevent navigation for links while these pages are still being built
+      if (e && typeof e.preventDefault === "function") e.preventDefault();
       toast("Coming next — this page isn’t built yet.");
     });
   }
+}
 }
 
 function wireCreateButtons() {

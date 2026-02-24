@@ -20,13 +20,11 @@
       </div>
 
       <nav class="nav" aria-label="Primary">
-        <button class="nav-link active" type="button" aria-current="page">
-          Dashboard
-        </button>
-        <button id="nav-quotes" class="nav-link" type="button">Quotes</button>
-        <button id="nav-customers" class="nav-link" type="button">
-          Customers
-        </button>
+        <a class="nav-link active" href="./dashboard.html" aria-current="page">Dashboard</a>
+        <a id="nav-quotes" class="nav-link" href="./quotes.html" data-soon="1">Quotes</a>
+        <a id="nav-customers" class="nav-link" href="./customers.html" data-soon="1">Customers</a>
+        <a id="nav-products" class="nav-link" href="./products.html" data-soon="1">Products</a>
+        <a id="nav-settings" class="nav-link" href="./settings.html" data-soon="1">Settings</a>
       </nav>
 
       <div class="actions">
@@ -50,8 +48,8 @@
         </div>
 
         <div class="page-head-right">
-          <button id="btn-all-quotes" class="btn">All quotes</button>
-          <button id="btn-customers" class="btn">Customers</button>
+          <button id="btn-all-quotes" class="btn" data-soon="1">All quotes</button>
+          <button id="btn-customers" class="btn" data-soon="1">Customers</button>
         </div>
       </div>
 
@@ -69,8 +67,9 @@
             <button id="create-btn-hero" class="btn primary large">
               Create quote
             </button>
-            <button id="btn-all-quotes-hero" class="btn">View all quotes</button>
-            <button id="btn-customers-hero" class="btn">Customers</button>
+            <button id="btn-all-quotes-hero" class="btn" data-soon="1">View all quotes</button>
+            <button id="btn-customers-hero" class="btn" data-soon="1">Customers</button>
+            <button id="btn-products-hero" class="btn" data-soon="1">Products</button>
           </div>
 
           <div class="muted small">
@@ -111,9 +110,7 @@
         <section class="card span-7">
           <div class="card-top">
             <h3>Recent quotes</h3>
-            <button id="btn-view-all-recent" class="link" type="button">
-              View all
-            </button>
+            <button id="btn-view-all-recent" class="link" type="button" data-soon="1">View all</button>
           </div>
 
           <div id="recent-loading" class="muted small">Loading…</div>
@@ -198,12 +195,14 @@
 
           <div class="quick-actions">
             <button id="qa-create" class="btn primary">Create quote</button>
-            <button id="qa-quotes" class="btn">Search quotes</button>
-            <button id="qa-customers" class="btn">Customers</button>
+            <button id="qa-quotes" class="btn" data-soon="1">Search quotes</button>
+            <button id="qa-customers" class="btn" data-soon="1">Customers</button>
+            <button id="qa-products" class="btn" data-soon="1">Products & services</button>
+            <button id="qa-settings" class="btn" data-soon="1">Settings</button>
           </div>
 
           <div class="muted small" style="margin-top: 10px">
-            We’ll add “New customer”, “Products”, and “Reminders” here once those pages exist.
+            We’ll wire these buttons to real pages next (Quotes, Customers, Products, Settings).
           </div>
         </section>
       </div>
