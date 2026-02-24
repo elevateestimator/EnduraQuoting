@@ -8,212 +8,252 @@
   </head>
 
   <body>
-    <header class="topbar">
-      <div class="brand">
-        <a class="brand-link" href="./dashboard.html" aria-label="Elevate Estimator">
+    <div class="app">
+      <!-- Sidebar -->
+      <aside class="sidebar" aria-label="Primary navigation">
+        <a class="brand" href="./dashboard.html" aria-label="Elevate Estimator">
           <img
             class="brand-logo"
             src="../assets/elevate-estimator-logo-light.png"
             alt="Elevate Estimator"
           />
         </a>
-      </div>
 
-      <nav class="nav" aria-label="Primary">
-        <button class="nav-link active" type="button" aria-current="page">
-          Dashboard
-        </button>
-        <button id="nav-quotes" class="nav-link" type="button">Quotes</button>
-        <button id="nav-customers" class="nav-link" type="button">
-          Customers
-        </button>
-      
-        <button id="nav-products" class="nav-link" type="button">Products</button>
-        <button id="nav-settings" class="nav-link" type="button">Settings</button>
-</nav>
+        <nav class="side-nav">
+          <button class="side-link active" type="button" aria-current="page">
+            <span class="ico" aria-hidden="true">
+              <!-- grid icon -->
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 0h7v7h-7v-7Z" stroke="currentColor" stroke-width="1.8" />
+              </svg>
+            </span>
+            Dashboard
+          </button>
 
-      <div class="actions">
-        <div class="user-chip" title="Signed in user">
-          <span class="user-dot" aria-hidden="true"></span>
-          <span id="user-email">…</span>
+          <button id="nav-quotes" class="side-link" type="button">
+            <span class="ico" aria-hidden="true">
+              <!-- document icon -->
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M7 3h7l3 3v15a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.8" />
+                <path d="M14 3v4a1 1 0 0 0 1 1h4" stroke="currentColor" stroke-width="1.8" />
+              </svg>
+            </span>
+            Quotes
+          </button>
+
+          <button id="nav-customers" class="side-link" type="button">
+            <span class="ico" aria-hidden="true">
+              <!-- users icon -->
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                <path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" stroke="currentColor" stroke-width="1.8"/>
+                <path d="M22 21v-2a3 3 0 0 0-2.2-2.9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                <path d="M17 3.1a4 4 0 0 1 0 7.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+            </span>
+            Customers
+          </button>
+
+          <button id="nav-products" class="side-link" type="button">
+            <span class="ico" aria-hidden="true">
+              <!-- tag icon -->
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M20 13l-7 7-11-11V2h7l11 11Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+                <path d="M7 7h.01" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/>
+              </svg>
+            </span>
+            Products &amp; services
+          </button>
+
+          <button id="nav-settings" class="side-link" type="button">
+            <span class="ico" aria-hidden="true">
+              <!-- settings icon -->
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" stroke="currentColor" stroke-width="1.8"/>
+                <path d="M19.4 15a7.9 7.9 0 0 0 .1-1l2-1.5-2-3.4-2.4.6a7.6 7.6 0 0 0-1.7-1l-.3-2.5H9l-.3 2.5a7.6 7.6 0 0 0-1.7 1L4.6 9.1 2.5 12.5l2 1.5a7.9 7.9 0 0 0 .1 1l-2 1.5 2 3.4 2.4-.6a7.6 7.6 0 0 0 1.7 1l.3 2.5h6l.3-2.5a7.6 7.6 0 0 0 1.7-1l2.4.6 2-3.4-2-1.5Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+              </svg>
+            </span>
+            Settings
+          </button>
+        </nav>
+
+        <div class="side-footer">
+          <div class="user-chip" title="Signed in user">
+            <span class="user-dot" aria-hidden="true"></span>
+            <span id="user-email">…</span>
+          </div>
+
+          <button id="logout-btn" class="btn ghost full">Log out</button>
         </div>
+      </aside>
 
-        <button id="create-btn" class="btn primary">Create quote</button>
-        <button id="logout-btn" class="btn ghost">Log out</button>
-      </div>
-    </header>
-
-    <main class="page">
-      <div class="page-head">
-        <div class="page-head-left">
-          <h1>Dashboard</h1>
-          <p class="muted">
-            Owner/Admin view (we’ll refine sales rep views after this).
-          </p>
-        </div>
-
-        <div class="page-head-right">
-          <button id="btn-all-quotes" class="btn">All quotes</button>
-          <button id="btn-customers" class="btn">Customers</button>
-        </div>
-      </div>
-
-      <div id="error-box" class="alert error" hidden></div>
-
-      <section class="card hero">
-        <div class="hero-left">
-          <h2>Send professional quotes that close.</h2>
-          <p class="muted">
-            Create a quote shell in seconds, then fill details, send a branded
-            link, and collect a signature online.
-          </p>
-
-          <div class="hero-actions">
-            <button id="create-btn-hero" class="btn primary large">
-              Create quote
-            </button>
-            <button id="btn-all-quotes-hero" class="btn">View all quotes</button>
-            <button id="btn-customers-hero" class="btn">Customers</button>
+      <!-- Main -->
+      <main class="main">
+        <header class="main-head">
+          <div class="title">
+            <h1>Dashboard</h1>
+            <p class="muted">Owner/Admin view (we’ll refine sales rep views after this).</p>
           </div>
 
-          <div class="muted small">
-            Tip: this dashboard will stay “overview-only”. Full search + filters
-            will live in the Quotes page.
+          <div class="head-actions">
+            <button id="btn-all-quotes" class="btn">Quotes</button>
+            <button id="btn-customers" class="btn">Customers</button>
+            <button id="btn-products" class="btn">Products</button>
+            <button id="btn-settings" class="btn">Settings</button>
+            <button id="create-btn" class="btn primary">Create quote</button>
           </div>
-        </div>
+        </header>
 
-        <div class="hero-right">
-          <div class="kpi-grid" role="group" aria-label="Key metrics">
-            <div class="kpi">
-              <div class="kpi-label">Draft</div>
-              <div id="kpi-draft" class="kpi-value">—</div>
+        <div id="error-box" class="alert error" hidden></div>
+
+        <!-- Overview / KPIs -->
+        <section class="card hero">
+          <div class="hero-left">
+            <h2>Overview</h2>
+            <p class="muted">
+              Create a quote shell in seconds, send a branded link, and collect signatures online.
+            </p>
+
+            <div class="hero-actions">
+              <button id="create-btn-hero" class="btn primary large">Create quote</button>
+              <button id="btn-all-quotes-hero" class="btn">View all quotes</button>
+              <button id="btn-customers-hero" class="btn">Customers</button>
             </div>
-            <div class="kpi">
-              <div class="kpi-label">Sent</div>
-              <div id="kpi-sent" class="kpi-value">—</div>
-            </div>
-            <div class="kpi">
-              <div class="kpi-label">Accepted</div>
-              <div id="kpi-accepted" class="kpi-value">—</div>
-            </div>
-            <div class="kpi">
-              <div class="kpi-label">Pipeline</div>
-              <div id="kpi-pipeline" class="kpi-value">—</div>
+
+            <div class="muted small">
+              Tip: keep this page overview-only. Full search + filters live in Quotes.
             </div>
           </div>
 
-          <div class="kpi-note muted small">
-            Metrics are calculated from the quotes we load for “recent”.
-            (We’ll make this smarter + date-filtered later.)
-          </div>
-        </div>
-      </section>
-
-      <div class="grid">
-        <!-- Recent quotes -->
-        <section class="card span-7">
-          <div class="card-top">
-            <h3>Recent quotes</h3>
-            <button id="btn-view-all-recent" class="link" type="button">
-              View all
-            </button>
-          </div>
-
-          <div id="recent-loading" class="muted small">Loading…</div>
-
-          <div id="recent-empty" class="empty" hidden>
-            <div class="empty-title">No quotes yet</div>
-            <div class="empty-sub">Click “Create quote” to add your first one.</div>
-          </div>
-
-          <div id="recent-list" class="recent-list"></div>
-        </section>
-
-        <!-- Pipeline placeholder -->
-        <section class="card span-5">
-          <div class="card-top">
-            <h3>Pipeline snapshot</h3>
-            <span class="pill">Placeholder</span>
-          </div>
-
-          <div class="chart">
-            <div class="chart-bars" aria-hidden="true">
-              <div class="bar b1"></div>
-              <div class="bar b2"></div>
-              <div class="bar b3"></div>
-              <div class="bar b4"></div>
-              <div class="bar b5"></div>
-              <div class="bar b6"></div>
-              <div class="bar b7"></div>
-            </div>
-            <div class="muted small chart-note">
-              Coming soon: real chart, date range picker, and conversion rate.
-            </div>
-          </div>
-        </section>
-
-        <!-- Team placeholder -->
-        <section class="card span-7">
-          <div class="card-top">
-            <h3>Team activity</h3>
-            <span class="pill">Placeholder</span>
-          </div>
-
-          <div class="team">
-            <div class="team-row">
-              <div class="avatar">JD</div>
-              <div class="team-meta">
-                <div class="team-name">Jacob Docherty</div>
-                <div class="muted small">Quotes sent: — • Accepted: —</div>
+          <div class="hero-right">
+            <div class="kpi-grid" role="group" aria-label="Key metrics">
+              <div class="kpi">
+                <div class="kpi-label">Draft</div>
+                <div id="kpi-draft" class="kpi-value">—</div>
               </div>
-              <div class="team-kpi">—</div>
-            </div>
-
-            <div class="team-row">
-              <div class="avatar muted">SR</div>
-              <div class="team-meta">
-                <div class="team-name muted">Sales Rep</div>
-                <div class="muted small">Quotes sent: — • Accepted: —</div>
+              <div class="kpi">
+                <div class="kpi-label">Sent</div>
+                <div id="kpi-sent" class="kpi-value">—</div>
               </div>
-              <div class="team-kpi muted">—</div>
-            </div>
-
-            <div class="team-row">
-              <div class="avatar muted">SR</div>
-              <div class="team-meta">
-                <div class="team-name muted">Sales Rep</div>
-                <div class="muted small">Quotes sent: — • Accepted: —</div>
+              <div class="kpi">
+                <div class="kpi-label">Accepted</div>
+                <div id="kpi-accepted" class="kpi-value">—</div>
               </div>
-              <div class="team-kpi muted">—</div>
+              <div class="kpi">
+                <div class="kpi-label">Pipeline</div>
+                <div id="kpi-pipeline" class="kpi-value">—</div>
+              </div>
             </div>
-          </div>
 
-          <div class="muted small" style="margin-top: 10px">
-            We’ll wire this to real users + roles once company memberships are live.
+            <div class="kpi-note muted small">
+              Metrics are calculated from the quotes we load. (We’ll add date ranges later.)
+            </div>
           </div>
         </section>
 
-        <!-- Quick actions -->
-        <section class="card span-5">
-          <div class="card-top">
-            <h3>Quick actions</h3>
-          </div>
+        <div class="grid">
+          <!-- Recent quotes -->
+          <section class="card span-7">
+            <div class="card-top">
+              <h3>Recent quotes</h3>
+              <button id="btn-view-all-recent" class="link" type="button">View all</button>
+            </div>
 
-          <div class="quick-actions">
-            <button id="qa-create" class="btn primary">Create quote</button>
-            <button id="qa-quotes" class="btn">Search quotes</button>
-            <button id="qa-customers" class="btn">Customers</button>
-          
-            <button id="qa-products" class="btn">Products & services</button>
-            <button id="qa-settings" class="btn">Settings</button>
-</div>
+            <div id="recent-loading" class="muted small">Loading…</div>
 
-          <div class="muted small" style="margin-top: 10px">
-            Coming next: we’ll wire these buttons to real pages (Products, Settings, Customers, Quotes).
-          </div>
-        </section>
-      </div>
-    </main>
+            <div id="recent-empty" class="empty" hidden>
+              <div class="empty-title">No quotes yet</div>
+              <div class="empty-sub">Click “Create quote” to add your first one.</div>
+            </div>
+
+            <div id="recent-list" class="recent-list"></div>
+          </section>
+
+          <!-- Pipeline placeholder -->
+          <section class="card span-5">
+            <div class="card-top">
+              <h3>Pipeline snapshot</h3>
+              <span class="pill">Placeholder</span>
+            </div>
+
+            <div class="chart">
+              <div class="chart-bars" aria-hidden="true">
+                <div class="bar b1"></div>
+                <div class="bar b2"></div>
+                <div class="bar b3"></div>
+                <div class="bar b4"></div>
+                <div class="bar b5"></div>
+                <div class="bar b6"></div>
+                <div class="bar b7"></div>
+              </div>
+              <div class="muted small chart-note">
+                Coming soon: real chart, date range picker, conversion rate.
+              </div>
+            </div>
+          </section>
+
+          <!-- Team placeholder -->
+          <section class="card span-7">
+            <div class="card-top">
+              <h3>Team activity</h3>
+              <span class="pill">Placeholder</span>
+            </div>
+
+            <div class="team">
+              <div class="team-row">
+                <div class="avatar">JD</div>
+                <div class="team-meta">
+                  <div class="team-name">Jacob Docherty</div>
+                  <div class="muted small">Quotes sent: — • Accepted: —</div>
+                </div>
+                <div class="team-kpi">—</div>
+              </div>
+
+              <div class="team-row">
+                <div class="avatar muted">SR</div>
+                <div class="team-meta">
+                  <div class="team-name muted">Sales Rep</div>
+                  <div class="muted small">Quotes sent: — • Accepted: —</div>
+                </div>
+                <div class="team-kpi muted">—</div>
+              </div>
+
+              <div class="team-row">
+                <div class="avatar muted">SR</div>
+                <div class="team-meta">
+                  <div class="team-name muted">Sales Rep</div>
+                  <div class="muted small">Quotes sent: — • Accepted: —</div>
+                </div>
+                <div class="team-kpi muted">—</div>
+              </div>
+            </div>
+
+            <div class="muted small" style="margin-top: 10px">
+              We’ll wire this to real users + roles once company memberships are live.
+            </div>
+          </section>
+
+          <!-- Quick actions -->
+          <section class="card span-5">
+            <div class="card-top">
+              <h3>Quick actions</h3>
+            </div>
+
+            <div class="quick-actions">
+              <button id="qa-create" class="btn primary">Create quote</button>
+              <button id="qa-quotes" class="btn">Search quotes</button>
+              <button id="qa-customers" class="btn">Customers</button>
+              <button id="qa-products" class="btn">Products &amp; services</button>
+              <button id="qa-settings" class="btn">Settings</button>
+            </div>
+
+            <div class="muted small" style="margin-top: 10px">
+              We’ll add “New customer”, “Reminders”, and “Payments” here once those pages exist.
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
 
     <!-- Create Quote Dialog -->
     <dialog id="create-dialog" class="dialog">
@@ -235,9 +275,7 @@
 
         <div class="dialog-actions">
           <button id="create-cancel" class="btn ghost" type="button">Cancel</button>
-          <button id="create-submit" class="btn primary" type="submit">
-            Create & open
-          </button>
+          <button id="create-submit" class="btn primary" type="submit">Create &amp; open</button>
         </div>
 
         <div id="create-msg" class="muted small"></div>

@@ -3,10 +3,10 @@ import { listQuotes, createQuote } from "../js/quotesApi.js";
 import { makeDefaultQuoteData } from "../js/quoteDefaults.js";
 
 /**
- * Dashboard v1:
- * - Overview layout (admin/owner first)
- * - Only shows Recent Quotes (no full-table view)
- * - “Quotes / Customers” buttons are placeholders for now
+ * Dashboard:
+ * - Owner/Admin overview
+ * - Shows Recent Quotes (not a full-table)
+ * - Nav buttons are placeholders until pages exist
  */
 
 const userEmailEl = document.getElementById("user-email");
@@ -18,16 +18,22 @@ const qaCreate = document.getElementById("qa-create");
 
 const logoutBtn = document.getElementById("logout-btn");
 
-// Placeholder navigation buttons (no pages yet)
+// Placeholder navigation buttons (pages not built yet)
 const navQuotes = document.getElementById("nav-quotes");
 const navCustomers = document.getElementById("nav-customers");
 const navProducts = document.getElementById("nav-products");
 const navSettings = document.getElementById("nav-settings");
+
 const btnAllQuotes = document.getElementById("btn-all-quotes");
 const btnCustomers = document.getElementById("btn-customers");
+const btnProducts = document.getElementById("btn-products");
+const btnSettings = document.getElementById("btn-settings");
+
 const btnAllQuotesHero = document.getElementById("btn-all-quotes-hero");
 const btnCustomersHero = document.getElementById("btn-customers-hero");
+
 const btnViewAllRecent = document.getElementById("btn-view-all-recent");
+
 const qaQuotes = document.getElementById("qa-quotes");
 const qaCustomers = document.getElementById("qa-customers");
 const qaProducts = document.getElementById("qa-products");
@@ -196,7 +202,7 @@ function updateKPIs(quotes) {
     else if (s === "sent" || s === "viewed") counts.sent += 1;
     else if (s === "draft") counts.draft += 1;
 
-    // Simple pipeline: include Draft+Sent+Viewed (exclude cancelled)
+    // Simple pipeline: include Draft+Sent+Viewed (exclude cancelled + accepted)
     if (s !== "cancelled" && s !== "accepted") {
       pipeline += Number(q.total_cents || 0);
     }
@@ -210,9 +216,7 @@ function updateKPIs(quotes) {
 
 async function requireSessionOrRedirect() {
   const { data, error } = await supabase.auth.getSession();
-  if (error) {
-    console.warn("getSession error", error);
-  }
+  if (error) console.warn("getSession error", error);
   const session = data?.session;
   if (!session) {
     window.location.href = "../index.html";
@@ -238,6 +242,8 @@ function wireComingSoonButtons() {
     navSettings,
     btnAllQuotes,
     btnCustomers,
+    btnProducts,
+    btnSettings,
     btnAllQuotesHero,
     btnCustomersHero,
     btnViewAllRecent,
@@ -249,7 +255,6 @@ function wireComingSoonButtons() {
 
   for (const el of comingSoon) {
     el.addEventListener("click", () => {
-      // Keeps the dashboard “design complete” without 404s yet
       toast("Coming next — this page isn’t built yet.");
     });
   }
@@ -286,7 +291,6 @@ async function loadRecentQuotes() {
       return;
     }
 
-    // Sort newest first and render only a small list
     const sorted = [...quotes].sort((a, b) => {
       const da = new Date(a.created_at).getTime();
       const db = new Date(b.created_at).getTime();
@@ -307,15 +311,15 @@ async function init() {
   wireComingSoonButtons();
   wireCreateButtons();
 
-  logoutBtn.addEventListener("click", logout);
-  createCancelBtn.addEventListener("click", () => closeDialog(createDialog));
+  logoutBtn?.addEventListener("click", logout);
+  createCancelBtn?.addEventListener("click", () => closeDialog(createDialog));
 
   const session = await requireSessionOrRedirect();
   if (!session) return;
 
-  userEmailEl.textContent = session.user.email || "";
+  if (userEmailEl) userEmailEl.textContent = session.user.email || "";
 
-  createForm.addEventListener("submit", async (e) => {
+  createForm?.addEventListener("submit", async (e) => {
     e.preventDefault();
     setCreateMsg("");
 
@@ -331,7 +335,6 @@ async function init() {
       createSubmitBtn.disabled = true;
       createSubmitBtn.textContent = "Creating…";
 
-      // Create “shell” quote with default payload
       const data = makeDefaultQuoteData({ customer_name, customer_email });
 
       const q = await createQuote({
