@@ -3,13 +3,15 @@ import { listQuotes, createQuote } from "../js/quotesApi.js";
 import { makeDefaultQuoteData } from "../js/quoteDefaults.js";
 
 /**
- * Dashboard v1:
- * - Overview layout (admin/owner first)
- * - Only shows Recent Quotes (no full-table view)
- * - “Quotes / Customers” buttons are placeholders for now
+ * Premium Dashboard (Owner/Admin first):
+ * - Overview layout (not a full quotes table)
+ * - Recent quotes only (small list)
+ * - Placeholder areas for charts + team
+ * - Navigation stubs for pages we’ll build next
  */
 
 const userEmailEl = document.getElementById("user-email");
+const userAvatarEl = document.getElementById("user-avatar");
 const errorBox = document.getElementById("error-box");
 
 const createBtn = document.getElementById("create-btn");
@@ -18,17 +20,21 @@ const qaCreate = document.getElementById("qa-create");
 
 const logoutBtn = document.getElementById("logout-btn");
 
-// Placeholder navigation buttons (no pages yet)
+// Navigation buttons (pages not built yet)
 const navQuotes = document.getElementById("nav-quotes");
 const navCustomers = document.getElementById("nav-customers");
 const navProducts = document.getElementById("nav-products");
 const navSettings = document.getElementById("nav-settings");
+
 const btnAllQuotes = document.getElementById("btn-all-quotes");
 const btnCustomers = document.getElementById("btn-customers");
+const btnProducts = document.getElementById("btn-products");
+const btnSettings = document.getElementById("btn-settings");
+
 const btnAllQuotesHero = document.getElementById("btn-all-quotes-hero");
 const btnCustomersHero = document.getElementById("btn-customers-hero");
-const btnProductsHero = document.getElementById("btn-products-hero");
 const btnViewAllRecent = document.getElementById("btn-view-all-recent");
+
 const qaQuotes = document.getElementById("qa-quotes");
 const qaCustomers = document.getElementById("qa-customers");
 const qaProducts = document.getElementById("qa-products");
@@ -88,9 +94,15 @@ function closeDialog(d) {
   else d.removeAttribute("open");
 }
 
+function setCreateMsg(text) {
+  createMsg.textContent = text || "";
+}
+
 function formatMoney(cents = 0, currency = "CAD") {
   const dollars = (Number(cents) || 0) / 100;
-  return new Intl.NumberFormat("en-CA", { style: "currency", currency }).format(dollars);
+  return new Intl.NumberFormat("en-CA", { style: "currency", currency }).format(
+    dollars
+  );
 }
 
 function formatDateShort(iso) {
@@ -197,7 +209,7 @@ function updateKPIs(quotes) {
     else if (s === "sent" || s === "viewed") counts.sent += 1;
     else if (s === "draft") counts.draft += 1;
 
-    // Simple pipeline: include Draft+Sent+Viewed (exclude cancelled)
+    // Simple pipeline: include Draft+Sent+Viewed (exclude cancelled + accepted)
     if (s !== "cancelled" && s !== "accepted") {
       pipeline += Number(q.total_cents || 0);
     }
@@ -211,9 +223,8 @@ function updateKPIs(quotes) {
 
 async function requireSessionOrRedirect() {
   const { data, error } = await supabase.auth.getSession();
-  if (error) {
-    console.warn("getSession error", error);
-  }
+  if (error) console.warn("getSession error", error);
+
   const session = data?.session;
   if (!session) {
     window.location.href = "../index.html";
@@ -227,20 +238,43 @@ async function logout() {
   window.location.href = "../index.html";
 }
 
-function setCreateMsg(text) {
-  createMsg.textContent = text || "";
+function initialsFromEmail(email) {
+  const e = String(email || "").trim();
+  if (!e) return "EE";
+  const left = e.split("@")[0] || e;
+  const parts = left.replace(/[^a-z0-9]+/gi, " ").trim().split(" ").filter(Boolean);
+
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  if (left.length >= 2) return left.slice(0, 2).toUpperCase();
+  return left.slice(0, 1).toUpperCase();
 }
 
 function wireComingSoonButtons() {
-  const els = Array.from(document.querySelectorAll('[data-soon="1"]'));
-  for (const el of els) {
-    el.addEventListener("click", (e) => {
-      // Prevent navigation for links while these pages are still being built
-      if (e && typeof e.preventDefault === "function") e.preventDefault();
+  const comingSoon = [
+    navQuotes,
+    navCustomers,
+    navProducts,
+    navSettings,
+    btnAllQuotes,
+    btnCustomers,
+    btnProducts,
+    btnSettings,
+    btnAllQuotesHero,
+    btnCustomersHero,
+    btnViewAllRecent,
+    qaQuotes,
+    qaCustomers,
+    qaProducts,
+    qaSettings,
+  ].filter(Boolean);
+
+  for (const el of comingSoon) {
+    el.addEventListener("click", () => {
       toast("Coming next — this page isn’t built yet.");
     });
   }
-}
 }
 
 function wireCreateButtons() {
@@ -274,13 +308,14 @@ async function loadRecentQuotes() {
       return;
     }
 
-    // Sort newest first and render only a small list
+    // Sort newest first
     const sorted = [...quotes].sort((a, b) => {
       const da = new Date(a.created_at).getTime();
       const db = new Date(b.created_at).getTime();
       return db - da;
     });
 
+    // Render only a small list
     const recent = sorted.slice(0, 6);
     for (const q of recent) recentList.appendChild(renderRecentItem(q));
 
@@ -295,13 +330,15 @@ async function init() {
   wireComingSoonButtons();
   wireCreateButtons();
 
-  logoutBtn.addEventListener("click", logout);
-  createCancelBtn.addEventListener("click", () => closeDialog(createDialog));
+  logoutBtn?.addEventListener("click", logout);
+  createCancelBtn?.addEventListener("click", () => closeDialog(createDialog));
 
   const session = await requireSessionOrRedirect();
   if (!session) return;
 
-  userEmailEl.textContent = session.user.email || "";
+  const email = session.user.email || "";
+  userEmailEl.textContent = email;
+  if (userAvatarEl) userAvatarEl.textContent = initialsFromEmail(email);
 
   createForm.addEventListener("submit", async (e) => {
     e.preventDefault();
