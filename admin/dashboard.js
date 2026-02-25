@@ -3,24 +3,25 @@ import { listQuotes, createQuote } from "../js/quotesApi.js";
 import { makeDefaultQuoteData } from "../js/quoteDefaults.js";
 
 /**
- * Growth Command Center Dashboard (Owner/Admin first)
- * - Dominant pipeline metric + immersive chart placeholder
- * - Recent quotes (small list, no giant table)
- * - Navigation entry points (Quotes/Customers/Products/Settings) are coming soon
+ * Command Center Dashboard
+ * - One dominant metric: Open Pipeline
+ * - Recent quotes feed (small, fast)
+ * - Everything else is intentionally staged as “coming soon”
  */
 
-const userEmailEl = document.getElementById("user-email");
 const workspaceNameEl = document.getElementById("workspace-name");
+const userEmailEl = document.getElementById("user-email");
 const errorBox = document.getElementById("error-box");
 
+const toastEl = document.getElementById("toast");
+
+// Primary actions
 const createBtn = document.getElementById("create-btn");
 const createBtnHero = document.getElementById("create-btn-hero");
 const qaCreate = document.getElementById("qa-create");
-
 const logoutBtn = document.getElementById("logout-btn");
-const toastEl = document.getElementById("toast");
 
-// Recent quotes
+// Recent
 const recentLoading = document.getElementById("recent-loading");
 const recentEmpty = document.getElementById("recent-empty");
 const recentList = document.getElementById("recent-list");
@@ -29,6 +30,7 @@ const recentList = document.getElementById("recent-list");
 const kpiDraft = document.getElementById("kpi-draft");
 const kpiSent = document.getElementById("kpi-sent");
 const kpiAccepted = document.getElementById("kpi-accepted");
+const kpiAcceptedValue = document.getElementById("kpi-accepted-value");
 const kpiPipeline = document.getElementById("kpi-pipeline");
 const kpiClose = document.getElementById("kpi-close");
 
@@ -76,18 +78,9 @@ function closeDialog(d) {
   else d.removeAttribute("open");
 }
 
-function setCreateMsg(text) {
-  if (!createMsg) return;
-  createMsg.textContent = text || "";
-}
-
 function formatMoney(cents = 0, currency = "CAD") {
   const dollars = (Number(cents) || 0) / 100;
-  return new Intl.NumberFormat("en-CA", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 0,
-  }).format(dollars);
+  return new Intl.NumberFormat("en-CA", { style: "currency", currency }).format(dollars);
 }
 
 function formatDateShort(iso) {
@@ -111,6 +104,15 @@ function normalizeStatus(status) {
   return s || "draft";
 }
 
+function badgeClass(status) {
+  const s = normalizeStatus(status);
+  if (s === "accepted") return "accepted";
+  if (s === "sent") return "sent";
+  if (s === "viewed") return "viewed";
+  if (s === "cancelled") return "cancelled";
+  return "draft";
+}
+
 function prettyStatus(status) {
   const s = normalizeStatus(status);
   if (s === "accepted") return "Accepted";
@@ -120,92 +122,93 @@ function prettyStatus(status) {
   return "Draft";
 }
 
-function safeText(v, fallback = "") {
-  const s = String(v ?? "").trim();
-  return s || fallback;
-}
+function renderRecentItem(q) {
+  const item = document.createElement("div");
+  item.className = "recent-item";
 
-function renderRecentRow(q) {
-  const row = document.createElement("div");
-  row.className = "recent-row";
-  row.setAttribute("role", "row");
-  row.tabIndex = 0;
-
-  const open = () => {
+  item.addEventListener("click", () => {
     window.location.href = `./quote.html?id=${q.id}`;
-  };
-
-  row.addEventListener("click", open);
-  row.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" || e.key === " ") open();
   });
 
+  const left = document.createElement("div");
+  left.className = "recent-left";
+
+  const top = document.createElement("div");
+  top.className = "recent-top";
+
   const code = document.createElement("div");
-  code.className = "cell quote-code";
+  code.className = "quote-code";
   code.textContent = `Q-${q.quote_no}`;
 
+  const badge = document.createElement("span");
+  badge.className = `badge ${badgeClass(q.status)}`;
+  badge.textContent = prettyStatus(q.status);
+
+  top.appendChild(code);
+  top.appendChild(badge);
+
   const customer = document.createElement("div");
-  customer.className = "cell customer-name";
-  customer.textContent = safeText(q.customer_name, "(No customer)");
+  customer.className = "customer";
+  customer.textContent = q.customer_name || "(No customer name)";
 
-  const status = document.createElement("div");
-  const s = normalizeStatus(q.status);
-  status.className = `cell status ${s}`;
-  const dot = document.createElement("span");
-  dot.className = "status-dot";
-  const label = document.createElement("span");
-  label.textContent = prettyStatus(q.status);
-  status.appendChild(dot);
-  status.appendChild(label);
+  left.appendChild(top);
+  left.appendChild(customer);
 
-  const amount = document.createElement("div");
-  amount.className = "cell right amount";
-  amount.textContent = formatMoney(q.total_cents ?? 0, q.currency ?? "CAD");
+  const right = document.createElement("div");
+  right.className = "recent-right";
+
+  const amt = document.createElement("div");
+  amt.className = "amount";
+  amt.textContent = formatMoney(q.total_cents ?? 0, q.currency ?? "CAD");
 
   const date = document.createElement("div");
-  date.className = "cell right date";
+  date.className = "date";
   date.textContent = formatDateShort(q.created_at);
 
-  row.appendChild(code);
-  row.appendChild(customer);
-  row.appendChild(status);
-  row.appendChild(amount);
-  row.appendChild(date);
+  right.appendChild(amt);
+  right.appendChild(date);
 
-  return row;
+  item.appendChild(left);
+  item.appendChild(right);
+
+  return item;
 }
 
 function updateKPIs(quotes) {
   const counts = { draft: 0, sent: 0, accepted: 0 };
-  let pipeline = 0;
+  let pipeline = 0;        // open pipeline (Draft + Sent/View, exclude Accepted/Cancelled)
+  let acceptedValue = 0;   // total accepted value (all-time for now)
 
   for (const q of quotes) {
     const s = normalizeStatus(q.status);
+    const total = Number(q.total_cents || 0);
 
-    if (s === "accepted") counts.accepted += 1;
-    else if (s === "sent" || s === "viewed") counts.sent += 1;
-    else if (s === "draft") counts.draft += 1;
-
-    // Open pipeline: include Draft + Sent + Viewed (exclude cancelled + accepted)
-    if (s !== "cancelled" && s !== "accepted") {
-      pipeline += Number(q.total_cents || 0);
+    if (s === "accepted") {
+      counts.accepted += 1;
+      acceptedValue += total;
+    } else if (s === "sent" || s === "viewed") {
+      counts.sent += 1;
+      pipeline += total;
+    } else if (s === "draft") {
+      counts.draft += 1;
+      pipeline += total;
     }
   }
+
+  const denom = counts.accepted + counts.sent + counts.draft;
+  const closeRate = denom ? Math.round((counts.accepted / denom) * 100) : null;
 
   if (kpiDraft) kpiDraft.textContent = String(counts.draft);
   if (kpiSent) kpiSent.textContent = String(counts.sent);
   if (kpiAccepted) kpiAccepted.textContent = String(counts.accepted);
+  if (kpiAcceptedValue) kpiAcceptedValue.textContent = formatMoney(acceptedValue, "CAD");
   if (kpiPipeline) kpiPipeline.textContent = formatMoney(pipeline, "CAD");
-
-  const denom = counts.accepted + counts.sent + counts.draft;
-  const closeRate = denom ? Math.round((counts.accepted / denom) * 100) : 0;
-  if (kpiClose) kpiClose.textContent = denom ? `${closeRate}%` : "—";
+  if (kpiClose) kpiClose.textContent = closeRate === null ? "—%" : `${closeRate}%`;
 }
 
 async function requireSessionOrRedirect() {
   const { data, error } = await supabase.auth.getSession();
   if (error) console.warn("getSession error", error);
-
   const session = data?.session;
   if (!session) {
     window.location.href = "../index.html";
@@ -219,12 +222,14 @@ async function logout() {
   window.location.href = "../index.html";
 }
 
+function setCreateMsg(text) {
+  if (createMsg) createMsg.textContent = text || "";
+}
+
 function wireComingSoon() {
-  const els = Array.from(document.querySelectorAll("[data-soon=\"1\"]"));
-  for (const el of els) {
-    el.addEventListener("click", (e) => {
-      // buttons don't need preventDefault, but links do.
-      if (el.tagName.toLowerCase() === "a") e.preventDefault();
+  const soonEls = Array.from(document.querySelectorAll("[data-soon='1']"));
+  for (const el of soonEls) {
+    el.addEventListener("click", () => {
       toast("Coming next — this page isn’t built yet.");
     });
   }
@@ -245,21 +250,22 @@ function wireCreateButtons() {
 
 async function loadRecentQuotes() {
   setError("");
-  recentEmpty.hidden = true;
-  recentList.innerHTML = "";
-  recentLoading.hidden = false;
+  if (recentEmpty) recentEmpty.hidden = true;
+  if (recentList) recentList.innerHTML = "";
+  if (recentLoading) recentLoading.hidden = false;
 
   try {
+    // Load more than we render so KPIs feel real
     const quotes = await listQuotes({ limit: 200 });
-    recentLoading.hidden = true;
+
+    if (recentLoading) recentLoading.hidden = true;
 
     if (!quotes?.length) {
-      recentEmpty.hidden = false;
+      if (recentEmpty) recentEmpty.hidden = false;
       updateKPIs([]);
       return;
     }
 
-    // Newest first; render only a small list
     const sorted = [...quotes].sort((a, b) => {
       const da = new Date(a.created_at).getTime();
       const db = new Date(b.created_at).getTime();
@@ -267,24 +273,31 @@ async function loadRecentQuotes() {
     });
 
     const recent = sorted.slice(0, 8);
-    for (const q of recent) recentList.appendChild(renderRecentRow(q));
+    for (const q of recent) recentList.appendChild(renderRecentItem(q));
+
     updateKPIs(sorted);
   } catch (e) {
-    recentLoading.hidden = true;
+    if (recentLoading) recentLoading.hidden = true;
     setError(e?.message || "Failed to load quotes.");
   }
 }
 
 function inferWorkspaceName(session) {
   const md = session?.user?.user_metadata || {};
-  return (
+  const name =
     md.company_name ||
     md.company ||
     md.workspace ||
     md.business_name ||
     md.org ||
-    "Workspace"
-  );
+    md.organization ||
+    "";
+  if (name) return String(name);
+
+  const email = session?.user?.email || "";
+  const domain = email.includes("@") ? email.split("@")[1] : "";
+  if (domain) return domain.replace(/^www\./, "");
+  return "Workspace";
 }
 
 async function init() {
@@ -292,8 +305,7 @@ async function init() {
   wireCreateButtons();
 
   if (logoutBtn) logoutBtn.addEventListener("click", logout);
-  if (createCancelBtn)
-    createCancelBtn.addEventListener("click", () => closeDialog(createDialog));
+  if (createCancelBtn) createCancelBtn.addEventListener("click", () => closeDialog(createDialog));
 
   const session = await requireSessionOrRedirect();
   if (!session) return;

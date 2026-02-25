@@ -8,9 +8,10 @@
   </head>
 
   <body>
-    <header class="topbar">
-      <div class="brand">
-        <a class="brand-link" href="./dashboard.html" aria-label="Elevate Estimator">
+    <div class="app">
+      <!-- Sidebar -->
+      <aside class="sidebar" aria-label="Primary">
+        <a class="brand" href="./dashboard.html" aria-label="Elevate Estimator home">
           <img
             class="brand-logo"
             src="../assets/elevate-estimator-logo-light.png"
@@ -18,170 +19,280 @@
           />
         </a>
 
-        <div class="brand-meta">
-          <div id="workspace-name" class="workspace-name">Workspace</div>
-          <div class="workspace-sub">
-            <span class="dot" aria-hidden="true"></span>
-            <span id="user-email" class="user-email">…</span>
+        <nav class="side-nav">
+          <div class="nav-group">
+            <div class="nav-group-label">Overview</div>
+            <a class="nav-item active" href="./dashboard.html" aria-current="page">
+                        <span class="nav-ico" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" fill="none">
+                            <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                          </svg>
+                        </span>
+                        <span>Dashboard</span>
+                      </a>
+          </div>
+
+          <div class="nav-group">
+            <div class="nav-group-label">Sales</div>
+            <button id="nav-quotes" class="nav-item" type="button" data-soon="1">
+                        <span class="nav-ico" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" fill="none">
+                            <path d="M7 3h8l4 4v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="2"/>
+                            <path d="M15 3v5h5" stroke="currentColor" stroke-width="2"/>
+                            <path d="M8 12h8M8 16h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                          </svg>
+                        </span>
+                        <span>Quotes</span>
+                      </button>
+
+            <button id="nav-customers" class="nav-item" type="button" data-soon="1">
+                        <span class="nav-ico" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" fill="none">
+                            <path d="M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0Z" stroke="currentColor" stroke-width="2"/>
+                            <path d="M4 21a8 8 0 0 1 16 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                          </svg>
+                        </span>
+                        <span>Customers</span>
+                      </button>
+          </div>
+
+          <div class="nav-group">
+            <div class="nav-group-label">Catalog</div>
+            <button id="nav-products" class="nav-item" type="button" data-soon="1">
+                        <span class="nav-ico" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" fill="none">
+                            <path d="M20 7 12 3 4 7v10l8 4 8-4V7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                            <path d="M12 7v14" stroke="currentColor" stroke-width="2" opacity=".55"/>
+                            <path d="M4 7l8 4 8-4" stroke="currentColor" stroke-width="2" opacity=".55"/>
+                          </svg>
+                        </span>
+                        <span>Products</span>
+                      </button>
+          </div>
+
+          <div class="nav-group">
+            <div class="nav-group-label">Admin</div>
+            <button id="nav-settings" class="nav-item" type="button" data-soon="1">
+                        <span class="nav-ico" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" fill="none">
+                            <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" stroke="currentColor" stroke-width="2"/>
+                            <path d="M19.4 15a7.7 7.7 0 0 0 .1-1 7.7 7.7 0 0 0-.1-1l2-1.5-2-3.5-2.4.6a7.8 7.8 0 0 0-1.7-1L13.8 3h-3.6L8.7 6.6a7.8 7.8 0 0 0-1.7 1L4.6 7l-2 3.5 2 1.5a7.7 7.7 0 0 0-.1 1 7.7 7.7 0 0 0 .1 1l-2 1.5 2 3.5 2.4-.6a7.8 7.8 0 0 0 1.7 1L10.2 21h3.6l1.5-3.6a7.8 7.8 0 0 0 1.7-1l2.4.6 2-3.5-2-1.5Z" stroke="currentColor" stroke-width="2" opacity=".55" stroke-linejoin="round"/>
+                          </svg>
+                        </span>
+                        <span>Settings</span>
+                      </button>
+          </div>
+          </nav>
+
+        <div class="sidebar-foot">
+          <div class="workspace">
+            <div class="workspace-label">Workspace</div>
+            <div id="workspace-name" class="workspace-name">—</div>
+          </div>
+
+          <div class="userline">
+            <div class="userline-dot" aria-hidden="true"></div>
+            <div id="user-email" class="userline-email">…</div>
           </div>
         </div>
-      </div>
+      </aside>
 
-      <nav class="nav" aria-label="Primary">
-        <button class="nav-link active" type="button" aria-current="page">Dashboard</button>
-        <button id="nav-quotes" class="nav-link" type="button" data-soon="1">Quotes</button>
-        <button id="nav-customers" class="nav-link" type="button" data-soon="1">Customers</button>
-        <button id="nav-products" class="nav-link" type="button" data-soon="1">Products</button>
-        <button id="nav-settings" class="nav-link" type="button" data-soon="1">Settings</button>
-      </nav>
-
-      <div class="actions">
-        <button id="create-btn" class="btn primary" type="button">Create quote</button>
-        <button id="logout-btn" class="btn ghost" type="button">Log out</button>
-      </div>
-    </header>
-
-    <main class="page">
-      <div id="error-box" class="alert error" hidden></div>
-
-      <section class="board" aria-label="Growth command center">
-        <!-- Top row: dominant metric + metric stack -->
-        <section class="primary" aria-label="Open pipeline">
-          <div class="primary-top">
-            <div class="primary-left">
-              <div class="eyebrow">Open pipeline</div>
-              <div id="kpi-pipeline" class="primary-value">—</div>
-              <div class="primary-sub">
-                <span class="delta up" aria-hidden="true">—</span>
-                <span class="muted">vs prior 30 days</span>
-              </div>
-            </div>
-
-            <div class="primary-right">
-              <button id="create-btn-hero" class="btn primary" type="button">Create quote</button>
-              <button id="btn-view-all-recent" class="btn" type="button" data-soon="1">Search quotes</button>
+      <!-- Main -->
+      <div class="main">
+        <header class="topbar">
+          <div class="topbar-left">
+            <div class="page-title">
+              <h1>Command center</h1>
+              <div class="subtitle">Pipeline, conversion, and team execution at a glance.</div>
             </div>
           </div>
 
-          <div class="immersive-chart" aria-hidden="true">
-            <svg class="spark" viewBox="0 0 900 220" preserveAspectRatio="none">
-              <path class="spark-grid" d="M0 40 H900 M0 90 H900 M0 140 H900 M0 190 H900" />
-              <path class="spark-line" d="M0 165 C 90 120, 160 150, 240 110 S 400 165, 520 120 S 690 140, 760 95 S 840 150, 900 120" />
-              <path class="spark-fill" d="M0 165 C 90 120, 160 150, 240 110 S 400 165, 520 120 S 690 140, 760 95 S 840 150, 900 120 L 900 220 L 0 220 Z" />
-            </svg>
+          <div class="topbar-right">
+            <button class="btn btn-quiet" type="button" data-soon="1" id="btn-range">
+              Last 30 days ▾
+            </button>
+
+            <button id="create-btn" class="btn btn-primary" type="button">
+              Create quote
+            </button>
+
+            <button id="logout-btn" class="btn btn-quiet" type="button">
+              Log out
+            </button>
           </div>
-        </section>
+        </header>
 
-        <aside class="stack" aria-label="Key metrics">
-          <div class="stack-row">
-            <div class="stack-label">Accepted</div>
-            <div id="kpi-accepted" class="stack-value">—</div>
-            <div class="stack-note muted">Booked</div>
-          </div>
+        <main class="content">
+          <div id="error-box" class="alert" hidden></div>
 
-          <div class="stack-row">
-            <div class="stack-label">Sent</div>
-            <div id="kpi-sent" class="stack-value">—</div>
-            <div class="stack-note muted">Out for signature</div>
-          </div>
-
-          <div class="stack-row">
-            <div class="stack-label">Draft</div>
-            <div id="kpi-draft" class="stack-value">—</div>
-            <div class="stack-note muted">In progress</div>
-          </div>
-
-          <div class="stack-row">
-            <div class="stack-label">Close rate</div>
-            <div id="kpi-close" class="stack-value">—</div>
-            <div class="stack-note muted">Accepted / total</div>
-          </div>
-        </aside>
-
-        <!-- Bottom row: recent + controls/team -->
-        <section class="recent" aria-label="Recent quotes">
-          <div class="block-head">
-            <h2>Recent quotes</h2>
-            <div class="head-actions">
-              <button id="btn-all-quotes" class="text-link" type="button" data-soon="1">View all</button>
-            </div>
-          </div>
-
-          <div id="recent-loading" class="muted small">Loading…</div>
-
-          <div id="recent-empty" class="empty" hidden>
-            <div class="empty-title">No quotes yet</div>
-            <div class="empty-sub">Create your first quote to start building pipeline.</div>
-          </div>
-
-          <div class="recent-table" role="table" aria-label="Recent quotes table">
-            <div class="recent-row head" role="row">
-              <div class="cell">Quote</div>
-              <div class="cell">Customer</div>
-              <div class="cell">Status</div>
-              <div class="cell right">Amount</div>
-              <div class="cell right">Created</div>
-            </div>
-
-            <div id="recent-list" class="recent-body" role="rowgroup"></div>
-          </div>
-        </section>
-
-        <aside class="rail" aria-label="Controls">
-          <div class="rail-block">
-            <div class="block-head tight">
-              <h2>Controls</h2>
-            </div>
-
-            <div class="rail-actions">
-              <button id="qa-create" class="btn primary" type="button">Create quote</button>
-              <button id="qa-quotes" class="btn" type="button" data-soon="1">Quotes</button>
-              <button id="qa-customers" class="btn" type="button" data-soon="1">Customers</button>
-              <button id="qa-products" class="btn" type="button" data-soon="1">Products</button>
-              <button id="qa-settings" class="btn" type="button" data-soon="1">Settings</button>
-            </div>
-
-            <div class="muted small rail-note">
-              This area will become real navigation + workflows once pages exist.
-            </div>
-          </div>
-
-          <div class="rail-block">
-            <div class="block-head tight">
-              <h2>Team</h2>
-              <span class="muted small">Placeholder</span>
-            </div>
-
-            <div class="team-list">
-              <div class="team-row">
-                <div class="avatar">JD</div>
-                <div class="team-meta">
-                  <div class="team-name">Jacob Docherty</div>
-                  <div class="muted small">Sent: — • Accepted: —</div>
+          <!-- Dominant metric + immersive analytics -->
+          <section class="canvas" aria-label="Pipeline overview">
+            <div class="canvas-top">
+              <div class="dominant">
+                <div class="kicker">Open pipeline</div>
+                <div id="kpi-pipeline" class="dominant-value">—</div>
+                <div class="dominant-sub">
+                  <span class="muted">Focus:</span>
+                  move sent quotes to signed. Deposits next.
                 </div>
-                <div class="team-kpi">—</div>
               </div>
 
-              <div class="team-row">
-                <div class="avatar muted">SR</div>
-                <div class="team-meta">
-                  <div class="team-name muted">Sales rep</div>
-                  <div class="muted small">Sent: — • Accepted: —</div>
+              <div class="rail" role="group" aria-label="Key metrics">
+                <div class="rail-item">
+                  <div class="rail-label">Accepted</div>
+                  <div class="rail-value">
+                    <span id="kpi-accepted">—</span>
+                    <span id="kpi-accepted-value" class="rail-sub">—</span>
+                  </div>
                 </div>
-                <div class="team-kpi muted">—</div>
+                <div class="rail-item">
+                  <div class="rail-label">Sent</div>
+                  <div id="kpi-sent" class="rail-value">—</div>
+                </div>
+                <div class="rail-item">
+                  <div class="rail-label">Draft</div>
+                  <div id="kpi-draft" class="rail-value">—</div>
+                </div>
+                <div class="rail-item">
+                  <div class="rail-label">Close rate</div>
+                  <div id="kpi-close" class="rail-value">—%</div>
+                </div>
               </div>
             </div>
-          </div>
-        </aside>
-      </section>
-    </main>
+
+            <div class="canvas-chart" aria-hidden="true">
+              <div class="chart-grid"></div>
+              <svg class="chart-svg" viewBox="0 0 1200 260" preserveAspectRatio="none">
+                <path
+                  d="M0 200 C 120 165, 240 210, 360 150 S 600 110, 720 135 S 960 80, 1200 95"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="3.5"
+                  vector-effect="non-scaling-stroke"
+                />
+                <path
+                  d="M0 200 C 120 165, 240 210, 360 150 S 600 110, 720 135 S 960 80, 1200 95 L1200 260 L0 260 Z"
+                  fill="currentColor"
+                  opacity="0.08"
+                />
+              </svg>
+
+              <div class="chart-foot">
+                <div class="legend">
+                  <span class="dot dot-open"></span> Open pipeline
+                  <span class="sep"></span>
+                  <span class="dot dot-won"></span> Accepted
+                </div>
+
+                <button id="btn-all-quotes" class="link" type="button" data-soon="1">
+                  View all quotes →
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <!-- Below fold -->
+          <section class="below">
+            <div class="recent">
+              <div class="section-head">
+                <h2>Recent quotes</h2>
+                <div class="section-actions">
+                  <button id="btn-view-all-recent" class="link" type="button" data-soon="1">
+                    Search / filters →
+                  </button>
+                  <button id="create-btn-hero" class="btn btn-secondary" type="button">
+                    New quote
+                  </button>
+                </div>
+              </div>
+
+              <div id="recent-loading" class="loading">Loading…</div>
+
+              <div id="recent-empty" class="empty" hidden>
+                <div class="empty-title">No quotes yet</div>
+                <div class="empty-sub">Create your first quote to start building pipeline.</div>
+              </div>
+
+              <div id="recent-list" class="recent-list"></div>
+            </div>
+
+            <aside class="side">
+              <div class="panel">
+                <div class="section-head">
+                  <h2>Team performance</h2>
+                  <button class="link" type="button" data-soon="1">Rep leaderboard →</button>
+                </div>
+
+                <div class="team">
+                  <div class="team-row">
+                    <div class="team-left">
+                      <div class="avatar">JD</div>
+                      <div class="team-meta">
+                        <div class="team-name">Jacob Docherty</div>
+                        <div class="team-sub">Quotes sent: — • Accepted: —</div>
+                      </div>
+                    </div>
+                    <div class="team-right">
+                      <div class="team-kpi">—</div>
+                      <div class="team-bar"><span style="width: 62%"></span></div>
+                    </div>
+                  </div>
+
+                  <div class="team-row muted">
+                    <div class="team-left">
+                      <div class="avatar muted">SR</div>
+                      <div class="team-meta">
+                        <div class="team-name">Sales rep</div>
+                        <div class="team-sub">Quotes sent: — • Accepted: —</div>
+                      </div>
+                    </div>
+                    <div class="team-right">
+                      <div class="team-kpi">—</div>
+                      <div class="team-bar"><span style="width: 38%"></span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="panel">
+                <div class="section-head">
+                  <h2>Actions</h2>
+                </div>
+
+                <div class="action-grid">
+                  <button id="qa-create" class="btn btn-primary" type="button">
+                    Create quote
+                  </button>
+                  <button id="qa-quotes" class="btn btn-quiet" type="button" data-soon="1">
+                    Search quotes
+                  </button>
+                  <button id="qa-customers" class="btn btn-quiet" type="button" data-soon="1">
+                    Customers
+                  </button>
+                  <button id="qa-products" class="btn btn-quiet" type="button" data-soon="1">
+                    Products
+                  </button>
+                  <button id="qa-settings" class="btn btn-quiet" type="button" data-soon="1">
+                    Settings
+                  </button>
+                </div>
+
+                <div class="hint">
+                  Next: deposits + reminders + automated follow‑up.
+                </div>
+              </div>
+            </aside>
+          </section>
+        </main>
+      </div>
+    </div>
 
     <!-- Create Quote Dialog -->
     <dialog id="create-dialog" class="dialog">
       <form id="create-form" class="dialog-form" method="dialog">
         <h2>Create quote</h2>
         <p class="muted small" style="margin: 0 0 10px">
-          Creates a draft shell. Add items, scope, and send for signature on the next screen.
+          Creates a draft shell. Add scope + items on the next screen.
         </p>
 
         <label class="field">
@@ -195,8 +306,10 @@
         </label>
 
         <div class="dialog-actions">
-          <button id="create-cancel" class="btn ghost" type="button">Cancel</button>
-          <button id="create-submit" class="btn primary" type="submit">Create & open</button>
+          <button id="create-cancel" class="btn btn-quiet" type="button">Cancel</button>
+          <button id="create-submit" class="btn btn-primary" type="submit">
+            Create & open
+          </button>
         </div>
 
         <div id="create-msg" class="muted small"></div>
