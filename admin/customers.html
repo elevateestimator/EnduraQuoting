@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Elevate Estimator — Customers</title>
+    <link rel="stylesheet" href="./customers.css" />
+  </head>
+
+  <body>
+    <div class="app">
+      <!-- Sidebar -->
+      <aside class="sidebar" aria-label="Primary">
+        <a class="brand" href="./dashboard.html" aria-label="Elevate Estimator home">
+          <img
+            class="brand-logo"
+            src="../assets/elevate-estimator-logo-light.png"
+            alt="Elevate Estimator"
+          />
+        </a>
+
+        <nav class="side-nav">
+          <div class="nav-group">
+            <div class="nav-group-label">Overview</div>
+            <a class="nav-item" href="./dashboard.html">
+              <span class="nav-ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </span>
+              <span>Dashboard</span>
+            </a>
+          </div>
+
+          <div class="nav-group">
+            <div class="nav-group-label">Sales</div>
+            <button id="nav-quotes" class="nav-item" type="button" data-soon="1">
+              <span class="nav-ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M7 3h8l4 4v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  />
+                  <path d="M15 3v5h5" stroke="currentColor" stroke-width="2" />
+                  <path
+                    d="M8 12h8M8 16h8"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </span>
+              <span>Quotes</span>
+            </button>
+
+            <a class="nav-item active" href="./customers.html" aria-current="page">
+              <span class="nav-ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0Z"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  />
+                  <path
+                    d="M4 21a8 8 0 0 1 16 0"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </span>
+              <span>Customers</span>
+            </a>
+          </div>
+
+          <div class="nav-group">
+            <div class="nav-group-label">Catalog</div>
+            <button id="nav-products" class="nav-item" type="button" data-soon="1">
+              <span class="nav-ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M20 7 12 3 4 7v10l8 4 8-4V7Z"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linejoin="round"
+                  />
+                  <path d="M12 7v14" stroke="currentColor" stroke-width="2" opacity=".55" />
+                  <path d="M4 7l8 4 8-4" stroke="currentColor" stroke-width="2" opacity=".55" />
+                </svg>
+              </span>
+              <span>Products</span>
+            </button>
+          </div>
+
+          <div class="nav-group">
+            <div class="nav-group-label">Admin</div>
+            <button id="nav-settings" class="nav-item" type="button" data-soon="1">
+              <span class="nav-ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  />
+                  <path
+                    d="M19.4 15a7.7 7.7 0 0 0 .1-1 7.7 7.7 0 0 0-.1-1l2-1.5-2-3.5-2.4.6a7.8 7.8 0 0 0-1.7-1L13.8 3h-3.6L8.7 6.6a7.8 7.8 0 0 0-1.7 1L4.6 7l-2 3.5 2 1.5a7.7 7.7 0 0 0-.1 1 7.7 7.7 0 0 0 .1 1l-2 1.5 2 3.5 2.4-.6a7.8 7.8 0 0 0 1.7 1L10.2 21h3.6l1.5-3.6a7.8 7.8 0 0 0 1.7-1l2.4.6 2-3.5-2-1.5Z"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    opacity=".55"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </span>
+              <span>Settings</span>
+            </button>
+          </div>
+        </nav>
+
+        <div class="sidebar-foot">
+          <div class="workspace">
+            <div class="workspace-label">Workspace</div>
+            <div id="workspace-name" class="workspace-name">—</div>
+          </div>
+
+          <div class="userline">
+            <div class="userline-dot" aria-hidden="true"></div>
+            <div id="user-email" class="userline-email">…</div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main -->
+      <div class="main">
+        <header class="topbar">
+          <div class="topbar-left">
+            <div class="page-title">
+              <h1>Customers</h1>
+              <div class="subtitle">A clean customer directory for quoting at scale.</div>
+            </div>
+          </div>
+
+          <div class="topbar-right">
+            <button id="btn-new" class="btn btn-primary" type="button">New customer</button>
+            <button id="logout-btn" class="btn btn-quiet" type="button">Log out</button>
+          </div>
+        </header>
+
+        <main class="content">
+          <div id="error-box" class="alert" hidden></div>
+
+          <section class="panel">
+            <div class="section-head">
+              <div>
+                <h2>Customer directory</h2>
+                <div class="muted small">
+                  <span id="customer-count">—</span> customers
+                </div>
+              </div>
+
+              <div class="section-actions">
+                <div class="search" role="search">
+                  <span class="search-ico" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none">
+                      <path
+                        d="M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      />
+                      <path
+                        d="M16.5 16.5 21 21"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                      />
+                    </svg>
+                  </span>
+                  <input
+                    id="search"
+                    type="search"
+                    placeholder="Search name, company, email, phone…"
+                    autocomplete="off"
+                  />
+                </div>
+
+                <button id="btn-new-inline" class="btn btn-secondary" type="button">
+                  New customer
+                </button>
+              </div>
+            </div>
+
+            <div id="loading" class="loading">Loading…</div>
+
+            <div id="empty" class="empty" hidden>
+              <div class="empty-title">No customers yet</div>
+              <div class="empty-sub">Create your first customer to speed up quoting.</div>
+            </div>
+
+            <div id="table-wrap" class="table-wrap" hidden>
+              <table class="table" aria-label="Customers table">
+                <thead>
+                  <tr>
+                    <th style="width: 240px">Customer</th>
+                    <th style="width: 220px">Company</th>
+                    <th style="width: 220px">Email</th>
+                    <th style="width: 160px">Phone</th>
+                    <th>Billing address</th>
+                    <th style="width: 140px">Created</th>
+                    <th style="width: 120px">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="customers-body"></tbody>
+              </table>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <!-- Create customer dialog -->
+    <dialog id="customer-dialog" class="dialog">
+      <form id="customer-form" class="dialog-form" method="dialog">
+        <h2>New customer</h2>
+        <p class="muted small" style="margin: 0 0 10px">
+          Stored in your workspace and available to your team.
+        </p>
+
+        <div class="form-grid">
+          <label class="field">
+            <span>First name</span>
+            <input id="first_name" type="text" required placeholder="John" />
+          </label>
+
+          <label class="field">
+            <span>Last name</span>
+            <input id="last_name" type="text" required placeholder="Smith" />
+          </label>
+        </div>
+
+        <label class="field">
+          <span>Company name (optional)</span>
+          <input id="company_name" type="text" placeholder="Smith Holdings" />
+        </label>
+
+        <label class="field">
+          <span>Billing address</span>
+          <textarea
+            id="billing_address"
+            rows="3"
+            placeholder="Street, city, province, postal code"
+          ></textarea>
+        </label>
+
+        <div class="form-grid">
+          <label class="field">
+            <span>Email</span>
+            <input id="email" type="email" placeholder="john@email.com" />
+          </label>
+
+          <label class="field">
+            <span>Phone</span>
+            <input id="phone" type="tel" placeholder="(555) 555‑5555" />
+          </label>
+        </div>
+
+        <div class="dialog-actions">
+          <button id="customer-cancel" class="btn btn-quiet" type="button">Cancel</button>
+          <button id="customer-submit" class="btn btn-primary" type="submit">
+            Create customer
+          </button>
+        </div>
+
+        <div id="customer-msg" class="muted small"></div>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast" hidden></div>
+
+    <script type="module" src="./customers.js"></script>
+  </body>
+</html>
