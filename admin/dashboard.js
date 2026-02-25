@@ -2,27 +2,37 @@ import { supabase } from "../js/api.js";
 import { listQuotes, createQuote } from "../js/quotesApi.js";
 import { makeDefaultQuoteData } from "../js/quoteDefaults.js";
 
-// ===== DOM =====
-const companyNameEl = document.getElementById("company-name");
+/**
+ * Command Center Dashboard
+ * - One dominant metric: Open Pipeline
+ * - Recent quotes feed (small, fast)
+ * - Everything else is intentionally staged as “coming soon”
+ */
+
+const workspaceNameEl = document.getElementById("workspace-name");
 const userEmailEl = document.getElementById("user-email");
 const errorBox = document.getElementById("error-box");
 
-const createBtn = document.getElementById("create-btn");
-const qaCreate = document.getElementById("qa-create");
-const logoutBtn = document.getElementById("logout-btn");
-
 const toastEl = document.getElementById("toast");
 
-// KPIs
-const kpiDraft = document.getElementById("kpi-draft");
-const kpiSent = document.getElementById("kpi-sent");
-const kpiAccepted = document.getElementById("kpi-accepted");
-const kpiPipeline = document.getElementById("kpi-pipeline");
+// Primary actions
+const createBtn = document.getElementById("create-btn");
+const createBtnHero = document.getElementById("create-btn-hero");
+const qaCreate = document.getElementById("qa-create");
+const logoutBtn = document.getElementById("logout-btn");
 
 // Recent
 const recentLoading = document.getElementById("recent-loading");
 const recentEmpty = document.getElementById("recent-empty");
 const recentList = document.getElementById("recent-list");
+
+// KPIs
+const kpiDraft = document.getElementById("kpi-draft");
+const kpiSent = document.getElementById("kpi-sent");
+const kpiAccepted = document.getElementById("kpi-accepted");
+const kpiAcceptedValue = document.getElementById("kpi-accepted-value");
+const kpiPipeline = document.getElementById("kpi-pipeline");
+const kpiClose = document.getElementById("kpi-close");
 
 // Dialog
 const createDialog = document.getElementById("create-dialog");
@@ -35,7 +45,6 @@ const customerEmailEl = document.getElementById("customer_email");
 
 let toastTimer = null;
 
-// ===== UI helpers =====
 function toast(msg) {
   if (!toastEl) return;
   toastEl.textContent = msg;
@@ -69,17 +78,9 @@ function closeDialog(d) {
   else d.removeAttribute("open");
 }
 
-function setCreateMsg(text) {
-  if (!createMsg) return;
-  createMsg.textContent = text || "";
-}
-
 function formatMoney(cents = 0, currency = "CAD") {
   const dollars = (Number(cents) || 0) / 100;
-  return new Intl.NumberFormat("en-CA", {
-    style: "currency",
-    currency,
-  }).format(dollars);
+  return new Intl.NumberFormat("en-CA", { style: "currency", currency }).format(dollars);
 }
 
 function formatDateShort(iso) {
@@ -106,7 +107,6 @@ function normalizeStatus(status) {
 function badgeClass(status) {
   const s = normalizeStatus(status);
   if (s === "accepted") return "accepted";
-  if (s === "signed") return "signed";
   if (s === "sent") return "sent";
   if (s === "viewed") return "viewed";
   if (s === "cancelled") return "cancelled";
@@ -115,18 +115,20 @@ function badgeClass(status) {
 
 function prettyStatus(status) {
   const s = normalizeStatus(status);
-  if (s === "accepted") return "Signed";
+  if (s === "accepted") return "Accepted";
   if (s === "viewed") return "Viewed";
   if (s === "sent") return "Sent";
   if (s === "cancelled") return "Cancelled";
   return "Draft";
 }
 
-// ===== Render =====
-function renderRecentRow(q) {
-  const row = document.createElement("a");
-  row.className = "recent-row";
-  row.href = `./quote.html?id=${q.id}`;
+function renderRecentItem(q) {
+  const item = document.createElement("div");
+  item.className = "recent-item";
+
+  item.addEventListener("click", () => {
+    window.location.href = `./quote.html?id=${q.id}`;
+  });
 
   const left = document.createElement("div");
   left.className = "recent-left";
@@ -166,40 +168,47 @@ function renderRecentRow(q) {
   right.appendChild(amt);
   right.appendChild(date);
 
-  row.appendChild(left);
-  row.appendChild(right);
+  item.appendChild(left);
+  item.appendChild(right);
 
-  return row;
+  return item;
 }
 
 function updateKPIs(quotes) {
   const counts = { draft: 0, sent: 0, accepted: 0 };
-  let pipeline = 0;
+  let pipeline = 0;        // open pipeline (Draft + Sent/View, exclude Accepted/Cancelled)
+  let acceptedValue = 0;   // total accepted value (all-time for now)
 
   for (const q of quotes) {
     const s = normalizeStatus(q.status);
+    const total = Number(q.total_cents || 0);
 
-    if (s === "accepted") counts.accepted += 1;
-    else if (s === "sent" || s === "viewed") counts.sent += 1;
-    else if (s === "draft") counts.draft += 1;
-
-    // Pipeline: Draft + Sent + Viewed (exclude cancelled + accepted)
-    if (s !== "cancelled" && s !== "accepted") {
-      pipeline += Number(q.total_cents || 0);
+    if (s === "accepted") {
+      counts.accepted += 1;
+      acceptedValue += total;
+    } else if (s === "sent" || s === "viewed") {
+      counts.sent += 1;
+      pipeline += total;
+    } else if (s === "draft") {
+      counts.draft += 1;
+      pipeline += total;
     }
   }
+
+  const denom = counts.accepted + counts.sent + counts.draft;
+  const closeRate = denom ? Math.round((counts.accepted / denom) * 100) : null;
 
   if (kpiDraft) kpiDraft.textContent = String(counts.draft);
   if (kpiSent) kpiSent.textContent = String(counts.sent);
   if (kpiAccepted) kpiAccepted.textContent = String(counts.accepted);
+  if (kpiAcceptedValue) kpiAcceptedValue.textContent = formatMoney(acceptedValue, "CAD");
   if (kpiPipeline) kpiPipeline.textContent = formatMoney(pipeline, "CAD");
+  if (kpiClose) kpiClose.textContent = closeRate === null ? "—%" : `${closeRate}%`;
 }
 
-// ===== Auth =====
 async function requireSessionOrRedirect() {
   const { data, error } = await supabase.auth.getSession();
   if (error) console.warn("getSession error", error);
-
   const session = data?.session;
   if (!session) {
     window.location.href = "../index.html";
@@ -213,15 +222,40 @@ async function logout() {
   window.location.href = "../index.html";
 }
 
-// ===== Data =====
-async function loadDashboard() {
-  setError("");
+function setCreateMsg(text) {
+  if (createMsg) createMsg.textContent = text || "";
+}
 
-  if (recentLoading) recentLoading.hidden = false;
+function wireComingSoon() {
+  const soonEls = Array.from(document.querySelectorAll("[data-soon='1']"));
+  for (const el of soonEls) {
+    el.addEventListener("click", () => {
+      toast("Coming next — this page isn’t built yet.");
+    });
+  }
+}
+
+function wireCreateButtons() {
+  const opens = [createBtn, createBtnHero, qaCreate].filter(Boolean);
+  for (const b of opens) {
+    b.addEventListener("click", () => {
+      setCreateMsg("");
+      customerNameEl.value = "";
+      customerEmailEl.value = "";
+      openDialog(createDialog);
+      customerNameEl.focus();
+    });
+  }
+}
+
+async function loadRecentQuotes() {
+  setError("");
   if (recentEmpty) recentEmpty.hidden = true;
   if (recentList) recentList.innerHTML = "";
+  if (recentLoading) recentLoading.hidden = false;
 
   try {
+    // Load more than we render so KPIs feel real
     const quotes = await listQuotes({ limit: 200 });
 
     if (recentLoading) recentLoading.hidden = true;
@@ -238,99 +272,86 @@ async function loadDashboard() {
       return db - da;
     });
 
-    updateKPIs(sorted);
+    const recent = sorted.slice(0, 8);
+    for (const q of recent) recentList.appendChild(renderRecentItem(q));
 
-    const recent = sorted.slice(0, 6);
-    for (const q of recent) {
-      recentList.appendChild(renderRecentRow(q));
-    }
+    updateKPIs(sorted);
   } catch (e) {
     if (recentLoading) recentLoading.hidden = true;
-    setError(e?.message || "Failed to load dashboard.");
+    setError(e?.message || "Failed to load quotes.");
   }
 }
 
-// ===== Wiring =====
-function wireComingSoon() {
-  const soonEls = Array.from(document.querySelectorAll("[data-soon='1']"));
-  for (const el of soonEls) {
-    el.addEventListener("click", (e) => {
-      e.preventDefault();
-      toast("Coming next — this page isn’t built yet.");
-    });
-  }
-}
+function inferWorkspaceName(session) {
+  const md = session?.user?.user_metadata || {};
+  const name =
+    md.company_name ||
+    md.company ||
+    md.workspace ||
+    md.business_name ||
+    md.org ||
+    md.organization ||
+    "";
+  if (name) return String(name);
 
-function wireCreate() {
-  const openers = [createBtn, qaCreate].filter(Boolean);
-  for (const el of openers) {
-    el.addEventListener("click", () => {
-      setCreateMsg("");
-      customerNameEl.value = "";
-      customerEmailEl.value = "";
-      openDialog(createDialog);
-      customerNameEl.focus();
-    });
-  }
-
-  createCancelBtn?.addEventListener("click", () => closeDialog(createDialog));
-
-  createForm?.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    setCreateMsg("");
-
-    const customer_name = customerNameEl.value.trim();
-    const customer_email = customerEmailEl.value.trim() || null;
-
-    if (!customer_name) {
-      setCreateMsg("Customer name is required.");
-      return;
-    }
-
-    try {
-      createSubmitBtn.disabled = true;
-      createSubmitBtn.textContent = "Creating…";
-
-      const data = makeDefaultQuoteData({ customer_name, customer_email });
-
-      const q = await createQuote({
-        customer_name,
-        customer_email,
-        total_cents: 0,
-        currency: "CAD",
-        data,
-      });
-
-      closeDialog(createDialog);
-      window.location.href = `./quote.html?id=${q.id}`;
-    } catch (err) {
-      setCreateMsg(err?.message || "Failed to create quote.");
-    } finally {
-      createSubmitBtn.disabled = false;
-      createSubmitBtn.textContent = "Create & open";
-    }
-  });
+  const email = session?.user?.email || "";
+  const domain = email.includes("@") ? email.split("@")[1] : "";
+  if (domain) return domain.replace(/^www\./, "");
+  return "Workspace";
 }
 
 async function init() {
   wireComingSoon();
-  wireCreate();
+  wireCreateButtons();
 
-  logoutBtn?.addEventListener("click", logout);
+  if (logoutBtn) logoutBtn.addEventListener("click", logout);
+  if (createCancelBtn) createCancelBtn.addEventListener("click", () => closeDialog(createDialog));
 
   const session = await requireSessionOrRedirect();
   if (!session) return;
 
-  const email = session.user.email || "";
-  if (userEmailEl) userEmailEl.textContent = email;
+  if (userEmailEl) userEmailEl.textContent = session.user.email || "";
+  if (workspaceNameEl) workspaceNameEl.textContent = inferWorkspaceName(session);
 
-  // Optional: display a workspace/company name if you store it in user_metadata
-  const meta = session.user.user_metadata || {};
-  const workspaceName =
-    meta.company_name || meta.company || meta.workspace || meta.business_name || null;
-  if (companyNameEl) companyNameEl.textContent = workspaceName || "Workspace";
+  if (createForm) {
+    createForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      setCreateMsg("");
 
-  await loadDashboard();
+      const customer_name = customerNameEl.value.trim();
+      const customer_email = customerEmailEl.value.trim() || null;
+
+      if (!customer_name) {
+        setCreateMsg("Customer name is required.");
+        return;
+      }
+
+      try {
+        createSubmitBtn.disabled = true;
+        createSubmitBtn.textContent = "Creating…";
+
+        const data = makeDefaultQuoteData({ customer_name, customer_email });
+
+        const q = await createQuote({
+          customer_name,
+          customer_email,
+          total_cents: 0,
+          currency: "CAD",
+          data,
+        });
+
+        closeDialog(createDialog);
+        window.location.href = `./quote.html?id=${q.id}`;
+      } catch (err) {
+        setCreateMsg(err?.message || "Failed to create quote.");
+      } finally {
+        createSubmitBtn.disabled = false;
+        createSubmitBtn.textContent = "Create & open";
+      }
+    });
+  }
+
+  await loadRecentQuotes();
 }
 
 init();
