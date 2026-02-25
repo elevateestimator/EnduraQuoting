@@ -2,55 +2,27 @@ import { supabase } from "../js/api.js";
 import { listQuotes, createQuote } from "../js/quotesApi.js";
 import { makeDefaultQuoteData } from "../js/quoteDefaults.js";
 
-/**
- * Dashboard:
- * - Owner/Admin overview
- * - Shows Recent Quotes (not a full-table)
- * - Nav buttons are placeholders until pages exist
- */
-
+// ===== DOM =====
+const companyNameEl = document.getElementById("company-name");
 const userEmailEl = document.getElementById("user-email");
 const errorBox = document.getElementById("error-box");
 
 const createBtn = document.getElementById("create-btn");
-const createBtnHero = document.getElementById("create-btn-hero");
 const qaCreate = document.getElementById("qa-create");
-
 const logoutBtn = document.getElementById("logout-btn");
 
-// Placeholder navigation buttons (pages not built yet)
-const navQuotes = document.getElementById("nav-quotes");
-const navCustomers = document.getElementById("nav-customers");
-const navProducts = document.getElementById("nav-products");
-const navSettings = document.getElementById("nav-settings");
-
-const btnAllQuotes = document.getElementById("btn-all-quotes");
-const btnCustomers = document.getElementById("btn-customers");
-const btnProducts = document.getElementById("btn-products");
-const btnSettings = document.getElementById("btn-settings");
-
-const btnAllQuotesHero = document.getElementById("btn-all-quotes-hero");
-const btnCustomersHero = document.getElementById("btn-customers-hero");
-
-const btnViewAllRecent = document.getElementById("btn-view-all-recent");
-
-const qaQuotes = document.getElementById("qa-quotes");
-const qaCustomers = document.getElementById("qa-customers");
-const qaProducts = document.getElementById("qa-products");
-const qaSettings = document.getElementById("qa-settings");
-
 const toastEl = document.getElementById("toast");
-
-// Recent quotes
-const recentLoading = document.getElementById("recent-loading");
-const recentEmpty = document.getElementById("recent-empty");
-const recentList = document.getElementById("recent-list");
 
 // KPIs
 const kpiDraft = document.getElementById("kpi-draft");
 const kpiSent = document.getElementById("kpi-sent");
 const kpiAccepted = document.getElementById("kpi-accepted");
 const kpiPipeline = document.getElementById("kpi-pipeline");
+
+// Recent
+const recentLoading = document.getElementById("recent-loading");
+const recentEmpty = document.getElementById("recent-empty");
+const recentList = document.getElementById("recent-list");
 
 // Dialog
 const createDialog = document.getElementById("create-dialog");
@@ -63,6 +35,7 @@ const customerEmailEl = document.getElementById("customer_email");
 
 let toastTimer = null;
 
+// ===== UI helpers =====
 function toast(msg) {
   if (!toastEl) return;
   toastEl.textContent = msg;
@@ -74,6 +47,7 @@ function toast(msg) {
 }
 
 function setError(message) {
+  if (!errorBox) return;
   if (!message) {
     errorBox.hidden = true;
     errorBox.textContent = "";
@@ -84,18 +58,28 @@ function setError(message) {
 }
 
 function openDialog(d) {
+  if (!d) return;
   if (typeof d.showModal === "function") d.showModal();
   else d.setAttribute("open", "");
 }
 
 function closeDialog(d) {
+  if (!d) return;
   if (typeof d.close === "function") d.close();
   else d.removeAttribute("open");
 }
 
+function setCreateMsg(text) {
+  if (!createMsg) return;
+  createMsg.textContent = text || "";
+}
+
 function formatMoney(cents = 0, currency = "CAD") {
   const dollars = (Number(cents) || 0) / 100;
-  return new Intl.NumberFormat("en-CA", { style: "currency", currency }).format(dollars);
+  return new Intl.NumberFormat("en-CA", {
+    style: "currency",
+    currency,
+  }).format(dollars);
 }
 
 function formatDateShort(iso) {
@@ -131,21 +115,18 @@ function badgeClass(status) {
 
 function prettyStatus(status) {
   const s = normalizeStatus(status);
-  if (s === "accepted") return "Accepted";
-  if (s === "signed") return "Signed";
+  if (s === "accepted") return "Signed";
   if (s === "viewed") return "Viewed";
   if (s === "sent") return "Sent";
   if (s === "cancelled") return "Cancelled";
   return "Draft";
 }
 
-function renderRecentItem(q) {
-  const item = document.createElement("div");
-  item.className = "recent-item";
-
-  item.addEventListener("click", () => {
-    window.location.href = `./quote.html?id=${q.id}`;
-  });
+// ===== Render =====
+function renderRecentRow(q) {
+  const row = document.createElement("a");
+  row.className = "recent-row";
+  row.href = `./quote.html?id=${q.id}`;
 
   const left = document.createElement("div");
   left.className = "recent-left";
@@ -185,10 +166,10 @@ function renderRecentItem(q) {
   right.appendChild(amt);
   right.appendChild(date);
 
-  item.appendChild(left);
-  item.appendChild(right);
+  row.appendChild(left);
+  row.appendChild(right);
 
-  return item;
+  return row;
 }
 
 function updateKPIs(quotes) {
@@ -202,21 +183,23 @@ function updateKPIs(quotes) {
     else if (s === "sent" || s === "viewed") counts.sent += 1;
     else if (s === "draft") counts.draft += 1;
 
-    // Simple pipeline: include Draft+Sent+Viewed (exclude cancelled + accepted)
+    // Pipeline: Draft + Sent + Viewed (exclude cancelled + accepted)
     if (s !== "cancelled" && s !== "accepted") {
       pipeline += Number(q.total_cents || 0);
     }
   }
 
-  kpiDraft.textContent = String(counts.draft);
-  kpiSent.textContent = String(counts.sent);
-  kpiAccepted.textContent = String(counts.accepted);
-  kpiPipeline.textContent = formatMoney(pipeline, "CAD");
+  if (kpiDraft) kpiDraft.textContent = String(counts.draft);
+  if (kpiSent) kpiSent.textContent = String(counts.sent);
+  if (kpiAccepted) kpiAccepted.textContent = String(counts.accepted);
+  if (kpiPipeline) kpiPipeline.textContent = formatMoney(pipeline, "CAD");
 }
 
+// ===== Auth =====
 async function requireSessionOrRedirect() {
   const { data, error } = await supabase.auth.getSession();
   if (error) console.warn("getSession error", error);
+
   const session = data?.session;
   if (!session) {
     window.location.href = "../index.html";
@@ -230,63 +213,21 @@ async function logout() {
   window.location.href = "../index.html";
 }
 
-function setCreateMsg(text) {
-  createMsg.textContent = text || "";
-}
-
-function wireComingSoonButtons() {
-  const comingSoon = [
-    navQuotes,
-    navCustomers,
-    navProducts,
-    navSettings,
-    btnAllQuotes,
-    btnCustomers,
-    btnProducts,
-    btnSettings,
-    btnAllQuotesHero,
-    btnCustomersHero,
-    btnViewAllRecent,
-    qaQuotes,
-    qaCustomers,
-    qaProducts,
-    qaSettings,
-  ].filter(Boolean);
-
-  for (const el of comingSoon) {
-    el.addEventListener("click", () => {
-      toast("Coming next — this page isn’t built yet.");
-    });
-  }
-}
-
-function wireCreateButtons() {
-  const opens = [createBtn, createBtnHero, qaCreate].filter(Boolean);
-  for (const b of opens) {
-    b.addEventListener("click", () => {
-      setCreateMsg("");
-      customerNameEl.value = "";
-      customerEmailEl.value = "";
-      openDialog(createDialog);
-      customerNameEl.focus();
-    });
-  }
-}
-
-async function loadRecentQuotes() {
+// ===== Data =====
+async function loadDashboard() {
   setError("");
-  recentEmpty.hidden = true;
-  recentList.innerHTML = "";
-  recentLoading.hidden = false;
+
+  if (recentLoading) recentLoading.hidden = false;
+  if (recentEmpty) recentEmpty.hidden = true;
+  if (recentList) recentList.innerHTML = "";
 
   try {
-    // Load more than we display so KPIs feel “real”
     const quotes = await listQuotes({ limit: 200 });
 
-    recentLoading.hidden = true;
+    if (recentLoading) recentLoading.hidden = true;
 
     if (!quotes?.length) {
-      recentEmpty.hidden = false;
+      if (recentEmpty) recentEmpty.hidden = false;
       updateKPIs([]);
       return;
     }
@@ -297,27 +238,42 @@ async function loadRecentQuotes() {
       return db - da;
     });
 
-    const recent = sorted.slice(0, 6);
-    for (const q of recent) recentList.appendChild(renderRecentItem(q));
-
     updateKPIs(sorted);
+
+    const recent = sorted.slice(0, 6);
+    for (const q of recent) {
+      recentList.appendChild(renderRecentRow(q));
+    }
   } catch (e) {
-    recentLoading.hidden = true;
-    setError(e?.message || "Failed to load quotes.");
+    if (recentLoading) recentLoading.hidden = true;
+    setError(e?.message || "Failed to load dashboard.");
   }
 }
 
-async function init() {
-  wireComingSoonButtons();
-  wireCreateButtons();
+// ===== Wiring =====
+function wireComingSoon() {
+  const soonEls = Array.from(document.querySelectorAll("[data-soon='1']"));
+  for (const el of soonEls) {
+    el.addEventListener("click", (e) => {
+      e.preventDefault();
+      toast("Coming next — this page isn’t built yet.");
+    });
+  }
+}
 
-  logoutBtn?.addEventListener("click", logout);
+function wireCreate() {
+  const openers = [createBtn, qaCreate].filter(Boolean);
+  for (const el of openers) {
+    el.addEventListener("click", () => {
+      setCreateMsg("");
+      customerNameEl.value = "";
+      customerEmailEl.value = "";
+      openDialog(createDialog);
+      customerNameEl.focus();
+    });
+  }
+
   createCancelBtn?.addEventListener("click", () => closeDialog(createDialog));
-
-  const session = await requireSessionOrRedirect();
-  if (!session) return;
-
-  if (userEmailEl) userEmailEl.textContent = session.user.email || "";
 
   createForm?.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -354,8 +310,27 @@ async function init() {
       createSubmitBtn.textContent = "Create & open";
     }
   });
+}
 
-  await loadRecentQuotes();
+async function init() {
+  wireComingSoon();
+  wireCreate();
+
+  logoutBtn?.addEventListener("click", logout);
+
+  const session = await requireSessionOrRedirect();
+  if (!session) return;
+
+  const email = session.user.email || "";
+  if (userEmailEl) userEmailEl.textContent = email;
+
+  // Optional: display a workspace/company name if you store it in user_metadata
+  const meta = session.user.user_metadata || {};
+  const workspaceName =
+    meta.company_name || meta.company || meta.workspace || meta.business_name || null;
+  if (companyNameEl) companyNameEl.textContent = workspaceName || "Workspace";
+
+  await loadDashboard();
 }
 
 init();
