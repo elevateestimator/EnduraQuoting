@@ -95,6 +95,7 @@ a{ color: inherit; }
   font-size: 13px;
   cursor:pointer;
   text-align:left;
+  text-decoration: none;
 }
 
 .nav-item:hover{
@@ -230,6 +231,7 @@ a{ color: inherit; }
   font-size: 13px;
   cursor:pointer;
   box-shadow: none;
+  text-decoration: none;
 }
 
 .btn:hover{
@@ -271,6 +273,7 @@ a{ color: inherit; }
   cursor:pointer;
   padding: 6px 8px;
   border-radius: 8px;
+  text-decoration: none;
 }
 
 .link:hover{

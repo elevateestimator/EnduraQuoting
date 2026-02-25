@@ -20,6 +20,7 @@ const createBtn = document.getElementById("create-btn");
 const createBtnHero = document.getElementById("create-btn-hero");
 const qaCreate = document.getElementById("qa-create");
 const logoutBtn = document.getElementById("logout-btn");
+const qaCustomers = document.getElementById("qa-customers");
 
 // Recent
 const recentLoading = document.getElementById("recent-loading");
@@ -248,6 +249,15 @@ function wireCreateButtons() {
   }
 }
 
+function wireRealNav() {
+  // Customers page exists now (no "coming soon" toast)
+  if (qaCustomers) {
+    qaCustomers.addEventListener("click", () => {
+      window.location.href = "./customers.html";
+    });
+  }
+}
+
 async function loadRecentQuotes() {
   setError("");
   if (recentEmpty) recentEmpty.hidden = true;
@@ -303,6 +313,7 @@ function inferWorkspaceName(session) {
 async function init() {
   wireComingSoon();
   wireCreateButtons();
+  wireRealNav();
 
   if (logoutBtn) logoutBtn.addEventListener("click", logout);
   if (createCancelBtn) createCancelBtn.addEventListener("click", () => closeDialog(createDialog));
