@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Elevate Estimator — Products</title>
+    <link rel="stylesheet" href="./products.css" />
+  </head>
+
+  <body>
+    <div class="app">
+      <!-- Sidebar -->
+      <aside class="sidebar" aria-label="Primary">
+        <a class="brand" href="./dashboard.html" aria-label="Elevate Estimator home">
+          <img
+            class="brand-logo"
+            src="../assets/elevate-estimator-logo-light.png"
+            alt="Elevate Estimator"
+          />
+        </a>
+
+        <nav class="side-nav">
+          <div class="nav-group">
+            <div class="nav-group-label">Overview</div>
+            <a class="nav-item" href="./dashboard.html">
+              <span class="nav-ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </span>
+              <span>Dashboard</span>
+            </a>
+          </div>
+
+          <div class="nav-group">
+            <div class="nav-group-label">Sales</div>
+            <a class="nav-item" href="./quotes.html">
+              <span class="nav-ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M7 3h8l4 4v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  />
+                  <path d="M15 3v5h5" stroke="currentColor" stroke-width="2" />
+                  <path
+                    d="M8 12h8M8 16h8"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </span>
+              <span>Quotes</span>
+            </a>
+
+            <a class="nav-item" href="./customers.html">
+              <span class="nav-ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0Z"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  />
+                  <path
+                    d="M4 21a8 8 0 0 1 16 0"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </span>
+              <span>Customers</span>
+            </a>
+          </div>
+
+          <div class="nav-group">
+            <div class="nav-group-label">Catalog</div>
+            <a class="nav-item active" href="./products.html" aria-current="page">
+              <span class="nav-ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M20 7 12 3 4 7v10l8 4 8-4V7Z"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linejoin="round"
+                  />
+                  <path d="M12 7v14" stroke="currentColor" stroke-width="2" opacity=".55" />
+                  <path d="M4 7l8 4 8-4" stroke="currentColor" stroke-width="2" opacity=".55" />
+                </svg>
+              </span>
+              <span>Products & services</span>
+            </a>
+          </div>
+
+          <div class="nav-group">
+            <div class="nav-group-label">Admin</div>
+            <button id="nav-settings" class="nav-item" type="button" data-soon="1">
+              <span class="nav-ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  />
+                  <path
+                    d="M19.4 15a7.7 7.7 0 0 0 .1-1 7.7 7.7 0 0 0-.1-1l2-1.5-2-3.5-2.4.6a7.8 7.8 0 0 0-1.7-1L13.8 3h-3.6L8.7 6.6a7.8 7.8 0 0 0-1.7 1L4.6 7l-2 3.5 2 1.5a7.7 7.7 0 0 0-.1 1 7.7 7.7 0 0 0 .1 1l-2 1.5 2 3.5 2.4-.6a7.8 7.8 0 0 0 1.7 1L10.2 21h3.6l1.5-3.6a7.8 7.8 0 0 0 1.7-1l2.4.6 2-3.5-2-1.5Z"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    opacity=".55"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </span>
+              <span>Settings</span>
+            </button>
+          </div>
+        </nav>
+
+        <div class="sidebar-foot">
+          <div class="workspace">
+            <div class="workspace-label">Workspace</div>
+            <div id="workspace-name" class="workspace-name">—</div>
+          </div>
+
+          <div class="userline">
+            <div class="userline-dot" aria-hidden="true"></div>
+            <div id="user-email" class="userline-email">…</div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main -->
+      <div class="main">
+        <header class="topbar">
+          <div class="topbar-left">
+            <div class="page-title">
+              <h1>Products & services</h1>
+              <div class="subtitle">Standardize sale items for fast, consistent quotes.</div>
+            </div>
+          </div>
+
+          <div class="topbar-right">
+            <button id="btn-new" class="btn btn-primary" type="button">New sale item</button>
+            <button id="logout-btn" class="btn btn-quiet" type="button">Log out</button>
+          </div>
+        </header>
+
+        <main class="content">
+          <div id="error-box" class="alert" hidden></div>
+
+          <section class="panel">
+            <div class="section-head">
+              <div>
+                <h2>Catalog</h2>
+                <div class="muted small">
+                  <span id="product-count">—</span> items
+                </div>
+              </div>
+
+              <div class="section-actions">
+                <div class="search" role="search">
+                  <span class="search-ico" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none">
+                      <path
+                        d="M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      />
+                      <path
+                        d="M16.5 16.5 21 21"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                      />
+                    </svg>
+                  </span>
+                  <input
+                    id="search"
+                    type="search"
+                    placeholder="Search name, unit type, description…"
+                    autocomplete="off"
+                  />
+                </div>
+
+                <button id="btn-new-inline" class="btn btn-secondary" type="button">
+                  New sale item
+                </button>
+              </div>
+            </div>
+
+            <div id="loading" class="loading">Loading…</div>
+
+            <div id="empty" class="empty" hidden>
+              <div class="empty-title">No items yet</div>
+              <div class="empty-sub">Create your first sale item to speed up quoting.</div>
+            </div>
+
+            <div id="table-wrap" class="table-wrap" hidden>
+              <table class="table" aria-label="Products table">
+                <thead>
+                  <tr>
+                    <th style="width: 320px">Item</th>
+                    <th style="width: 160px">Unit</th>
+                    <th style="width: 160px">Price / unit</th>
+                    <th style="width: 200px">Quote display</th>
+                    <th style="width: 140px">Updated</th>
+                    <th style="width: 120px">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="products-body"></tbody>
+              </table>
+            </div>
+
+            <p class="hint">
+              These are your standardized line items. Later we’ll let you add them to quotes in 1 click.
+            </p>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <!-- Create/Edit product dialog -->
+    <dialog id="product-dialog" class="dialog">
+      <form id="product-form" class="dialog-form" method="dialog">
+        <h2 id="dialog-title">New sale item</h2>
+        <p id="dialog-sub" class="muted small" style="margin: 0 0 10px">
+          Stored in your workspace and available to your team.
+        </p>
+
+        <label class="field">
+          <span>Name</span>
+          <input id="name" type="text" required placeholder="Standing seam install" />
+        </label>
+
+        <label class="field">
+          <span>Description</span>
+          <textarea
+            id="description"
+            rows="3"
+            placeholder="What’s included, notes, exclusions…"
+          ></textarea>
+        </label>
+
+        <div class="form-grid">
+          <label class="field">
+            <span>Unit type</span>
+            <input id="unit_type" list="unit_types" required placeholder="Each" />
+            <datalist id="unit_types">
+              <option value="Each"></option>
+              <option value="Sq Ft"></option>
+              <option value="Linear Ft"></option>
+              <option value="Job"></option>
+              <option value="Hour"></option>
+              <option value="Bundle"></option>
+            </datalist>
+          </label>
+
+          <label class="field">
+            <span>Price per unit</span>
+            <input
+              id="price_per_unit"
+              type="number"
+              inputmode="decimal"
+              step="0.01"
+              min="0"
+              required
+              placeholder="0.00"
+            />
+          </label>
+        </div>
+
+        <label class="field">
+          <span>Quote display</span>
+          <div class="checkline">
+            <input id="show_qty_unit" type="checkbox" checked />
+            <div class="checkmeta">
+              <div class="checktitle">Show quantity and unit price on quotes</div>
+              <div class="muted small">If off, quotes can show a single line total only.</div>
+            </div>
+          </div>
+        </label>
+
+        <div class="dialog-actions">
+          <button id="product-cancel" class="btn btn-quiet" type="button">Cancel</button>
+          <button id="product-submit" class="btn btn-primary" type="submit">Create item</button>
+        </div>
+
+        <div id="product-meta" class="muted small" style="margin-top: 10px"></div>
+        <div id="product-msg" class="muted small"></div>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast" hidden></div>
+
+    <script type="module" src="./products.js"></script>
+  </body>
+</html>
