@@ -1,11 +1,12 @@
 import { supabase } from "../js/api.js";
-import { listQuotes, createQuote, duplicateQuoteById, cancelQuote } from "../js/quotesApi.js";
+import { createQuote, duplicateQuoteById, cancelQuote } from "../js/quotesApi.js";
 import { makeDefaultQuoteData } from "../js/quoteDefaults.js";
 
 /**
  * Customer detail page
  * - Shows customer info
- * - Shows quotes only for this customer (by customer_id when available, else email/name fallback)
+ * - Shows quotes only for this customer
+ *   (queries server-side by customer_id when available, else falls back to json/email/name)
  * - Actions: Open, New version, Cancel
  */
 
@@ -166,22 +167,124 @@ function customerFullName(c) {
   return [first, last].filter(Boolean).join(" ").trim();
 }
 
-function quoteMatchesCustomer(q, c) {
-  if (!q || !c) return false;
+// --- Quote loading (server-side filtering) ---------------------------------
 
-  // Strong match if we have customer_id on the quote
-  if (q.customer_id && String(q.customer_id) === String(c.id)) return true;
+const SELECT_BASE =
+  "id, quote_no, customer_name, customer_email, total_cents, currency, status, created_at";
+const SELECT_WITH_CUSTOMER_ID = `${SELECT_BASE}, customer_id`;
 
-  const email = safeLower(c.email);
-  const qEmail = safeLower(q.customer_email);
-  if (email && qEmail && email === qEmail) return true;
+function isMissingColumnError(err, columnName) {
+  const msg = String(err?.message || "").toLowerCase();
+  const col = String(columnName || "").toLowerCase();
+  return (
+    msg.includes(col) &&
+    (msg.includes("does not exist") || msg.includes("schema cache") || msg.includes("not found"))
+  );
+}
 
-  // Fallback (least strict): exact full-name match
-  const name = safeLower(customerFullName(c));
-  const qName = safeLower(q.customer_name);
-  if (name && qName && name === qName) return true;
+async function fetchQuotesByCustomerId(id) {
+  if (!id) return [];
+  const { data, error } = await supabase
+    .from("quotes")
+    .select(SELECT_WITH_CUSTOMER_ID)
+    .eq("customer_id", id)
+    .order("created_at", { ascending: false })
+    .limit(500);
 
-  return false;
+  if (error) throw error;
+  return data || [];
+}
+
+async function fetchQuotesByDataCustomerId(id) {
+  if (!id) return [];
+  const { data, error } = await supabase
+    .from("quotes")
+    .select(SELECT_BASE)
+    .contains("data", { customer_id: id })
+    .order("created_at", { ascending: false })
+    .limit(500);
+
+  if (error) throw error;
+  return data || [];
+}
+
+async function fetchQuotesByEmail(email) {
+  const e = String(email || "").trim();
+  if (!e) return [];
+  const { data, error } = await supabase
+    .from("quotes")
+    .select(SELECT_BASE)
+    .eq("customer_email", e)
+    .order("created_at", { ascending: false })
+    .limit(500);
+
+  if (error) throw error;
+  return data || [];
+}
+
+async function fetchQuotesByName(fullName) {
+  const n = String(fullName || "").trim();
+  if (!n) return [];
+  const { data, error } = await supabase
+    .from("quotes")
+    .select(SELECT_BASE)
+    .eq("customer_name", n)
+    .order("created_at", { ascending: false })
+    .limit(500);
+
+  if (error) throw error;
+  return data || [];
+}
+
+function dedupeQuotes(...lists) {
+  const map = new Map();
+  for (const list of lists) {
+    for (const q of list || []) {
+      if (!q?.id) continue;
+      map.set(q.id, q);
+    }
+  }
+  const arr = Array.from(map.values());
+  arr.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  return arr;
+}
+
+async function fetchCustomerQuotes(c) {
+  if (!c?.id) return [];
+
+  const email = String(c.email || "").trim();
+  const fullName = customerFullName(c);
+
+  let customerIdColumnOK = true;
+  let byId = [];
+
+  // 1) Prefer a real FK column if you have it
+  try {
+    byId = await fetchQuotesByCustomerId(c.id);
+  } catch (e) {
+    if (isMissingColumnError(e, "customer_id")) {
+      customerIdColumnOK = false;
+      byId = [];
+    } else {
+      throw e;
+    }
+  }
+
+  // 2) If no customer_id column, use json fallback (we stamp data.customer_id on create)
+  const byData = customerIdColumnOK ? [] : await fetchQuotesByDataCustomerId(c.id);
+
+  // 3) Backfill older quotes by email (best) or name (last resort)
+  const byEmail = email ? await fetchQuotesByEmail(email) : [];
+
+  let byName = [];
+  if (!email && fullName) {
+    // Only use name fallback if we didn't find anything by ID/json.
+    if ((byId?.length || 0) + (byData?.length || 0) === 0) {
+      byName = await fetchQuotesByName(fullName);
+    }
+  }
+
+  return dedupeQuotes(byId, byData, byEmail, byName);
 }
 
 function computeKPIs(quotes) {
@@ -419,6 +522,14 @@ async function createQuoteForCustomer() {
 
     const data = makeDefaultQuoteData({ customer_name: name, customer_email: email });
 
+    // Stamp linkage in json so we can always query quotes for this customer,
+    // even if your quotes table doesn't have a customer_id column yet.
+    try {
+      if (data && typeof data === "object") data.customer_id = customer.id;
+    } catch {
+      // ignore
+    }
+
     // Try to set customer_id if your quotes table supports it.
     const payload = {
       customer_id: customer.id,
@@ -464,14 +575,8 @@ async function loadQuotes() {
   clearQuotesTable();
 
   try {
-    const all = await listQuotes({ limit: 500 });
-
-    // Filter down to this customer
-    const matched = (all || []).filter((q) => quoteMatchesCustomer(q, customer));
-    matched.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
-    allCustomerQuotes = matched;
-
+    const matched = await fetchCustomerQuotes(customer);
+    allCustomerQuotes = matched || [];
     renderQuotes(allCustomerQuotes, { search: quoteSearchEl?.value || "" });
   } catch (e) {
     setError(e?.message || "Failed to load quotes.");
