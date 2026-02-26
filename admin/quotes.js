@@ -111,12 +111,6 @@ function canCancel(status) {
   return s !== "accepted" && s !== "cancelled";
 }
 
-function canDelete(status) {
-  const s = normalizeStatus(status);
-  // Hard delete only for Draft or Cancelled (safer)
-  return s === "draft" || s === "cancelled";
-}
-
 function scrubForNewVersion(data) {
   if (!data || typeof data !== "object") return data;
   const clone = JSON.parse(JSON.stringify(data));
@@ -254,31 +248,6 @@ function renderRow(q) {
       }
     });
     actions.appendChild(btnCancel);
-  }
-
-  if (canDelete(q.status)) {
-    const btnDelete = document.createElement("button");
-    btnDelete.className = "btn small danger";
-    btnDelete.textContent = "Delete";
-    btnDelete.addEventListener("click", async () => {
-      const ok = window.confirm(
-        `Delete Q-${q.quote_no}? This permanently removes it.\n\nTip: If you just want it out of the way, use Cancel instead.`
-      );
-      if (!ok) return;
-
-      try {
-        setError("");
-        btnDelete.disabled = true;
-        await deleteQuoteById(q.id);
-        await loadQuotes();
-        toast("Quote deleted.");
-      } catch (e) {
-        setError(e?.message || "Failed to delete quote. (You may need a delete RLS policy.)");
-      } finally {
-        btnDelete.disabled = false;
-      }
-    });
-    actions.appendChild(btnDelete);
   }
 
   tdActions.appendChild(actions);
@@ -453,11 +422,6 @@ async function duplicateQuoteById(quoteId) {
 
 async function cancelQuoteById(quoteId) {
   const { error } = await supabase.from("quotes").update({ status: "cancelled" }).eq("id", quoteId);
-  if (error) throw error;
-}
-
-async function deleteQuoteById(quoteId) {
-  const { error } = await supabase.from("quotes").delete().eq("id", quoteId);
   if (error) throw error;
 }
 

@@ -76,17 +76,30 @@ body{
   display:block;
 }
 
-.nav{ display:flex; flex-direction:column; gap: 14px; }
+.nav{
+  display:flex;
+  flex-direction:column;
+  gap: 14px;
+  padding: 8px 6px 0;
+}
 
-.nav-group{ display:flex; flex-direction:column; gap: 6px; }
+.nav-group{
+  display:flex;
+  flex-direction:column;
+  gap: 4px;
+}
+
+.nav-group + .nav-group{
+  margin-top: 2px;
+}
 
 .nav-label{
-  padding: 6px 10px;
-  font-size: 11px;
+  padding: 10px 12px 6px;
+  font-size: 10px;
   letter-spacing: .18em;
   text-transform: uppercase;
-  color: rgba(11, 18, 32, 0.45);
-  font-weight: 800;
+  color: rgba(11, 18, 32, 0.52);
+  font-weight: 950;
 }
 
 .nav-item{
@@ -94,26 +107,37 @@ body{
   align-items:center;
   gap: 10px;
   padding: 10px 12px;
-  border-radius: 14px;
+
+  border: 0;
+  border-radius: 9px;
   text-decoration:none;
-  color: rgba(11, 18, 32, 0.82);
-  font-weight: 750;
+  color: rgba(11, 18, 32, 0.76);
+
+  font-weight: 780;
   font-size: 14px;
-  border: 1px solid transparent;
+  letter-spacing: -0.01em;
+
   background: transparent;
   cursor:pointer;
   text-align:left;
 }
 
 .nav-item:hover{
-  background: rgba(255,255,255,0.70);
-  border-color: rgba(15, 23, 42, 0.08);
+  background: rgba(255,255,255,0.62);
 }
 
 .nav-item.active{
-  background: #ffffff;
-  border-color: rgba(15, 23, 42, 0.12);
-  box-shadow: var(--shadow-soft);
+  background: rgba(255,255,255,0.92);
+  color: var(--text);
+  font-weight: 920;
+  box-shadow: inset 3px 0 0 var(--brand);
+}
+
+.nav-item:focus-visible{
+  outline: none;
+  box-shadow:
+    inset 3px 0 0 var(--brand),
+    0 0 0 3px rgba(31, 78, 216, 0.18);
 }
 
 .nav-ic{
@@ -121,8 +145,10 @@ body{
   height: 18px;
   display:grid;
   place-items:center;
-  color: rgba(11, 18, 32, 0.72);
+  color: rgba(11, 18, 32, 0.62);
 }
+
+.nav-item.active .nav-ic{ color: var(--brand); }
 
 .nav-ic svg{ width: 18px; height: 18px; }
 
@@ -538,6 +564,12 @@ tbody tr:hover{ background: rgba(15, 23, 42, 0.02); }
   }
   .nav-group{ flex-direction: row; gap: 8px; align-items:center; }
   .nav-label{ display:none; }
+
+  /* Active state becomes a simple tint on mobile (horizontal nav) */
+  .nav-item.active{
+    box-shadow: none;
+    background: rgba(31, 78, 216, 0.10);
+  }
 
   .sidebar-foot{ display:none; }
 
