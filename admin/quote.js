@@ -1,6 +1,8 @@
 import { requireAdminOrRedirect } from "../js/adminGuard.js";
 import { getQuote, updateQuote } from "../js/quotesApi.js";
-import { DEFAULT_COMPANY, makeDefaultQuoteData, formatQuoteCode } from "../js/quoteDefaults.js";
+import { makeDefaultQuoteData, formatQuoteCode } from "../js/quoteDefaults.js";
+import { supabase } from "../js/api.js";
+import { listProducts } from "../js/productsApi.js";
 
 const $  = (sel, ctx = document) => ctx.querySelector(sel);
 const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
@@ -20,8 +22,22 @@ const quoteCodeEl = $("#quote-code");
 const quoteStatusEl = $("#quote-status");
 const docQuoteCodeEl = $("#doc-quote-code");
 
+// Company + rep
+const companyLogoEl = $("#company-logo");
+const repSignatureEl = $("#rep-signature");
+const repPrintedNameEl = $("#rep-printed-name");
+
 const itemRowsEl = $("#item-rows");
 const addItemBtn = $("#add-item");
+
+// Products dialog
+const addProductBtn = $("#add-product");
+const productsDialog = $("#products-dialog");
+const productsCloseBtn = $("#products-close");
+const productsSearchEl = $("#products-search");
+const productsListEl = $("#products-list");
+const productsMsgEl = $("#products-msg");
+const productsEmptyEl = $("#products-empty");
 
 const subtotalEl = $("#subtotal");
 const taxAmountEl = $("#tax-amount");
@@ -66,6 +82,26 @@ async function postJSON(url, body) {
   return data;
 }
 
+function openDialog(dialog) {
+  if (!dialog) return;
+  if (typeof dialog.showModal === "function") dialog.showModal();
+  else dialog.setAttribute("open", "");
+}
+
+function closeDialog(dialog) {
+  if (!dialog) return;
+  if (typeof dialog.close === "function" && dialog.open) dialog.close();
+  else dialog.removeAttribute("open");
+}
+
+function debounce(fn, wait = 160) {
+  let t = null;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), wait);
+  };
+}
+
 
 /* ===== Money helpers ===== */
 function parseMoneyToCents(value) {
@@ -102,83 +138,176 @@ function wireAutosize(selector) {
   requestAnimationFrame(run);
 }
 function autosizeAll() {
-  wireAutosize('[data-bind="scope"]');
   wireAutosize('[data-bind="terms"]');
   wireAutosize('[data-bind="notes"]');
 }
 
+/* ===== Tenant context (company + user) ===== */
+let _ctx = null;
+let _companySnapshot = null;
 
-/* ===== Scope presets (screen only) ===== */
-const SCOPE_PRESETS = {
-  removal: `• Protect landscaping and property; set up safety and debris control.
-• Remove and dispose of existing roofing materials as required (shingles/underlayment/fasteners).
-• Sweep the deck clean and inspect roof sheathing. Any required deck repairs or replacement sheathing will be discussed and quoted as needed.`,
-
-  icewater_full: `• Supply & install full-coverage high-temperature self-adhered ice & water membrane over the entire roof deck.
-• Proper overlaps, sealing at laps, and detailing at eaves, valleys, penetrations, and wall transitions.`,
-
-  standing_seam: `• Supply & install a mechanical-lock standing seam metal roofing system fabricated to roof measurements.
-• Concealed clip attachment with allowances for thermal expansion; fastened per manufacturer specifications.
-• Install all trims and accessories required for a complete watertight system (eaves/drip edge, gable/rake trim, ridge cap, valleys, wall/chimney flashings, pipe boots, closures, and sealants as required).`,
-
-  ribbed_steel: `• Supply & install ribbed steel roofing panels (through-fastened) with colour-matched fasteners and neoprene washers.
-• Install closures, ridge cap, gable trim, eave trim, valleys, and penetrations flashed/sealed for a watertight finish.`,
-
-  metal_shingles: `• Supply & install a metal shingle roofing system including starter, field shingles, ridge/hip caps, and required trims.
-• Detail valleys, eaves, gables, and roof penetrations per manufacturer specifications for a clean, watertight assembly.`,
-
-  plank_siding: `• Supply & install modern plank metal siding including starter, panels, corners, J-trim, and all required flashings.
-• Integrate with openings and transitions; fasten per manufacturer specifications for straight, clean lines and a finished appearance.`,
-
-  soffit_fascia: `• Supply & install new soffit and fascia system (vented where required) for a clean finished edge.
-• Install J-channel/F-channel and trims as required; secure and seal joints for a crisp, finished appearance.`,
-
-  eavestrough: `• Supply & install seamless eavestrough and downspouts with hidden hangers, outlets, elbows, straps, and end caps.
-• Set proper pitch for drainage and seal all joints to help prevent leaks.`
-};
-
-function normText(s) {
-  return String(s || "").replace(/\r\n/g, "\n").trim();
+function safeStr(v) {
+  return String(v ?? "").trim();
 }
 
-function updatePresetButtonStates(scopeValue) {
-  const cur = normText(scopeValue);
-  document.querySelectorAll("[data-scope-preset]").forEach((btn) => {
-    const key = btn.getAttribute("data-scope-preset");
-    const snippet = normText(SCOPE_PRESETS[key]);
-    const exists = snippet && cur.includes(snippet);
-    btn.classList.toggle("added", !!exists);
+async function getContext() {
+  if (_ctx) return _ctx;
+
+  const { data: sData, error: sErr } = await supabase.auth.getSession();
+  if (sErr) throw new Error(sErr.message);
+  const session = sData?.session;
+  if (!session) throw new Error("Not authenticated.");
+
+  const user = session.user;
+  const userId = user.id;
+
+  const { data: membership, error: memErr } = await supabase
+    .from("company_members")
+    .select("company_id, role")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (memErr) throw new Error(memErr.message);
+  if (!membership?.company_id) {
+    throw new Error(
+      "No company membership found for this account. Create a company (owner) or ask an admin to invite you."
+    );
+  }
+
+  const companyId = membership.company_id;
+  const role = membership.role || "member";
+
+  const { data: company, error: compErr } = await supabase
+    .from("companies")
+    .select(
+      "id, name, phone, website, address, logo_url, default_currency, billing_email, owner_email"
+    )
+    .eq("id", companyId)
+    .single();
+
+  if (compErr) throw new Error(compErr.message);
+
+  // Profiles table is optional; gracefully fall back to auth metadata.
+  let profile = null;
+  try {
+    const { data: pData, error: pErr } = await supabase
+      .from("profiles")
+      .select("first_name, last_name, phone")
+      .eq("id", userId)
+      .maybeSingle();
+    if (pErr) {
+      // Common: "relation profiles does not exist" in early builds.
+      console.warn("profiles load error", pErr);
+    } else {
+      profile = pData || null;
+    }
+  } catch (e) {
+    console.warn("profiles load exception", e);
+  }
+
+  const first = safeStr(profile?.first_name) || safeStr(user.user_metadata?.first_name);
+  const last = safeStr(profile?.last_name) || safeStr(user.user_metadata?.last_name);
+  const fullName = safeStr(`${first} ${last}`) || safeStr(user.user_metadata?.full_name) || safeStr(user.user_metadata?.name) || safeStr(user.email) || "User";
+
+  _ctx = { session, user, userId, companyId, role, company, profile, userName: fullName };
+  return _ctx;
+}
+
+function companyToQuoteCompany(company) {
+  const address = safeStr(company?.address);
+  let addr1 = "";
+  let addr2 = "";
+
+  if (address.includes("\n")) {
+    const lines = address
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+    addr1 = lines.shift() || "";
+    addr2 = lines.join(", ");
+  } else {
+    addr1 = address;
+  }
+
+  return {
+    company_id: company?.id || null,
+    name: safeStr(company?.name),
+    addr1,
+    addr2,
+    phone: safeStr(company?.phone),
+    email: safeStr(company?.billing_email) || safeStr(company?.owner_email),
+    web: safeStr(company?.website),
+    logo_url: safeStr(company?.logo_url),
+    currency: safeStr(company?.default_currency) || "CAD",
+  };
+}
+
+function ensureCompanySnapshot(data, ctx) {
+  const snap = companyToQuoteCompany(ctx?.company);
+  const cur = data?.company || {};
+
+  // If the quote doesn't have a company snapshot yet (or it's from another company), set it.
+  if (!cur?.company_id || cur.company_id !== snap.company_id) {
+    data.company = { ...snap };
+  } else {
+    // Fill missing fields but do not clobber an existing snapshot.
+    data.company = { ...snap, ...cur, company_id: snap.company_id };
+  }
+
+  _companySnapshot = data.company;
+  return _companySnapshot;
+}
+
+function applyCompanyToDom(company) {
+  if (!company) return;
+
+  const set = (key, value) => {
+    const el = document.querySelector(`[data-company="${key}"]`);
+    if (!el) return null;
+    el.textContent = value || "";
+    return el;
+  };
+
+  set("name", company.name);
+  set("addr1", company.addr1);
+  set("addr2", company.addr2);
+  set("phone", company.phone);
+  set("email", company.email);
+  set("web", company.web);
+
+  // Remove empty spans so bullet separators don't render awkwardly.
+  ["addr1", "addr2", "phone", "email", "web"].forEach((k) => {
+    const el = document.querySelector(`[data-company="${k}"]`);
+    if (el && !safeStr(el.textContent)) el.remove();
   });
+
+  if (companyLogoEl) {
+    const src = company.logo_url || companyLogoEl.getAttribute("src");
+    if (src) companyLogoEl.src = src;
+    companyLogoEl.alt = company.name ? `${company.name} logo` : "Company logo";
+  }
 }
 
-function appendScopePreset(key) {
-  const scopeEl = document.querySelector('[data-bind="scope"]');
-  if (!scopeEl) return;
+function ensurePreparedBy(data, ctx) {
+  if (!data.meta) data.meta = {};
 
-  const snippet = normText(SCOPE_PRESETS[key]);
-  if (!snippet) return;
+  const current = safeStr(data.meta.prepared_by);
+  const candidate = safeStr(ctx?.userName);
+  const lower = current.toLowerCase();
 
-  const cur = normText(scopeEl.value);
-  if (cur.includes(snippet)) return;
+  // Legacy placeholder(s) from the previous single-company version.
+  const looksLikePlaceholder = !current || lower === "jacob docherty" || lower === "jacob";
 
-  const next = cur ? `${cur}\n\n${snippet}` : snippet;
-  scopeEl.value = next;
+  if (looksLikePlaceholder && candidate) {
+    data.meta.prepared_by = candidate;
+  }
 
-  // keep the textarea fully visible
-  autosizeTextarea(scopeEl);
-  updatePresetButtonStates(scopeEl.value);
+  return data.meta.prepared_by;
 }
 
-function wireScopePresets() {
-  const scopeEl = document.querySelector('[data-bind="scope"]');
-  if (!scopeEl) return;
-
-  document.querySelectorAll("[data-scope-preset]").forEach((btn) => {
-    btn.addEventListener("click", () => appendScopePreset(btn.getAttribute("data-scope-preset")));
-  });
-
-  updatePresetButtonStates(scopeEl.value);
-  scopeEl.addEventListener("input", () => updatePresetButtonStates(scopeEl.value));
+function applyRepName(name) {
+  if (repSignatureEl) repSignatureEl.textContent = name || "";
+  if (repPrintedNameEl) repPrintedNameEl.textContent = name || "";
 }
 
 /* ===== Rep signature date ===== */
@@ -248,16 +377,7 @@ function renderClientAcceptance(data, qRow) {
   }
 }
 
-/* ===== Company text ===== */
-function setCompanyText() {
-  $('[data-company="name"]').textContent = DEFAULT_COMPANY.name;
-  $('[data-company="addr1"]').textContent = DEFAULT_COMPANY.addr1;
-  $('[data-company="addr2"]').textContent = DEFAULT_COMPANY.addr2;
-  $('[data-company="phone"]').textContent = DEFAULT_COMPANY.phone;
-  $('[data-company="email"]').textContent = DEFAULT_COMPANY.email;
-  $('[data-company="web"]').textContent = DEFAULT_COMPANY.web;
-}
-
+/* ===== Quote field binding helpers ===== */
 function setBoundValue(key, val) {
   const el = document.querySelector(`[data-bind="${key}"]`);
   if (!el) return;
@@ -269,23 +389,76 @@ function getBoundValue(key) {
   return (el.value ?? "").trim();
 }
 
-/* ===== Items (NO "Item" column) ===== */
+/* ===== Items (Products & Services) ===== */
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function buildItemRow(item = {}) {
   const tr = document.createElement("tr");
   tr.className = "item-row avoid-break";
-  tr.innerHTML = `
-    <td><textarea rows="2" class="i-desc" placeholder="Description">${item.description ?? ""}</textarea></td>
-    <td class="num"><input type="text" class="i-qty" inputmode="decimal" value="${item.qty ?? 1}"></td>
-    <td class="num"><input type="text" class="i-price" inputmode="decimal" value="${centsToMoney(item.unit_price_cents ?? 0)}"></td>
-    <td class="center"><input type="checkbox" class="i-tax" ${item.taxable ? "checked" : ""}></td>
-    <td class="line-total"><span>$0.00</span></td>
-    <td class="no-print slim"><button class="btn small" type="button" data-action="remove">✕</button></td>
-  `;
+
+  const show = item.show_qty_unit_price !== false; // default true
+  const productId = item.product_id || "";
+  const unitType = item.unit_type || "Each";
+
+  tr.dataset.productId = productId;
+  tr.dataset.unitType = unitType;
+  tr.dataset.showQtyUnitPrice = show ? "1" : "0";
+
+  const name = item.name ?? "";
+  const description = item.description ?? item.desc ?? "";
+  const qty = Number.isFinite(Number(item.qty)) ? Number(item.qty) : 1;
+  const unitPriceCents = Number.isFinite(Number(item.unit_price_cents)) ? Number(item.unit_price_cents) : 0;
+  const taxable = typeof item.taxable === "boolean" ? item.taxable : true;
+  const lineCents = Math.round((qty || 0) * (unitPriceCents || 0));
+
+  if (show) {
+    tr.innerHTML = `
+      <td>
+        <input type="text" class="i-name" placeholder="Item name" value="${escapeHtml(name)}" />
+        <textarea rows="2" class="i-desc" placeholder="Description">${escapeHtml(description)}</textarea>
+      </td>
+      <td class="num"><input type="text" class="i-qty" inputmode="decimal" value="${qty || 0}" /></td>
+      <td class="center"><div class="i-unit">${escapeHtml(unitType)}</div></td>
+      <td class="num"><input type="text" class="i-price" inputmode="decimal" value="${centsToMoney(unitPriceCents)}" /></td>
+      <td class="center"><input type="checkbox" class="i-tax" ${taxable ? "checked" : ""} /></td>
+      <td class="line-total"><span>$${centsToMoney(lineCents)}</span></td>
+      <td class="no-print slim"><button class="btn small" type="button" data-action="remove">✕</button></td>
+    `;
+  } else {
+    tr.innerHTML = `
+      <td>
+        <input type="text" class="i-name" placeholder="Item name" value="${escapeHtml(name)}" />
+        <textarea rows="2" class="i-desc" placeholder="Description">${escapeHtml(description)}</textarea>
+      </td>
+      <td class="center"><div class="muted-cell">—</div></td>
+      <td class="center"><div class="muted-cell">—</div></td>
+      <td class="center"><div class="muted-cell">—</div></td>
+      <td class="center"><input type="checkbox" class="i-tax" ${taxable ? "checked" : ""} /></td>
+      <td class="line-total"><input type="text" class="i-total" inputmode="decimal" value="${centsToMoney(lineCents)}" /></td>
+      <td class="no-print slim"><button class="btn small" type="button" data-action="remove">✕</button></td>
+    `;
+  }
 
   tr.querySelectorAll("input, textarea").forEach((el) => {
     el.addEventListener("input", () => recalcTotals());
     el.addEventListener("change", () => recalcTotals());
   });
+
+  const totalInput = tr.querySelector(".i-total");
+  if (totalInput) {
+    totalInput.addEventListener("blur", () => {
+      const cents = Math.max(0, parseMoneyToCents(totalInput.value));
+      totalInput.value = centsToMoney(cents);
+      recalcTotals();
+    });
+  }
 
   tr.querySelector('[data-action="remove"]').addEventListener("click", () => {
     tr.remove();
@@ -296,24 +469,182 @@ function buildItemRow(item = {}) {
   return tr;
 }
 
+function isRowEffectivelyEmpty(row) {
+  const name = safeStr($(".i-name", row)?.value);
+  const desc = safeStr($(".i-desc", row)?.value);
+  const show = row.dataset.showQtyUnitPrice !== "0";
+
+  if (name || desc) return false;
+  if (show) {
+    const qty = parseNum($(".i-qty", row)?.value);
+    const price = parseMoneyToCents($(".i-price", row)?.value);
+    return (qty === 0 || qty === 1) && price === 0;
+  }
+  const total = parseMoneyToCents($(".i-total", row)?.value);
+  return total === 0;
+}
+
+function maybeRemoveSingleEmptyRow() {
+  const rows = $$(".item-row", itemRowsEl);
+  if (rows.length !== 1) return;
+  if (isRowEffectivelyEmpty(rows[0])) rows[0].remove();
+}
+
 function getItemsFromUI() {
   const rows = $$(".item-row", itemRowsEl);
   return rows.map((row) => {
-    const description = $(".i-desc", row).value.trim();
-    const qty = Math.max(0, parseNum($(".i-qty", row).value));
-    const unit_price_cents = Math.max(0, parseMoneyToCents($(".i-price", row).value));
-    const taxable = $(".i-tax", row).checked;
-    return { description, qty, unit_price_cents, taxable };
-  });
+      const show_qty_unit_price = row.dataset.showQtyUnitPrice !== "0";
+      const product_id = safeStr(row.dataset.productId) || null;
+      const unit_type = safeStr(row.dataset.unitType) || "Each";
+
+      const name = safeStr($(".i-name", row)?.value);
+      const description = safeStr($(".i-desc", row)?.value);
+      const taxable = !!$(".i-tax", row)?.checked;
+
+      if (show_qty_unit_price) {
+        const qty = Math.max(0, parseNum($(".i-qty", row)?.value));
+        const unit_price_cents = Math.max(0, parseMoneyToCents($(".i-price", row)?.value));
+        return { product_id, name, description, unit_type, show_qty_unit_price, qty, unit_price_cents, taxable };
+      }
+
+      const line_total_cents = Math.max(0, parseMoneyToCents($(".i-total", row)?.value));
+      return {
+        product_id,
+        name,
+        description,
+        unit_type,
+        show_qty_unit_price,
+        qty: 1,
+        unit_price_cents: line_total_cents,
+        taxable,
+      };
+    });
 }
 
 function writeLineTotals(items) {
   const rows = $$(".item-row", itemRowsEl);
   items.forEach((it, idx) => {
     const line = Math.round((it.qty || 0) * (it.unit_price_cents || 0));
-    const cell = rows[idx]?.querySelector(".line-total span");
-    if (cell) cell.textContent = `$${centsToMoney(line)}`;
+    const span = rows[idx]?.querySelector(".line-total span");
+    if (span) span.textContent = `$${centsToMoney(line)}`;
   });
+}
+
+/* ===== Products dialog ===== */
+function formatCurrency(cents, currency = "CAD") {
+  const amount = (Number(cents) || 0) / 100;
+  try {
+    return new Intl.NumberFormat("en-CA", { style: "currency", currency }).format(amount);
+  } catch {
+    return `$${centsToMoney(Number(cents) || 0)}`;
+  }
+}
+
+function productToItem(product) {
+  return {
+    product_id: product.id,
+    name: product.name || "",
+    description: product.description || "",
+    unit_type: product.unit_type || "Each",
+    show_qty_unit_price: !!product.show_qty_unit_price,
+    qty: 1,
+    unit_price_cents: Number(product.price_per_unit_cents || 0),
+    taxable: true,
+  };
+}
+
+function renderProductsList(products, currency) {
+  if (!productsListEl) return;
+  productsListEl.innerHTML = "";
+
+  products.forEach((p) => {
+    const row = document.createElement("div");
+    row.className = "product-row";
+
+    const main = document.createElement("div");
+    main.className = "product-main";
+
+    const name = document.createElement("div");
+    name.className = "product-name";
+    name.textContent = p.name || "Unnamed";
+
+    const desc = document.createElement("div");
+    desc.className = "product-desc";
+    desc.textContent = p.description || "";
+    if (!safeStr(desc.textContent)) desc.style.display = "none";
+
+    const meta = document.createElement("div");
+    meta.className = "product-meta";
+
+    const priceTag = document.createElement("span");
+    priceTag.className = "tag";
+    priceTag.textContent = formatCurrency(p.price_per_unit_cents || 0, currency);
+
+    const unitTag = document.createElement("span");
+    unitTag.className = "tag";
+    unitTag.textContent = p.unit_type || "Each";
+
+    const modeTag = document.createElement("span");
+    modeTag.className = "tag";
+    modeTag.textContent = p.show_qty_unit_price ? "Breakdown" : "Total only";
+
+    meta.appendChild(priceTag);
+    meta.appendChild(unitTag);
+    meta.appendChild(modeTag);
+
+    main.appendChild(name);
+    main.appendChild(desc);
+    main.appendChild(meta);
+
+    const actions = document.createElement("div");
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn small brand";
+    btn.textContent = "Add";
+    btn.addEventListener("click", () => {
+      maybeRemoveSingleEmptyRow();
+      itemRowsEl.appendChild(buildItemRow(productToItem(p)));
+      recalcTotals();
+      closeDialog(productsDialog);
+    });
+    actions.appendChild(btn);
+
+    row.appendChild(main);
+    row.appendChild(actions);
+
+    productsListEl.appendChild(row);
+  });
+}
+
+async function loadProductsIntoDialog(search = "") {
+  if (!productsDialog || !productsListEl) return;
+
+  const currency = _companySnapshot?.currency || "CAD";
+  if (productsMsgEl) {
+    productsMsgEl.hidden = false;
+    productsMsgEl.textContent = "Loading…";
+  }
+  if (productsEmptyEl) productsEmptyEl.hidden = true;
+
+  try {
+    const products = await listProducts({ search, limit: 200 });
+    if (productsMsgEl) productsMsgEl.hidden = true;
+
+    if (!products.length) {
+      productsListEl.innerHTML = "";
+      if (productsEmptyEl) productsEmptyEl.hidden = false;
+      return;
+    }
+
+    if (productsEmptyEl) productsEmptyEl.hidden = true;
+    renderProductsList(products, currency);
+  } catch (e) {
+    console.error(e);
+    if (productsMsgEl) {
+      productsMsgEl.hidden = false;
+      productsMsgEl.textContent = e?.message || "Failed to load products.";
+    }
+  }
 }
 
 function recalcTotals() {
@@ -369,9 +700,14 @@ function mergeDefaults(existing, fallback) {
   // normalize legacy item structure
   if (Array.isArray(out.items)) {
     out.items = out.items.map((it) => ({
+      product_id: it.product_id ?? it.productId ?? null,
+      name: it.name ?? "",
       description: it.description ?? it.desc ?? it.item ?? "",
+      unit_type: it.unit_type ?? it.unitType ?? it.unit ?? "Each",
+      show_qty_unit_price:
+        typeof it.show_qty_unit_price === "boolean" ? it.show_qty_unit_price : true,
       qty: it.qty ?? 1,
-      unit_price_cents: it.unit_price_cents ?? 0,
+      unit_price_cents: it.unit_price_cents ?? it.price_per_unit_cents ?? 0,
       taxable: typeof it.taxable === "boolean" ? it.taxable : true,
     }));
   }
@@ -379,8 +715,14 @@ function mergeDefaults(existing, fallback) {
   return out;
 }
 
-function fillUIFromData(qRow, data) {
-  setCompanyText();
+function fillUIFromData(qRow, data, ctx) {
+  // Company snapshot (customer-facing letterhead)
+  const company = ensureCompanySnapshot(data, ctx);
+  applyCompanyToDom(company);
+
+  // Prepared-by (quote creator)
+  const preparedBy = ensurePreparedBy(data, ctx);
+  applyRepName(preparedBy);
 
   const quoteCode = formatQuoteCode(qRow.quote_no, data.meta.quote_date);
 
@@ -392,7 +734,7 @@ function fillUIFromData(qRow, data) {
   setBoundValue("quote_no", quoteCode);
   setBoundValue("quote_date", data.meta.quote_date);
   setBoundValue("quote_expires", data.meta.quote_expires);
-  setBoundValue("prepared_by", data.meta.prepared_by);
+  setBoundValue("prepared_by", preparedBy);
 
   setBoundValue("client_name", data.bill_to.client_name);
   setBoundValue("client_phone", data.bill_to.client_phone);
@@ -401,7 +743,6 @@ function fillUIFromData(qRow, data) {
 
   setBoundValue("project_location", data.project.project_location);
 
-  setBoundValue("scope", data.scope);
   setBoundValue("terms", data.terms);
   setBoundValue("notes", data.notes);
 
@@ -418,7 +759,7 @@ function fillUIFromData(qRow, data) {
   itemRowsEl.innerHTML = "";
   const items = Array.isArray(data.items) && data.items.length
     ? data.items
-    : [{ description: "", qty: 1, unit_price_cents: 0, taxable: true }];
+    : [{ name: "", description: "", unit_type: "Each", show_qty_unit_price: true, qty: 1, unit_price_cents: 0, taxable: true }];
 
   for (const it of items) itemRowsEl.appendChild(buildItemRow(it));
 
@@ -449,18 +790,20 @@ function collectDataFromUI(qRow, existingAcceptance = null) {
   };
 
   const items = getItemsFromUI();
+  const itemsForSave = items.filter(
+    (it) => safeStr(it?.name) || safeStr(it?.description) || (it?.unit_price_cents || 0) > 0
+  );
 
   const mode = getDepositMode();
   let deposit_cents = 0;
   if (mode === "custom") deposit_cents = parseMoneyToCents(depositDueEl.value);
 
   return {
-    company: { ...DEFAULT_COMPANY },
+    company: _companySnapshot || qRow.data?.company || {},
     meta,
     bill_to,
     project,
-    scope: getBoundValue("scope"),
-    items,
+    items: itemsForSave,
     tax_rate: parseNum(taxRateEl.value) || 13,
     fees_cents: totals.fees_cents,
     deposit_mode: mode,
@@ -645,11 +988,62 @@ function buildPdfClone() {
         cg.removeChild(cg.lastElementChild);
       }
     }
+
+    // If none of the items show qty/unit/unit price, collapse those columns for a cleaner PDF.
+    applyItemsTablePdfRules(table);
+
     const wrap = table.closest(".table-wrap");
     if (wrap) wrap.style.overflow = "visible";
   }
 
   return clone;
+}
+
+function applyItemsTablePdfRules(table) {
+  const bodyRows = Array.from(table.querySelectorAll("tbody tr.item-row"));
+  if (!bodyRows.length) return;
+
+  const anyShowsBreakdown = bodyRows.some((r) => r.dataset.showQtyUnitPrice === "1");
+
+  // In the cloned table (no-print removed) indexes are:
+  // 0 Item | 1 Qty | 2 Unit | 3 Unit Price | 4 Tax | 5 Line Total
+  const breakdownCols = [1, 2, 3];
+
+  if (!anyShowsBreakdown) {
+    removeTableColumns(table, breakdownCols);
+    return;
+  }
+
+  // Mixed mode: keep columns but blank them for total-only rows.
+  bodyRows.forEach((row) => {
+    if (row.dataset.showQtyUnitPrice !== "0") return;
+    breakdownCols.forEach((idx) => {
+      const cell = row.children[idx];
+      if (cell) cell.textContent = "";
+    });
+  });
+}
+
+function removeTableColumns(table, colIndexes) {
+  const sorted = [...colIndexes].sort((a, b) => b - a);
+  const headRow = table.tHead?.rows?.[0];
+
+  sorted.forEach((idx) => {
+    if (headRow?.children?.[idx]) headRow.children[idx].remove();
+  });
+
+  Array.from(table.tBodies?.[0]?.rows || []).forEach((row) => {
+    sorted.forEach((idx) => {
+      if (row.children?.[idx]) row.children[idx].remove();
+    });
+  });
+
+  const cg = table.querySelector("colgroup");
+  if (cg) {
+    sorted.forEach((idx) => {
+      if (cg.children?.[idx]) cg.children[idx].remove();
+    });
+  }
 }
 
 async function exportPdfManual({ filename }) {
@@ -745,6 +1139,15 @@ async function exportPdfManual({ filename }) {
 async function main() {
   await requireAdminOrRedirect({ redirectTo: "../index.html" });
 
+  // Company + user context (letterhead + prepared-by)
+  let ctx;
+  try {
+    ctx = await getContext();
+  } catch (e) {
+    showMsg(e?.message || "Failed to load company context.");
+    return;
+  }
+
   const quoteId = new URLSearchParams(window.location.search).get("id");
   if (!quoteId) {
     window.location.href = "./dashboard.html";
@@ -767,17 +1170,30 @@ async function main() {
   });
 
   const data = mergeDefaults(qRow.data, defaults);
-  fillUIFromData(qRow, data);
-  wireScopePresets();
+  fillUIFromData(qRow, data, ctx);
 
   backBtn.addEventListener("click", () => {
     window.location.href = "./dashboard.html";
   });
 
   addItemBtn.addEventListener("click", () => {
-    itemRowsEl.appendChild(buildItemRow({ description: "", qty: 1, unit_price_cents: 0, taxable: true }));
+    itemRowsEl.appendChild(buildItemRow());
     recalcTotals();
   });
+
+  // Add from Products
+  addProductBtn?.addEventListener("click", async () => {
+    openDialog(productsDialog);
+    if (productsSearchEl) productsSearchEl.value = "";
+    await loadProductsIntoDialog("");
+    setTimeout(() => productsSearchEl?.focus(), 0);
+  });
+
+  productsCloseBtn?.addEventListener("click", () => closeDialog(productsDialog));
+  productsSearchEl?.addEventListener(
+    "input",
+    debounce(() => loadProductsIntoDialog(productsSearchEl.value || ""), 180)
+  );
 
   taxRateEl.addEventListener("input", recalcTotals);
   feesEl.addEventListener("input", recalcTotals);

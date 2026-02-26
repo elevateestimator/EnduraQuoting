@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Endura — Quote</title>
+    <title>Elevate Estimator — Quote</title>
     <link rel="stylesheet" href="./quote.css" />
   </head>
 
@@ -11,7 +11,7 @@
     <!-- Top app bar (screen only) -->
     <header class="topbar no-print">
       <div class="brand">
-        <img class="logo" src="../assets/logo.jpg" alt="Endura" />
+        <img class="logo" src="../assets/logo.jpg" alt="Elevate Estimator" />
         <div class="brand-text">
           <div class="brand-title">Quote Builder</div>
           <div class="brand-sub">
@@ -41,9 +41,11 @@
             <div class="logo-col">
               <div class="logo-box">
                 <img
+                  id="company-logo"
                   src="../assets/logo.jpg"
-                  alt="Endura Metal Roofing Ltd."
+                  alt="Company logo"
                   class="doc-logo"
+                  crossorigin="anonymous"
                 />
               </div>
             </div>
@@ -89,7 +91,7 @@
 
               <div class="meta-field">
                 <span>Prepared by</span>
-                <input type="text" data-bind="prepared_by" />
+                <input type="text" data-bind="prepared_by" readonly />
               </div>
             </div>
           </div>
@@ -136,56 +138,34 @@
           </div>
         </section>
 
-        <!-- Scope -->
-        <section class="card avoid-break">
-          <h3>Scope of Work</h3>
-          <div class="scope-presets no-print">
-            <div class="scope-presets-title">Quick add</div>
-            <div class="chip-row">
-              <button type="button" class="chip" data-scope-preset="removal">Removal &amp; Disposal</button>
-              <button type="button" class="chip" data-scope-preset="icewater_full">Full Ice &amp; Water (Entire Roof)</button>
-              <button type="button" class="chip" data-scope-preset="standing_seam">Mechanical-Lock Standing Seam</button>
-              <button type="button" class="chip" data-scope-preset="ribbed_steel">Ribbed Steel Panels</button>
-              <button type="button" class="chip" data-scope-preset="metal_shingles">Metal Shingles</button>
-              <button type="button" class="chip" data-scope-preset="plank_siding">Modern Plank Metal Siding</button>
-              <button type="button" class="chip" data-scope-preset="soffit_fascia">Soffit &amp; Fascia</button>
-              <button type="button" class="chip" data-scope-preset="eavestrough">Eavestrough &amp; Downspouts</button>
-            </div>
-          </div>
-
-          <textarea
-            class="autogrow"
-            rows="3"
-            placeholder="Describe the work…"
-            data-bind="scope"
-          ></textarea>
-        </section>
-
         <!-- Items -->
         <section class="card avoid-break">
           <div class="row-between">
             <h3>Items & Pricing</h3>
-            <button id="add-item" class="btn small no-print" type="button">
-              + Add Item
-            </button>
+            <div class="row-actions no-print">
+              <button id="add-product" class="btn small brand" type="button">+ Add from Products</button>
+              <button id="add-item" class="btn small ghost" type="button">+ Custom Line</button>
+            </div>
           </div>
 
           <div class="table-wrap">
             <table class="items-table" aria-label="Line items">
               <colgroup>
                 <col style="width: auto" />
+                <col style="width: 10%" />
                 <col style="width: 11%" />
-                <col style="width: 17%" />
+                <col style="width: 16%" />
                 <col style="width: 8%" />
-                <col style="width: 17%" />
+                <col style="width: 15%" />
                 <col style="width: 4%" />
               </colgroup>
 
               <thead>
                 <tr>
-                  <th>Description</th>
+                  <th>Item</th>
                   <th class="num">Qty</th>
-                  <th class="num">Rate</th>
+                  <th class="center">Unit</th>
+                  <th class="num">Unit Price</th>
                   <th class="center">Tax</th>
                   <th class="num">Line Total</th>
                   <th class="no-print slim"></th>
@@ -317,14 +297,14 @@
 
           <div class="sig-block">
             <div class="sig-line signature">
-              <span>Endura Representative Signature</span>
-              <div class="sig-signature" id="rep-signature">Jacob Docherty</div>
+              <span>Representative Signature</span>
+              <div class="sig-signature" id="rep-signature"></div>
             </div>
 
             <div class="sig-inline two">
               <div class="sig-line">
                 <span>Printed Name</span>
-                <div class="sig-value">Jacob Docherty</div>
+                <div class="sig-value" id="rep-printed-name"></div>
               </div>
 
               <div class="sig-line">
@@ -336,6 +316,29 @@
         </section>
       </section>
     </main>
+
+    <!-- Add from Products dialog (screen only) -->
+    <dialog id="products-dialog" class="dialog no-print">
+      <div class="dialog-head">
+        <div>
+          <div class="dialog-title">Add sale items</div>
+          <div class="dialog-sub">Pick from your Products &amp; Services catalog.</div>
+        </div>
+        <button id="products-close" class="btn small ghost" type="button">Close</button>
+      </div>
+
+      <div class="dialog-search">
+        <input id="products-search" type="text" placeholder="Search products…" />
+      </div>
+
+      <div id="products-msg" class="dialog-msg" hidden></div>
+
+      <div id="products-list" class="products-list" aria-label="Products list"></div>
+
+      <div id="products-empty" class="dialog-empty" hidden>
+        No products found. Add items in <strong>Products &amp; Services</strong>.
+      </div>
+    </dialog>
 
     <script type="module" src="./quote.js"></script>
   </body>
