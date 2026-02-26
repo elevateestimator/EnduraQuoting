@@ -3,8 +3,11 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Elevate Estimator — Customers</title>
+    <title>Elevate Estimator — Customer</title>
+
+    <!-- Base command-center styling shared with Customers -->
     <link rel="stylesheet" href="./customers.css" />
+    <link rel="stylesheet" href="./customer.css" />
   </head>
 
   <body>
@@ -39,6 +42,7 @@
 
           <div class="nav-group">
             <div class="nav-group-label">Sales</div>
+
             <a class="nav-item" href="./quotes.html">
               <span class="nav-ico" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none">
@@ -140,13 +144,16 @@
         <header class="topbar">
           <div class="topbar-left">
             <div class="page-title">
-              <h1>Customers</h1>
-              <div class="subtitle">A clean customer directory for quoting at scale.</div>
+              <h1 id="page-h1">Customer</h1>
+              <div id="page-subtitle" class="subtitle">Loading…</div>
             </div>
           </div>
 
           <div class="topbar-right">
-            <button id="btn-new" class="btn btn-primary" type="button">New customer</button>
+            <a class="btn btn-secondary" href="./customers.html">All customers</a>
+            <button id="btn-create-quote" class="btn btn-primary" type="button">
+              Create quote
+            </button>
             <button id="logout-btn" class="btn btn-quiet" type="button">Log out</button>
           </div>
         </header>
@@ -154,13 +161,76 @@
         <main class="content">
           <div id="error-box" class="alert" hidden></div>
 
+          <!-- Customer overview -->
           <section class="panel">
             <div class="section-head">
               <div>
-                <h2>Customer directory</h2>
-                <div class="muted small">
-                  <span id="customer-count">—</span> customers
+                <h2 id="cust-name">—</h2>
+                <div id="cust-company" class="muted small">—</div>
+              </div>
+
+              <div class="section-actions">
+                <button
+                  id="btn-copy-email"
+                  class="btn btn-secondary"
+                  type="button"
+                  hidden
+                >
+                  Copy email
+                </button>
+              </div>
+            </div>
+
+            <div class="customer-grid">
+              <div class="info-block">
+                <div class="info-label">Contact</div>
+
+                <div class="info-row">
+                  <div class="info-k">Email</div>
+                  <div id="cust-email" class="info-v">—</div>
                 </div>
+
+                <div class="info-row">
+                  <div class="info-k">Phone</div>
+                  <div id="cust-phone" class="info-v">—</div>
+                </div>
+              </div>
+
+              <div class="info-block">
+                <div class="info-label">Billing address</div>
+                <div id="cust-address" class="info-value">—</div>
+              </div>
+            </div>
+
+            <div class="metrics" role="group" aria-label="Customer metrics">
+              <div class="metric">
+                <div class="metric-label">Quotes</div>
+                <div id="kpi-quotes" class="metric-value mono">—</div>
+              </div>
+
+              <div class="metric">
+                <div class="metric-label">Open pipeline</div>
+                <div id="kpi-pipeline" class="metric-value mono">—</div>
+              </div>
+
+              <div class="metric">
+                <div class="metric-label">Accepted</div>
+                <div id="kpi-accepted" class="metric-value mono">—</div>
+              </div>
+
+              <div class="metric">
+                <div class="metric-label">Last activity</div>
+                <div id="kpi-last" class="metric-value">—</div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Quotes for this customer -->
+          <section class="panel">
+            <div class="section-head">
+              <div>
+                <h2>Quotes</h2>
+                <div class="muted small"><span id="quotes-count">—</span> quotes</div>
               </div>
 
               <div class="section-actions">
@@ -181,40 +251,35 @@
                     </svg>
                   </span>
                   <input
-                    id="search"
+                    id="quote-search"
                     type="search"
-                    placeholder="Search name, company, email, phone…"
+                    placeholder="Search quote #, status, amount…"
                     autocomplete="off"
                   />
                 </div>
-
-                <button id="btn-new-inline" class="btn btn-secondary" type="button">
-                  New customer
-                </button>
               </div>
             </div>
 
-            <div id="loading" class="loading">Loading…</div>
+            <div id="quotes-loading" class="loading">Loading…</div>
 
-            <div id="empty" class="empty" hidden>
-              <div class="empty-title">No customers yet</div>
-              <div class="empty-sub">Create your first customer to speed up quoting.</div>
+            <div id="quotes-empty" class="empty" hidden>
+              <div class="empty-title">No quotes for this customer yet</div>
+              <div class="empty-sub">Create a quote to start a clean history.</div>
             </div>
 
-            <div id="table-wrap" class="table-wrap" hidden>
-              <table class="table" aria-label="Customers table">
+            <div id="quotes-table-wrap" class="table-wrap" hidden>
+              <table class="table" aria-label="Customer quotes table">
                 <thead>
                   <tr>
-                    <th style="width: 240px">Customer</th>
-                    <th style="width: 220px">Company</th>
-                    <th style="width: 220px">Email</th>
-                    <th style="width: 160px">Phone</th>
-                    <th>Billing address</th>
-                    <th style="width: 140px">Created</th>
-                    <th style="width: 120px">Actions</th>
+                    <th style="width: 130px">Quote</th>
+                    <th style="width: 140px">Status</th>
+                    <th style="width: 170px">Total</th>
+                    <th style="width: 170px">Created</th>
+                    <th>Customer name/email</th>
+                    <th style="width: 260px">Actions</th>
                   </tr>
                 </thead>
-                <tbody id="customers-body"></tbody>
+                <tbody id="quotes-body"></tbody>
               </table>
             </div>
           </section>
@@ -222,65 +287,8 @@
       </div>
     </div>
 
-    <!-- Create customer dialog -->
-    <dialog id="customer-dialog" class="dialog">
-      <form id="customer-form" class="dialog-form" method="dialog">
-        <h2>New customer</h2>
-        <p class="muted small" style="margin: 0 0 10px">
-          Stored in your workspace and available to your team.
-        </p>
-
-        <div class="form-grid">
-          <label class="field">
-            <span>First name</span>
-            <input id="first_name" type="text" required placeholder="John" />
-          </label>
-
-          <label class="field">
-            <span>Last name</span>
-            <input id="last_name" type="text" required placeholder="Smith" />
-          </label>
-        </div>
-
-        <label class="field">
-          <span>Company name (optional)</span>
-          <input id="company_name" type="text" placeholder="Smith Holdings" />
-        </label>
-
-        <label class="field">
-          <span>Billing address</span>
-          <textarea
-            id="billing_address"
-            rows="3"
-            placeholder="Street, city, province, postal code"
-          ></textarea>
-        </label>
-
-        <div class="form-grid">
-          <label class="field">
-            <span>Email</span>
-            <input id="email" type="email" placeholder="john@email.com" />
-          </label>
-
-          <label class="field">
-            <span>Phone</span>
-            <input id="phone" type="tel" placeholder="(555) 555‑5555" />
-          </label>
-        </div>
-
-        <div class="dialog-actions">
-          <button id="customer-cancel" class="btn btn-quiet" type="button">Cancel</button>
-          <button id="customer-submit" class="btn btn-primary" type="submit">
-            Create customer
-          </button>
-        </div>
-
-        <div id="customer-msg" class="muted small"></div>
-      </form>
-    </dialog>
-
     <div id="toast" class="toast" hidden></div>
 
-    <script type="module" src="./customers.js"></script>
+    <script type="module" src="./customer.js"></script>
   </body>
 </html>

@@ -161,6 +161,17 @@ function renderRow(c) {
   const actions = document.createElement("div");
   actions.className = "row-actions";
 
+  const view = document.createElement("button");
+  view.className = "btn btn-secondary";
+  view.type = "button";
+  view.textContent = "View";
+  view.addEventListener("click", (e) => {
+    e.stopPropagation();
+    window.location.href = `./customer.html?id=${c.id}`;
+  });
+
+  actions.appendChild(view);
+
   const del = document.createElement("button");
   del.className = "btn btn-danger";
   del.type = "button";
