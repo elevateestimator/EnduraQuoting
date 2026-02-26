@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Elevate Estimator — Quotes</title>
+    <link rel="stylesheet" href="./quotes.css" />
+  </head>
+
+  <body>
+    <div class="app">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <a class="brand" href="./dashboard.html" aria-label="Dashboard">
+          <img
+            class="brand-logo"
+            src="../assets/elevate-estimator-logo-light.png"
+            alt="Elevate Estimator"
+          />
+        </a>
+
+        <nav class="nav" aria-label="Primary">
+          <div class="nav-group">
+            <div class="nav-label">Overview</div>
+
+            <a class="nav-item" href="./dashboard.html">
+              <span class="nav-ic" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              Dashboard
+            </a>
+          </div>
+
+          <div class="nav-group">
+            <div class="nav-label">Sales</div>
+
+            <a class="nav-item active" href="./quotes.html" aria-current="page">
+              <span class="nav-ic" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M7 3h8l3 3v15a1 1 0 0 1-1 1H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+                  <path d="M9 11h6M9 15h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                </svg>
+              </span>
+              Quotes
+            </a>
+
+            <a class="nav-item" href="./customers.html">
+              <span class="nav-ic" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M20 21a7 7 0 1 0-16 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                  <path d="M12 11a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" stroke="currentColor" stroke-width="1.8"/>
+                </svg>
+              </span>
+              Customers
+            </a>
+          </div>
+
+          <div class="nav-group">
+            <div class="nav-label">Catalog</div>
+
+            <button class="nav-item" type="button" data-soon="1">
+              <span class="nav-ic" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M4 7.5 12 3l8 4.5-8 4.5-8-4.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+                  <path d="M4 7.5V16.5L12 21l8-4.5V7.5" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+                  <path d="M12 12V21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                </svg>
+              </span>
+              Products
+            </button>
+          </div>
+
+          <div class="nav-group">
+            <div class="nav-label">Admin</div>
+
+            <button class="nav-item" type="button" data-soon="1">
+              <span class="nav-ic" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M12 15.5a3.5 3.5 0 1 0-3.5-3.5 3.5 3.5 0 0 0 3.5 3.5Z" stroke="currentColor" stroke-width="1.8"/>
+                  <path d="M19.4 15a8 8 0 0 0 .1-6l2-1.1-2-3.5-2.2 1a8 8 0 0 0-5.2-3L12 0h-4l-.1 2.4a8 8 0 0 0-5.2 3l-2.2-1-2 3.5 2 1.1a8 8 0 0 0 .1 6l-2 1.1 2 3.5 2.2-1a8 8 0 0 0 5.2 3L8 24h4l.1-2.4a8 8 0 0 0 5.2-3l2.2 1 2-3.5-2-1.1Z" stroke="currentColor" stroke-width="1.2" opacity=".55"/>
+                </svg>
+              </span>
+              Settings
+            </button>
+          </div>
+        </nav>
+
+        <div class="sidebar-foot">
+          <div class="user">
+            <div class="user-dot" aria-hidden="true"></div>
+            <div class="user-meta">
+              <div class="user-label">Signed in</div>
+              <div id="user-email" class="user-email">…</div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main -->
+      <main class="main">
+        <header class="topbar">
+          <div class="title">
+            <h1>Quotes</h1>
+            <p>Search, version, and manage quotes across your workspace.</p>
+          </div>
+
+          <div class="top-actions">
+            <button id="range-btn" class="btn subtle" type="button" data-soon="1">
+              Last 30 days
+              <span class="caret" aria-hidden="true">▾</span>
+            </button>
+
+            <button id="create-btn" class="btn primary" type="button">
+              Create quote
+            </button>
+
+            <button id="logout-btn" class="btn subtle" type="button">
+              Log out
+            </button>
+          </div>
+        </header>
+
+        <section class="content">
+          <div class="controls">
+            <div class="search">
+              <svg class="search-ic" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" stroke="currentColor" stroke-width="1.8"/>
+                <path d="M16.5 16.5 21 21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+              <input
+                id="search"
+                type="search"
+                placeholder="Search quote #, customer, email…"
+                autocomplete="off"
+              />
+            </div>
+
+            <select id="status-filter" class="select" aria-label="Status filter">
+              <option value="">All statuses</option>
+              <option value="draft">Draft</option>
+              <option value="sent">Sent</option>
+              <option value="viewed">Viewed</option>
+              <option value="accepted">Accepted</option>
+              <option value="signed">Signed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+
+            <button id="refresh-btn" class="btn subtle" type="button">Refresh</button>
+          </div>
+
+          <div id="error-box" class="alert error" hidden></div>
+
+          <section class="panel">
+            <div class="panel-head">
+              <div class="panel-title">
+                <h2>All quotes</h2>
+                <div id="results-meta" class="meta">—</div>
+              </div>
+
+              <div class="panel-actions">
+                <button id="btn-dashboard" class="btn subtle" type="button">
+                  Dashboard
+                </button>
+              </div>
+            </div>
+
+            <div class="table-wrap">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 120px">Quote</th>
+                    <th>Customer</th>
+                    <th style="width: 150px">Total</th>
+                    <th style="width: 140px">Status</th>
+                    <th style="width: 170px">Created</th>
+                    <th style="width: 280px">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="quotes-body"></tbody>
+              </table>
+            </div>
+
+            <div id="empty-state" class="empty" hidden>
+              <div class="empty-title">No quotes yet</div>
+              <div class="empty-sub">
+                Create your first quote to start tracking pipeline and close rate.
+              </div>
+              <button id="empty-create" class="btn primary" type="button">
+                Create quote
+              </button>
+            </div>
+          </section>
+        </section>
+
+        <!-- Create quote dialog -->
+        <dialog id="create-dialog" class="dialog">
+          <form id="create-form" class="dialog-form" method="dialog">
+            <div class="dialog-head">
+              <h3>Create quote</h3>
+              <p>Creates a draft shell. You’ll fill items + scope on the next screen.</p>
+            </div>
+
+            <label class="field">
+              <span>Customer name</span>
+              <input id="customer_name" type="text" required placeholder="John Smith" />
+            </label>
+
+            <label class="field">
+              <span>Customer email (optional)</span>
+              <input id="customer_email" type="email" placeholder="john@email.com" />
+            </label>
+
+            <div class="dialog-actions">
+              <button id="create-cancel" class="btn subtle" type="button">Cancel</button>
+              <button id="create-submit" class="btn primary" type="submit">
+                Create & open
+              </button>
+            </div>
+
+            <div id="create-msg" class="muted small"></div>
+          </form>
+        </dialog>
+
+        <div id="toast" class="toast" hidden></div>
+
+        <script type="module" src="./quotes.js"></script>
+      </main>
+    </div>
+  </body>
+</html>
