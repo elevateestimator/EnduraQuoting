@@ -248,6 +248,40 @@
                 </div>
               </section>
 
+
+<!-- Quote defaults -->
+<section class="panel">
+  <div class="section-head">
+    <div>
+      <h2>Quote defaults</h2>
+      <div class="muted small">Applied to new quotes by default.</div>
+    </div>
+
+    <div class="section-actions">
+      <button id="btn-save-quote-defaults" class="btn btn-primary" type="button">
+        Save
+      </button>
+    </div>
+  </div>
+
+  <label class="field">
+    <span>Payment &amp; Terms</span>
+    <textarea
+      id="company_payment_terms"
+      rows="7"
+      placeholder="Example: 40% deposit due upon acceptance. Remaining balance due upon completion. Payment methods…"
+    ></textarea>
+  </label>
+
+  <div class="notice muted small" style="margin-top: 10px" id="quote-defaults-note">
+    These terms are copied into new quotes. You can still edit terms per quote when needed.
+  </div>
+
+  <div class="notice muted small" style="margin-top: 12px" id="quote-defaults-perms-note" hidden>
+    Only owners/admins can edit quote defaults.
+  </div>
+</section>
+
               <!-- Billing -->
               <section class="panel">
                 <div class="section-head">

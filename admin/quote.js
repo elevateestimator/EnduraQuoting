@@ -196,8 +196,9 @@ async function getContext() {
 
   const { data: company, error: compErr } = await supabase
     .from("companies")
-    // Keep this select minimal to avoid breaking if you haven't added optional columns yet.
-    .select("id, name, phone, website, address, logo_url, default_currency, billing_email")
+    // Use select("*") so optional fields (like payment_terms) don't break the app.
+    // Row-level security still applies.
+    .select("*")
     .eq("id", companyId)
     .single();
 
@@ -428,6 +429,25 @@ async function hydrateBillToFromCustomer(data, qRow) {
   }
 }
 
+function applyCompanyPaymentTermsDefault(data, defaults, ctx) {
+  // Company-level default terms live on the companies row (Settings page).
+  // We only apply them if the quote terms are blank OR still equal to the stock default.
+  const companyTerms =
+    safeStr(ctx?.company?.payment_terms) ||
+    safeStr(ctx?.company?.default_payment_terms) ||
+    safeStr(ctx?.company?.terms);
+
+  if (!companyTerms) return;
+
+  const current = safeStr(data?.terms);
+  const stock = safeStr(defaults?.terms);
+
+  if (!current || (stock && current === stock)) {
+    data.terms = companyTerms;
+  }
+}
+
+
 function applyRepName(name) {
   if (repSignatureEl) repSignatureEl.textContent = name || "";
   if (repPrintedNameEl) repPrintedNameEl.textContent = name || "";
@@ -526,6 +546,9 @@ function buildItemRow(item = {}) {
   const tr = document.createElement("tr");
   tr.className = "item-row avoid-break";
 
+  // NOTE:
+  // show_qty_unit_price controls what the CUSTOMER sees (PDF + customer view),
+  // NOT what the admin can edit. Admins always get qty + unit price inputs.
   const show = item.show_qty_unit_price !== false; // default true
   const productId = item.product_id || "";
   const unitType = item.unit_type || "Each";
@@ -541,44 +564,30 @@ function buildItemRow(item = {}) {
   const taxable = typeof item.taxable === "boolean" ? item.taxable : true;
   const lineCents = Math.round((qty || 0) * (unitPriceCents || 0));
 
-  if (show) {
-    tr.innerHTML = `
-      <td>
-        <input type="text" class="i-name" placeholder="Item name" value="${escapeHtml(name)}" />
-        <textarea rows="2" class="i-desc" placeholder="Description">${escapeHtml(description)}</textarea>
-      </td>
-      <td class="num"><input type="text" class="i-qty" inputmode="decimal" value="${qty || 0}" /></td>
-      <td class="center"><div class="i-unit">${escapeHtml(unitType)}</div></td>
-      <td class="num"><input type="text" class="i-price" inputmode="decimal" value="${centsToMoney(unitPriceCents)}" /></td>
-      <td class="center"><input type="checkbox" class="i-tax" ${taxable ? "checked" : ""} /></td>
-      <td class="line-total"><span>$${centsToMoney(lineCents)}</span></td>
-      <td class="no-print slim"><button class="btn small" type="button" data-action="remove">✕</button></td>
-    `;
-  } else {
-    tr.innerHTML = `
-      <td>
-        <input type="text" class="i-name" placeholder="Item name" value="${escapeHtml(name)}" />
-        <textarea rows="2" class="i-desc" placeholder="Description">${escapeHtml(description)}</textarea>
-      </td>
-      <td class="center"><div class="muted-cell">—</div></td>
-      <td class="center"><div class="muted-cell">—</div></td>
-      <td class="center"><div class="muted-cell">—</div></td>
-      <td class="center"><input type="checkbox" class="i-tax" ${taxable ? "checked" : ""} /></td>
-      <td class="line-total"><input type="text" class="i-total" inputmode="decimal" value="${centsToMoney(lineCents)}" /></td>
-      <td class="no-print slim"><button class="btn small" type="button" data-action="remove">✕</button></td>
-    `;
-  }
+  tr.innerHTML = `
+    <td>
+      <input type="text" class="i-name" placeholder="Item name" value="${escapeHtml(name)}" />
+      <textarea rows="2" class="i-desc" placeholder="Description">${escapeHtml(description)}</textarea>
+    </td>
+    <td class="num"><input type="text" class="i-qty" inputmode="decimal" value="${qty || 0}" /></td>
+    <td class="center"><div class="i-unit">${escapeHtml(unitType)}</div></td>
+    <td class="num"><input type="text" class="i-price" inputmode="decimal" value="${centsToMoney(unitPriceCents)}" /></td>
+    <td class="center"><input type="checkbox" class="i-tax" ${taxable ? "checked" : ""} /></td>
+    <td class="line-total"><span>$${centsToMoney(lineCents)}</span></td>
+    <td class="no-print slim"><button class="btn small" type="button" data-action="remove">✕</button></td>
+  `;
 
   tr.querySelectorAll("input, textarea").forEach((el) => {
     el.addEventListener("input", () => recalcTotals());
     el.addEventListener("change", () => recalcTotals());
   });
 
-  const totalInput = tr.querySelector(".i-total");
-  if (totalInput) {
-    totalInput.addEventListener("blur", () => {
-      const cents = Math.max(0, parseMoneyToCents(totalInput.value));
-      totalInput.value = centsToMoney(cents);
+  // Money tidy-up (keeps PDFs clean too)
+  const priceInput = tr.querySelector(".i-price");
+  if (priceInput) {
+    priceInput.addEventListener("blur", () => {
+      const cents = Math.max(0, parseMoneyToCents(priceInput.value));
+      priceInput.value = centsToMoney(cents);
       recalcTotals();
     });
   }
@@ -595,16 +604,13 @@ function buildItemRow(item = {}) {
 function isRowEffectivelyEmpty(row) {
   const name = safeStr($(".i-name", row)?.value);
   const desc = safeStr($(".i-desc", row)?.value);
-  const show = row.dataset.showQtyUnitPrice !== "0";
 
   if (name || desc) return false;
-  if (show) {
-    const qty = parseNum($(".i-qty", row)?.value);
-    const price = parseMoneyToCents($(".i-price", row)?.value);
-    return (qty === 0 || qty === 1) && price === 0;
-  }
-  const total = parseMoneyToCents($(".i-total", row)?.value);
-  return total === 0;
+
+  const qty = parseNum($(".i-qty", row)?.value);
+  const price = parseMoneyToCents($(".i-price", row)?.value);
+
+  return (qty === 0 || qty === 1) && price === 0;
 }
 
 function maybeRemoveSingleEmptyRow() {
@@ -616,32 +622,19 @@ function maybeRemoveSingleEmptyRow() {
 function getItemsFromUI() {
   const rows = $$(".item-row", itemRowsEl);
   return rows.map((row) => {
-      const show_qty_unit_price = row.dataset.showQtyUnitPrice !== "0";
-      const product_id = safeStr(row.dataset.productId) || null;
-      const unit_type = safeStr(row.dataset.unitType) || "Each";
+    const show_qty_unit_price = row.dataset.showQtyUnitPrice !== "0";
+    const product_id = safeStr(row.dataset.productId) || null;
+    const unit_type = safeStr(row.dataset.unitType) || "Each";
 
-      const name = safeStr($(".i-name", row)?.value);
-      const description = safeStr($(".i-desc", row)?.value);
-      const taxable = !!$(".i-tax", row)?.checked;
+    const name = safeStr($(".i-name", row)?.value);
+    const description = safeStr($(".i-desc", row)?.value);
+    const taxable = !!$(".i-tax", row)?.checked;
 
-      if (show_qty_unit_price) {
-        const qty = Math.max(0, parseNum($(".i-qty", row)?.value));
-        const unit_price_cents = Math.max(0, parseMoneyToCents($(".i-price", row)?.value));
-        return { product_id, name, description, unit_type, show_qty_unit_price, qty, unit_price_cents, taxable };
-      }
+    const qty = Math.max(0, parseNum($(".i-qty", row)?.value));
+    const unit_price_cents = Math.max(0, parseMoneyToCents($(".i-price", row)?.value));
 
-      const line_total_cents = Math.max(0, parseMoneyToCents($(".i-total", row)?.value));
-      return {
-        product_id,
-        name,
-        description,
-        unit_type,
-        show_qty_unit_price,
-        qty: 1,
-        unit_price_cents: line_total_cents,
-        taxable,
-      };
-    });
+    return { product_id, name, description, unit_type, show_qty_unit_price, qty, unit_price_cents, taxable };
+  });
 }
 
 function writeLineTotals(items) {
@@ -654,6 +647,7 @@ function writeLineTotals(items) {
 }
 
 /* ===== Products dialog ===== */
+
 function formatCurrency(cents, currency = "CAD") {
   const amount = (Number(cents) || 0) / 100;
   try {
@@ -710,7 +704,8 @@ function renderProductsList(products, currency) {
 
     const modeTag = document.createElement("span");
     modeTag.className = "tag";
-    modeTag.textContent = p.show_qty_unit_price ? "Breakdown" : "Total only";
+    const breakdown = p.show_qty_unit_price !== false;
+    modeTag.textContent = breakdown ? "Breakdown" : "Total only";
 
     meta.appendChild(priceTag);
     meta.appendChild(unitTag);
@@ -1306,6 +1301,9 @@ async function main() {
   });
 
   const data = mergeDefaults(qRow.data, defaults);
+
+  // Pull company-level default Payment & Terms (from Settings) into new quotes.
+  applyCompanyPaymentTermsDefault(data, defaults, ctx);
 
   // If this quote is linked to a customer, pull in their phone/address so Bill To is pre-filled.
   ensureBillToFromQuoteRow(data, qRow);

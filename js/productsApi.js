@@ -42,7 +42,7 @@ export async function listProducts({ search = "", limit = 500 } = {}) {
     .from("products")
     .select("*")
     .eq("company_id", companyId)
-    .order("updated_at", { ascending: false })
+    .order("name", { ascending: true })
     .limit(limit);
 
   const s = String(search || "").trim();

@@ -30,6 +30,12 @@ const companyAddressEl = document.getElementById("company_address");
 const saveCompanyBtn = document.getElementById("btn-save-company");
 const companyPermsNote = document.getElementById("company-perms-note");
 
+// Quote defaults
+const companyPaymentTermsEl = document.getElementById("company_payment_terms");
+const saveQuoteDefaultsBtn = document.getElementById("btn-save-quote-defaults");
+const quoteDefaultsPermsNote = document.getElementById("quote-defaults-perms-note");
+
+
 // Logo
 const companyLogoImg = document.getElementById("company-logo");
 const logoFileEl = document.getElementById("logo-file");
@@ -202,6 +208,8 @@ function fillCompanyForm(company) {
   companyCurrencyEl.value = company?.default_currency || "CAD";
   companyAddressEl.value = company?.address || "";
 
+  if (companyPaymentTermsEl) companyPaymentTermsEl.value = company?.payment_terms || "";
+
   // Logo (public url stored)
   if (company?.logo_url) {
     companyLogoImg.src = company.logo_url;
@@ -237,6 +245,11 @@ function applyPermissions() {
   uploadLogoBtn.disabled = companyDisabled;
 
   if (companyPermsNote) companyPermsNote.hidden = isAdmin;
+
+  // Quote defaults
+  if (companyPaymentTermsEl) companyPaymentTermsEl.disabled = !isAdmin;
+  if (saveQuoteDefaultsBtn) saveQuoteDefaultsBtn.disabled = !isAdmin;
+  if (quoteDefaultsPermsNote) quoteDefaultsPermsNote.hidden = isAdmin;
 
   // Billing
   saveBillingBtn.disabled = !isAdmin;
@@ -442,6 +455,49 @@ async function saveCompany() {
     saveCompanyBtn.textContent = "Save";
   }
 }
+
+async function saveQuoteDefaults() {
+  if (!state.isAdmin) {
+    toast("Only owners/admins can edit quote defaults.");
+    return;
+  }
+
+  setError("");
+  if (!saveQuoteDefaultsBtn) return;
+
+  saveQuoteDefaultsBtn.disabled = true;
+  const oldText = saveQuoteDefaultsBtn.textContent;
+  saveQuoteDefaultsBtn.textContent = "Saving…";
+
+  try {
+    const updates = {
+      payment_terms: normalizeOptional(companyPaymentTermsEl?.value),
+    };
+
+    const { data, error } = await supabase
+      .from("companies")
+      .update(updates)
+      .eq("id", state.company.id)
+      .select("*")
+      .single();
+
+    if (error) throw error;
+
+    state.company = data;
+    if (companyPaymentTermsEl) companyPaymentTermsEl.value = data?.payment_terms || "";
+    toast("Quote defaults saved.");
+  } catch (e) {
+    // If the column hasn't been added yet, Supabase will error here.
+    setError(
+      e?.message ||
+        "Failed to save quote defaults. Make sure you added companies.payment_terms in Supabase."
+    );
+  } finally {
+    saveQuoteDefaultsBtn.disabled = !state.isAdmin;
+    saveQuoteDefaultsBtn.textContent = oldText || "Save";
+  }
+}
+
 
 async function saveBilling() {
   if (!state.isAdmin) {
@@ -695,6 +751,7 @@ async function init() {
   if (logoutBtn) logoutBtn.addEventListener("click", logout);
 
   if (saveCompanyBtn) saveCompanyBtn.addEventListener("click", saveCompany);
+  if (saveQuoteDefaultsBtn) saveQuoteDefaultsBtn.addEventListener("click", saveQuoteDefaults);
   if (saveBillingBtn) saveBillingBtn.addEventListener("click", saveBilling);
   if (manageBillingBtn) manageBillingBtn.addEventListener("click", () => toast("Billing is coming next."));
 
