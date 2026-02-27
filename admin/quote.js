@@ -429,25 +429,6 @@ async function hydrateBillToFromCustomer(data, qRow) {
   }
 }
 
-function applyCompanyPaymentTermsDefault(data, defaults, ctx) {
-  // Company-level default terms live on the companies row (Settings page).
-  // We only apply them if the quote terms are blank OR still equal to the stock default.
-  const companyTerms =
-    safeStr(ctx?.company?.payment_terms) ||
-    safeStr(ctx?.company?.default_payment_terms) ||
-    safeStr(ctx?.company?.terms);
-
-  if (!companyTerms) return;
-
-  const current = safeStr(data?.terms);
-  const stock = safeStr(defaults?.terms);
-
-  if (!current || (stock && current === stock)) {
-    data.terms = companyTerms;
-  }
-}
-
-
 function applyRepName(name) {
   if (repSignatureEl) repSignatureEl.textContent = name || "";
   if (repPrintedNameEl) repPrintedNameEl.textContent = name || "";
@@ -1301,9 +1282,6 @@ async function main() {
   });
 
   const data = mergeDefaults(qRow.data, defaults);
-
-  // Pull company-level default Payment & Terms (from Settings) into new quotes.
-  applyCompanyPaymentTermsDefault(data, defaults, ctx);
 
   // If this quote is linked to a customer, pull in their phone/address so Bill To is pre-filled.
   ensureBillToFromQuoteRow(data, qRow);

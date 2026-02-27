@@ -37,6 +37,23 @@ function addDaysIso(iso, days) {
   return local.toISOString().slice(0, 10);
 }
 
+function splitAddressLines(address) {
+  const raw = safeStr(address);
+  if (!raw) return { addr1: "", addr2: "" };
+
+  if (raw.includes("\n")) {
+    const lines = raw
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+    const addr1 = lines.shift() || "";
+    const addr2 = lines.join(", ");
+    return { addr1, addr2 };
+  }
+
+  return { addr1: raw, addr2: "" };
+}
+
 async function getSessionUser() {
   const { data, error } = await supabase.auth.getSession();
   if (error) throw new Error(error.message);
@@ -195,6 +212,56 @@ export async function createQuote(payload = {}) {
     currency: safeStr(payload.currency) || "CAD",
     data: payload.data && typeof payload.data === "object" ? payload.data : {},
   };
+
+  // Snapshot company defaults (payment terms + letterhead) into the quote *at creation time*
+  // so future edits to Settings / Products don't mutate historical quotes.
+  const data = row.data && typeof row.data === "object" ? row.data : {};
+
+  if (!data.meta || typeof data.meta !== "object") data.meta = {};
+  if (!safeStr(data.meta.quote_date)) data.meta.quote_date = todayIsoLocal();
+  if (!safeStr(data.meta.quote_expires)) data.meta.quote_expires = addDaysIso(data.meta.quote_date, 30);
+
+  try {
+    const { data: company, error: compErr } = await supabase
+      .from("companies")
+      // Use select("*") so optional columns (like payment_terms) don't hard-fail if missing.
+      .select("*")
+      .eq("id", companyId)
+      .single();
+
+    if (!compErr && company) {
+      // Currency: prefer explicit payload.currency, then company default_currency, then CAD.
+      if (!safeStr(payload.currency) && safeStr(company.default_currency)) {
+        row.currency = safeStr(company.default_currency);
+      }
+
+      // Payment & Terms snapshot
+      if (!safeStr(data.terms) && safeStr(company.payment_terms)) {
+        data.terms = safeStr(company.payment_terms);
+      }
+
+      // Company (letterhead) snapshot
+      if (!data.company || typeof data.company !== "object" || !safeStr(data.company.company_id)) {
+        const { addr1, addr2 } = splitAddressLines(company.address);
+        data.company = {
+          company_id: company.id,
+          name: safeStr(company.name),
+          addr1,
+          addr2,
+          phone: safeStr(company.phone),
+          email: safeStr(company.billing_email),
+          web: safeStr(company.website),
+          logo_url: safeStr(company.logo_url),
+          currency: safeStr(company.default_currency) || row.currency || "CAD",
+        };
+      }
+    }
+  } catch {
+    // If the companies table isn't selectable due to RLS (or column not added yet),
+    // we still allow quote creation. The builder can fill defaults later.
+  }
+
+  row.data = data;
 
   // Never allow callers to override tenancy
   delete row.id;

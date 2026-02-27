@@ -147,7 +147,7 @@ body{
   overflow: hidden;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
 }
 .doc-logo{
   width: 100%;
@@ -307,6 +307,42 @@ body{
   resize: none;
 }
 
+/* ===== Document buttons (inside the white quote page) ===== */
+/*
+  The global .btn styles are tuned for the dark topbar.
+  Override inside the quote page so secondary actions (eg. Custom line)
+  are readable and feel intentional.
+*/
+.page .btn{
+  color: var(--ink);
+  background: #f8fafc;
+  border: 1px solid var(--border);
+}
+.page .btn:hover{ border-color: #c6cedc; }
+.page .btn.ghost{ background: transparent; }
+
+.page .btn.brand{
+  color:#fff;
+  border:0;
+  background: linear-gradient(90deg, var(--brand), var(--brand-dark));
+}
+
+.page .btn.brand.cta{
+  padding: 12px 16px;
+  border-radius: 14px;
+  box-shadow: 0 10px 26px rgba(2,103,181,0.22);
+}
+
+.page .btn.secondary{
+  color: #0b0f14;
+  background: #ffffff;
+  border: 1px solid rgba(2,103,181,0.28);
+}
+.page .btn.secondary:hover{
+  border-color: rgba(2,103,181,0.45);
+  background: rgba(2,103,181,0.04);
+}
+
 /* Helpers */
 .helper{
   margin: 8px 2px 0;
@@ -336,12 +372,17 @@ textarea.autogrow{
   align-items:center;
   justify-content:space-between;
   gap: 10px;
+  margin-bottom: 12px;
 }
+
+/* Remove the default card h3 margin in header rows (fixes "floating" spacing) */
+.row-between h3{ margin: 0; }
 
 .row-actions{
   display:flex;
   align-items:center;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
 .table-wrap{
@@ -640,7 +681,7 @@ textarea.autogrow{
 
 .logo-box{
   width: 190px;
-  height: 120px;
+  height: 96px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -651,11 +692,17 @@ textarea.autogrow{
 }
 
 .doc-logo{
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  object-position: center;
-  transform: none;
+  /*
+    IMPORTANT:
+    Avoid setting BOTH width + height to 100% with object-fit.
+    html2canvas (PDF export) can ignore object-fit and stretch the logo.
+  */
+  height: 96px;
+  width: auto;
+  max-width: 190px;
+  display: block;
+  transform: scale(1.08);
+  transform-origin: left center;
 }
 
 /* =========================================================
