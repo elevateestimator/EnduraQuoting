@@ -131,24 +131,30 @@ body{
 
 .letterhead{
   display:grid;
-  grid-template-columns: 150px 1fr;
-  gap: 18px;
+  grid-template-columns: 190px 1fr;
+  gap: 20px;
   align-items: start;
 }
 
 .logo-col{ display:flex; align-items:flex-start; justify-content:flex-start; }
 .logo-box{
-  width: 150px;
-  border: 1px solid var(--border-soft);
-  border-radius: 16px;
-  background: linear-gradient(180deg, #f8fafc, #ffffff);
-  padding: 12px;
+  width: 190px;
+  height: 120px;
+  border: 0;
+  border-radius: 18px;
+  background: transparent;
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .doc-logo{
   width: 100%;
-  height: auto;          /* no stretching */
+  height: 100%;          /* no stretching */
   display: block;
   object-fit: contain;
+  object-position: center;
 }
 
 .company-row{
@@ -628,14 +634,16 @@ textarea.autogrow{
    Logo sizing (safe for any company logo)
    ========================================================= */
 .letterhead{
-  grid-template-columns: 132px 1fr;
-  gap: 16px;
+  grid-template-columns: 190px 1fr;
+  gap: 20px;
 }
 
 .logo-box{
-  width: 132px;
-  height: 96px;
-  padding: 10px;
+  width: 190px;
+  height: 120px;
+  padding: 0;
+  border: 0;
+  background: transparent;
   overflow: hidden;
   display: flex;
   align-items: center;

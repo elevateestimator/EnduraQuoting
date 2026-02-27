@@ -150,6 +150,21 @@ function safeStr(v) {
   return String(v ?? "").trim();
 }
 
+function deriveNameFromEmail(email) {
+  const e = safeStr(email);
+  if (!e.includes("@")) return "";
+  const local = e.split("@")[0] || "";
+  if (!local) return "";
+  // e.g. "jacob.docherty" -> "Jacob Docherty"
+  return local
+    .replace(/[._-]+/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ")
+    .trim();
+}
+
 async function getContext() {
   if (_ctx) return _ctx;
 
@@ -161,13 +176,15 @@ async function getContext() {
   const user = session.user;
   const userId = user.id;
 
-  const { data: membership, error: memErr } = await supabase
+  const { data: memRows, error: memErr } = await supabase
     .from("company_members")
     .select("company_id, role")
     .eq("user_id", userId)
-    .maybeSingle();
+    .limit(1);
 
   if (memErr) throw new Error(memErr.message);
+
+  const membership = memRows?.[0] || null;
   if (!membership?.company_id) {
     throw new Error(
       "No company membership found for this account. Create a company (owner) or ask an admin to invite you."
@@ -179,35 +196,47 @@ async function getContext() {
 
   const { data: company, error: compErr } = await supabase
     .from("companies")
-    .select(
-      "id, name, phone, website, address, logo_url, default_currency, billing_email, owner_email"
-    )
+    // Keep this select minimal to avoid breaking if you haven't added optional columns yet.
+    .select("id, name, phone, website, address, logo_url, default_currency, billing_email")
     .eq("id", companyId)
     .single();
 
   if (compErr) throw new Error(compErr.message);
 
-  // Profiles table is optional; gracefully fall back to auth metadata.
+  // Profiles table is optional. We'll try both common schemas:
+  // - profiles.id = auth.uid()
+  // - profiles.user_id = auth.uid()
   let profile = null;
   try {
-    const { data: pData, error: pErr } = await supabase
+    const { data: p1, error: e1 } = await supabase
       .from("profiles")
       .select("first_name, last_name, phone")
       .eq("id", userId)
       .maybeSingle();
-    if (pErr) {
-      // Common: "relation profiles does not exist" in early builds.
-      console.warn("profiles load error", pErr);
-    } else {
-      profile = pData || null;
-    }
-  } catch (e) {
-    console.warn("profiles load exception", e);
+    if (!e1 && p1) profile = p1;
+  } catch {}
+
+  if (!profile) {
+    try {
+      const { data: p2, error: e2 } = await supabase
+        .from("profiles")
+        .select("first_name, last_name, phone")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (!e2 && p2) profile = p2;
+    } catch {}
   }
 
-  const first = safeStr(profile?.first_name) || safeStr(user.user_metadata?.first_name);
-  const last = safeStr(profile?.last_name) || safeStr(user.user_metadata?.last_name);
-  const fullName = safeStr(`${first} ${last}`) || safeStr(user.user_metadata?.full_name) || safeStr(user.user_metadata?.name) || safeStr(user.email) || "User";
+  const md = user.user_metadata || {};
+  const first = safeStr(profile?.first_name) || safeStr(md.first_name);
+  const last = safeStr(profile?.last_name) || safeStr(md.last_name);
+  const fullName =
+    safeStr(`${first} ${last}`) ||
+    safeStr(md.full_name) ||
+    safeStr(md.name) ||
+    deriveNameFromEmail(user.email) ||
+    safeStr(user.email) ||
+    "User";
 
   _ctx = { session, user, userId, companyId, role, company, profile, userName: fullName };
   return _ctx;
@@ -294,15 +323,109 @@ function ensurePreparedBy(data, ctx) {
   const current = safeStr(data.meta.prepared_by);
   const candidate = safeStr(ctx?.userName);
   const lower = current.toLowerCase();
+  const email = safeStr(ctx?.user?.email).toLowerCase();
+  const derived = deriveNameFromEmail(ctx?.user?.email).toLowerCase();
 
-  // Legacy placeholder(s) from the previous single-company version.
-  const looksLikePlaceholder = !current || lower === "jacob docherty" || lower === "jacob";
+  // Legacy placeholder(s) / generic placeholders from early builds.
+  const looksLikePlaceholder =
+    !current ||
+    ["jacob docherty", "jacob", "user", "unknown"].includes(lower) ||
+    (email && lower === email) ||
+    (derived && lower === derived);
 
   if (looksLikePlaceholder && candidate) {
     data.meta.prepared_by = candidate;
   }
 
   return data.meta.prepared_by;
+}
+
+function todayIsoLocal() {
+  const d = new Date();
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+}
+
+function addDaysIso(isoDate, days) {
+  const base = isoDate && /^\d{4}-\d{2}-\d{2}$/.test(isoDate)
+    ? new Date(`${isoDate}T00:00:00`)
+    : new Date();
+  base.setDate(base.getDate() + (Number(days) || 0));
+  const local = new Date(base.getTime() - base.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+}
+
+function ensureMetaDates(data) {
+  if (!data.meta) data.meta = {};
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(data.meta.quote_date || ""))) {
+    data.meta.quote_date = todayIsoLocal();
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(data.meta.quote_expires || ""))) {
+    data.meta.quote_expires = addDaysIso(data.meta.quote_date, 30);
+  }
+}
+
+function ensureBillToShape(data) {
+  if (!data.bill_to || typeof data.bill_to !== "object") data.bill_to = {};
+  data.bill_to.client_name = safeStr(data.bill_to.client_name);
+  data.bill_to.client_phone = safeStr(data.bill_to.client_phone);
+  data.bill_to.client_email = safeStr(data.bill_to.client_email);
+  data.bill_to.client_addr = safeStr(data.bill_to.client_addr);
+  return data.bill_to;
+}
+
+function ensureProjectShape(data) {
+  if (!data.project || typeof data.project !== "object") data.project = {};
+  data.project.project_location = safeStr(data.project.project_location);
+  return data.project;
+}
+
+function ensureBillToFromQuoteRow(data, qRow) {
+  const bill = ensureBillToShape(data);
+  if (!bill.client_name && safeStr(qRow?.customer_name)) bill.client_name = safeStr(qRow.customer_name);
+  if (!bill.client_email && safeStr(qRow?.customer_email)) bill.client_email = safeStr(qRow.customer_email);
+}
+
+function chooseCustomerDisplayName(c) {
+  const first = safeStr(c?.first_name);
+  const last = safeStr(c?.last_name);
+  const full = safeStr([first, last].filter(Boolean).join(" "));
+  const company = safeStr(c?.company_name);
+  if (company && full) return `${full} (${company})`;
+  return company || full;
+}
+
+async function hydrateBillToFromCustomer(data, qRow) {
+  // Supports either a dedicated column (quotes.customer_id) or a stamped json key (data.customer_id).
+  const custId =
+    safeStr(qRow?.customer_id) ||
+    safeStr(data?.customer_id) ||
+    safeStr(data?.meta?.customer_id) ||
+    safeStr(data?.bill_to?.customer_id);
+
+  if (!custId) return;
+
+  // Keep a copy in JSON for future-proof querying.
+  if (!safeStr(data.customer_id)) data.customer_id = custId;
+
+  try {
+    const { data: c, error } = await supabase
+      .from("customers")
+      .select("id, first_name, last_name, company_name, billing_address, email, phone")
+      .eq("id", custId)
+      .single();
+
+    if (error || !c) return;
+
+    const bill = ensureBillToShape(data);
+    const name = chooseCustomerDisplayName(c);
+    if (!bill.client_name && name) bill.client_name = name;
+    if (!bill.client_email && safeStr(c.email)) bill.client_email = safeStr(c.email);
+    if (!bill.client_phone && safeStr(c.phone)) bill.client_phone = safeStr(c.phone);
+    if (!bill.client_addr && safeStr(c.billing_address)) bill.client_addr = safeStr(c.billing_address);
+  } catch {
+    // If customers table isn't in place yet or RLS blocks it, we just skip hydration.
+  }
 }
 
 function applyRepName(name) {
@@ -546,7 +669,8 @@ function productToItem(product) {
     name: product.name || "",
     description: product.description || "",
     unit_type: product.unit_type || "Each",
-    show_qty_unit_price: !!product.show_qty_unit_price,
+    // Default to showing breakdown unless explicitly turned off
+    show_qty_unit_price: product.show_qty_unit_price !== false,
     qty: 1,
     unit_price_cents: Number(product.price_per_unit_cents || 0),
     taxable: true,
@@ -716,6 +840,12 @@ function mergeDefaults(existing, fallback) {
 }
 
 function fillUIFromData(qRow, data, ctx) {
+  // Ensure shape + core defaults exist (prevents blank meta fields)
+  ensureMetaDates(data);
+  ensureBillToShape(data);
+  ensureProjectShape(data);
+  ensureBillToFromQuoteRow(data, qRow);
+
   // Company snapshot (customer-facing letterhead)
   const company = ensureCompanySnapshot(data, ctx);
   applyCompanyToDom(company);
@@ -724,7 +854,10 @@ function fillUIFromData(qRow, data, ctx) {
   const preparedBy = ensurePreparedBy(data, ctx);
   applyRepName(preparedBy);
 
-  const quoteCode = formatQuoteCode(qRow.quote_no, data.meta.quote_date);
+  let quoteCode = formatQuoteCode(qRow.quote_no, data.meta.quote_date);
+  if (!safeStr(quoteCode)) {
+    quoteCode = qRow.quote_no ? `Q-${qRow.quote_no}` : `Q-${String(qRow.id || "").slice(0, 8)}`;
+  }
 
   quoteCodeEl.textContent = quoteCode;
   if (docQuoteCodeEl) docQuoteCodeEl.textContent = quoteCode;
@@ -773,6 +906,7 @@ function collectDataFromUI(qRow, existingAcceptance = null) {
   const totals = recalcTotals();
 
   const meta = {
+    ...(qRow?.data?.meta && typeof qRow.data.meta === "object" ? qRow.data.meta : {}),
     quote_date: getBoundValue("quote_date"),
     quote_expires: getBoundValue("quote_expires"),
     prepared_by: getBoundValue("prepared_by"),
@@ -799,6 +933,8 @@ function collectDataFromUI(qRow, existingAcceptance = null) {
   if (mode === "custom") deposit_cents = parseMoneyToCents(depositDueEl.value);
 
   return {
+    // Keep the customer linkage in json so customer pages can query reliably
+    customer_id: safeStr(qRow?.customer_id) || safeStr(qRow?.data?.customer_id) || safeStr(meta?.customer_id) || "",
     company: _companySnapshot || qRow.data?.company || {},
     meta,
     bill_to,
@@ -1170,6 +1306,11 @@ async function main() {
   });
 
   const data = mergeDefaults(qRow.data, defaults);
+
+  // If this quote is linked to a customer, pull in their phone/address so Bill To is pre-filled.
+  ensureBillToFromQuoteRow(data, qRow);
+  await hydrateBillToFromCustomer(data, qRow);
+
   fillUIFromData(qRow, data, ctx);
 
   backBtn.addEventListener("click", () => {

@@ -1,220 +1,312 @@
-// js/quotesApi.js
-// Tenant-safe Quotes API + automatic first-run company setup
-//
-// Why this file exists:
-// - In SaaS mode, every row MUST belong to a company_id.
-// - New Supabase Auth users do NOT automatically get a company_members row.
-// - Without a membership row, inserts into quotes will fail with RLS errors.
-//
-// What this file does:
-// - Reads the logged-in user's company_members row.
-// - If missing, it will:
-//   1) Reuse an existing company owned by the user (if any), otherwise
-//   2) Create a new company using user_metadata.company_name (set during signup), then
-//   3) Insert the owner membership row.
-//
-// This makes "sign up → confirm → sign in → dashboard" work with no manual SQL steps.
-
 import { supabase } from "./api.js";
 
-async function getSessionOrThrow() {
+/**
+ * Tenant-safe Quotes API
+ *
+ * Exposes the helpers your pages expect:
+ * - listQuotes
+ * - getQuote
+ * - createQuote
+ * - updateQuote
+ * - cancelQuote
+ * - duplicateQuoteById
+ *
+ * Notes:
+ * - All reads/writes are scoped to the signed-in user's company_id.
+ * - If a brand new signup has no membership yet, we'll attempt to bootstrap
+ *   an owner company using user_metadata.company_name (set at signup).
+ */
+
+let _ctxCache = null;
+let _ctxPromise = null;
+
+function safeStr(v) {
+  return String(v ?? "").trim();
+}
+
+function todayIsoLocal() {
+  const d = new Date();
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+}
+
+function addDaysIso(iso, days) {
+  const base = iso && /^\d{4}-\d{2}-\d{2}$/.test(iso) ? new Date(`${iso}T00:00:00`) : new Date();
+  base.setDate(base.getDate() + (Number(days) || 0));
+  const local = new Date(base.getTime() - base.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+}
+
+async function getSessionUser() {
   const { data, error } = await supabase.auth.getSession();
-  if (error) throw error;
-  const session = data?.session;
-  if (!session) throw new Error("Not signed in.");
-  return session;
+  if (error) throw new Error(error.message);
+  const user = data?.session?.user;
+  if (!user) throw new Error("Not authenticated.");
+  return user;
 }
 
-function deriveCompanyNameFromEmail(email) {
-  const e = String(email || "").trim();
-  const domain = e.split("@")[1] || "";
-  if (!domain) return "My Company";
-  const base = domain.replace(/^www\./i, "").split(".")[0] || "My Company";
-  // Title case-ish
-  return base
-    .replace(/[-_]/g, " ")
-    .split(" ")
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
+async function fetchMembership(userId) {
+  const { data, error } = await supabase
+    .from("company_members")
+    .select("company_id, role")
+    .eq("user_id", userId)
+    .limit(1);
+  if (error) throw new Error(error.message);
+  return data?.[0] || null;
 }
 
-async function getMembershipOrBootstrap() {
-  const session = await getSessionOrThrow();
-  const user = session.user;
+async function bootstrapCompanyForUser(user, desiredName) {
+  const name = safeStr(desiredName) || "My Company";
   const userId = user.id;
 
-  // 1) Try current membership
-  const { data: membership, error: memErr } = await supabase
-    .from("company_members")
-    .select("company_id, role")
-    .eq("user_id", userId)
-    .maybeSingle();
+  // Try with owner_user_id first (recommended schema). If that column doesn't exist yet,
+  // fall back to inserting without it.
+  let insertRow = { name, owner_user_id: userId };
 
-  if (memErr) throw memErr;
-  if (membership?.company_id) {
-    return { session, userId, companyId: membership.company_id, role: membership.role };
-  }
+  let res = await supabase.from("companies").insert(insertRow).select("id, name").single();
 
-  // 2) No membership found — bootstrap.
-  // First try to reuse a company the user already owns (if they created one manually).
-  let companyId = null;
-
-  const { data: ownedCompany, error: ownedErr } = await supabase
-    .from("companies")
-    .select("id")
-    .eq("owner_user_id", userId)
-    .order("created_at", { ascending: true })
-    .maybeSingle();
-
-  if (ownedErr) throw ownedErr;
-  if (ownedCompany?.id) companyId = ownedCompany.id;
-
-  // If no owned company exists, create one using signup metadata.
-  if (!companyId) {
-    const meta = user.user_metadata || {};
-    const companyName =
-      String(meta.company_name || meta.company || "").trim() ||
-      deriveCompanyNameFromEmail(user.email);
-
-    const { data: createdCompany, error: createCompanyErr } = await supabase
-      .from("companies")
-      .insert({ name: companyName, owner_user_id: userId })
-      .select("id")
-      .single();
-
-    if (createCompanyErr) {
-      // Give a helpful message if policies aren't installed correctly.
-      const msg =
-        createCompanyErr?.message ||
-        "Failed to create company for this account.";
-      throw new Error(
-        msg +
-          "\n\nFix: In Supabase, ensure RLS policies allow authenticated users to insert into companies where owner_user_id = auth.uid()."
-      );
+  if (res.error) {
+    const msg = String(res.error.message || "").toLowerCase();
+    if (msg.includes("owner_user_id") && (msg.includes("column") || msg.includes("schema"))) {
+      res = await supabase.from("companies").insert({ name }).select("id, name").single();
     }
-    companyId = createdCompany.id;
   }
 
-  // 3) Insert membership row as owner (idempotent-ish)
-  const { error: insertMemberErr } = await supabase
-    .from("company_members")
-    .insert({ company_id: companyId, user_id: userId, role: "owner" });
+  if (res.error) throw new Error(res.error.message);
 
-  // Ignore duplicate-key errors if the row was created in parallel
-  if (insertMemberErr && insertMemberErr.code !== "23505") {
-    const msg =
-      insertMemberErr?.message ||
-      "Failed to create company membership for this account.";
-    throw new Error(
-      msg +
-        "\n\nFix: In Supabase, ensure RLS policies allow an owner to insert their own membership row into company_members (role = owner)."
-    );
+  const company = res.data;
+  if (!company?.id) throw new Error("Failed to create company.");
+
+  // Create membership (owner)
+  const { error: memErr } = await supabase.from("company_members").insert({
+    user_id: userId,
+    company_id: company.id,
+    role: "owner",
+  });
+
+  // If it already exists, ignore.
+  if (memErr) {
+    const msg = String(memErr.message || "").toLowerCase();
+    const ignorable = msg.includes("duplicate") || msg.includes("already") || msg.includes("unique");
+    if (!ignorable) throw new Error(memErr.message);
   }
 
-  // 4) Re-fetch membership
-  const { data: membership2, error: memErr2 } = await supabase
-    .from("company_members")
-    .select("company_id, role")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (memErr2) throw memErr2;
-  if (!membership2?.company_id) {
-    throw new Error(
-      "Company setup did not complete. Your account is signed in, but no company membership exists." +
-        "\n\nFix: Check your company_members RLS policies, then retry."
-    );
-  }
-
-  return { session, userId, companyId: membership2.company_id, role: membership2.role };
+  return company.id;
 }
 
-export async function listQuotes({ limit = 200 } = {}) {
-  const { companyId } = await getMembershipOrBootstrap();
+async function getTenantContext() {
+  if (_ctxCache) return _ctxCache;
+  if (_ctxPromise) return _ctxPromise;
+
+  _ctxPromise = (async () => {
+    const user = await getSessionUser();
+    const userId = user.id;
+
+    let membership = await fetchMembership(userId);
+
+    if (!membership?.company_id) {
+      // Attempt to bootstrap a first company for brand new signups
+      const companyName =
+        safeStr(user.user_metadata?.company_name) ||
+        safeStr(user.user_metadata?.company) ||
+        safeStr(user.user_metadata?.workspace);
+
+      if (!companyName) {
+        throw new Error(
+          "No company membership found for this account. Create a company (owner) or ask an admin to invite you."
+        );
+      }
+
+      const companyId = await bootstrapCompanyForUser(user, companyName);
+      membership = (await fetchMembership(userId)) || { company_id: companyId, role: "owner" };
+    }
+
+    const ctx = {
+      user,
+      userId,
+      companyId: membership.company_id,
+      role: membership.role || "member",
+    };
+
+    _ctxCache = ctx;
+    _ctxPromise = null;
+    return ctx;
+  })();
+
+  return _ctxPromise;
+}
+
+function scrubAcceptance(data) {
+  const d = data && typeof data === "object" ? JSON.parse(JSON.stringify(data)) : {};
+  if (d.acceptance) {
+    d.acceptance = null;
+  }
+  // Keep meta but strip accepted flags if you added them there
+  if (d.meta && typeof d.meta === "object") {
+    delete d.meta.accepted_date;
+    delete d.meta.accepted_at;
+  }
+  return d;
+}
+
+export async function listQuotes({ limit = 500 } = {}) {
+  const { companyId } = await getTenantContext();
 
   const { data, error } = await supabase
     .from("quotes")
     .select(
-      "id, quote_no, customer_name, customer_email, total_cents, currency, status, created_at"
+      "id, quote_no, customer_name, customer_email, customer_id, total_cents, currency, status, created_at"
     )
     .eq("company_id", companyId)
     .order("created_at", { ascending: false })
     .limit(limit);
 
-  if (error) throw error;
+  if (error) throw new Error(error.message);
   return data || [];
 }
 
-export async function createQuote(payload) {
-  const { userId, companyId } = await getMembershipOrBootstrap();
-
-  const insertRow = {
-    ...payload,
-    company_id: companyId,
-    created_by: userId,
-    status: payload?.status ?? "Draft",
-  };
+export async function getQuote(quoteId) {
+  const { companyId } = await getTenantContext();
 
   const { data, error } = await supabase
     .from("quotes")
-    .insert(insertRow)
     .select(
-      "id, quote_no, customer_name, customer_email, total_cents, currency, status, created_at, data"
+      "id, quote_no, customer_name, customer_email, customer_id, total_cents, currency, status, created_at, updated_at, created_by, data"
+    )
+    .eq("id", quoteId)
+    .eq("company_id", companyId)
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function createQuote(payload = {}) {
+  const { userId, companyId } = await getTenantContext();
+
+  const row = {
+    ...payload,
+    company_id: companyId,
+    created_by: userId,
+    status: payload.status ?? "draft",
+    total_cents: Number(payload.total_cents ?? 0) || 0,
+    currency: safeStr(payload.currency) || "CAD",
+    data: payload.data && typeof payload.data === "object" ? payload.data : {},
+  };
+
+  // Never allow callers to override tenancy
+  delete row.id;
+  delete row.companyId;
+
+  // Insert (with a graceful fallback if your quotes table doesn't have customer_id yet)
+  let res = await supabase
+    .from("quotes")
+    .insert(row)
+    .select(
+      "id, quote_no, customer_name, customer_email, customer_id, total_cents, currency, status, created_at, data"
     )
     .single();
 
-  if (error) throw error;
+  if (res.error) {
+    const msg = String(res.error.message || "").toLowerCase();
+    if (msg.includes("customer_id") && (msg.includes("column") || msg.includes("schema"))) {
+      const retry = { ...row };
+      delete retry.customer_id;
+      res = await supabase
+        .from("quotes")
+        .insert(retry)
+        .select(
+          "id, quote_no, customer_name, customer_email, total_cents, currency, status, created_at, data"
+        )
+        .single();
+    }
+  }
+
+  if (res.error) throw new Error(res.error.message);
+  return res.data;
+}
+
+export async function updateQuote(quoteId, patch = {}) {
+  const { companyId } = await getTenantContext();
+
+  const row = { ...patch };
+  delete row.id;
+  delete row.company_id;
+  delete row.created_by;
+
+  const { data, error } = await supabase
+    .from("quotes")
+    .update(row)
+    .eq("id", quoteId)
+    .eq("company_id", companyId)
+    .select(
+      "id, quote_no, customer_name, customer_email, customer_id, total_cents, currency, status, created_at, updated_at, created_by, data"
+    )
+    .single();
+
+  if (error) throw new Error(error.message);
   return data;
 }
 
 export async function cancelQuote(quoteId) {
-  if (!quoteId) throw new Error("Missing quote id.");
-
-  const { data, error } = await supabase
-    .from("quotes")
-    .update({ status: "Cancelled" })
-    .eq("id", quoteId)
-    .select("id, status")
-    .single();
-
-  if (error) throw error;
-  return data;
+  return updateQuote(quoteId, { status: "cancelled" });
 }
 
 export async function duplicateQuoteById(sourceQuoteId) {
-  if (!sourceQuoteId) throw new Error("Missing source quote id.");
+  const { userId, companyId } = await getTenantContext();
 
-  const { userId, companyId } = await getMembershipOrBootstrap();
+  const src = await getQuote(sourceQuoteId);
+  if (!src?.id) throw new Error("Source quote not found.");
 
-  const { data: src, error: srcErr } = await supabase
-    .from("quotes")
-    .select("customer_name, customer_email, total_cents, currency, data")
-    .eq("id", sourceQuoteId)
-    .single();
+  const srcData = src.data && typeof src.data === "object" ? src.data : {};
+  const newData = scrubAcceptance(srcData);
 
-  if (srcErr) throw srcErr;
+  // Mark versioning in meta and refresh dates
+  const meta = (newData.meta && typeof newData.meta === "object") ? { ...newData.meta } : {};
+  meta.version_of_quote_id = src.id;
+  meta.version_of_quote_no = src.quote_no;
+  meta.quote_date = todayIsoLocal();
+  meta.quote_expires = addDaysIso(meta.quote_date, 30);
+  newData.meta = meta;
 
-  const clonedData = structuredClone(src.data || {});
-  if (clonedData.acceptance) delete clonedData.acceptance;
+  // Keep customer linkage in json too
+  if (safeStr(src.customer_id) && !safeStr(newData.customer_id)) newData.customer_id = src.customer_id;
 
-  const insertRow = {
-    customer_name: src.customer_name,
-    customer_email: src.customer_email,
-    total_cents: src.total_cents ?? 0,
-    currency: src.currency ?? "CAD",
-    data: clonedData,
-    status: "Draft",
+  const row = {
     company_id: companyId,
     created_by: userId,
+    status: "draft",
+    customer_name: src.customer_name,
+    customer_email: src.customer_email,
+    customer_id: src.customer_id,
+    currency: src.currency || "CAD",
+    total_cents: Number(src.total_cents ?? 0) || 0,
+    data: newData,
   };
 
-  const { data: created, error: createErr } = await supabase
+  let res = await supabase
     .from("quotes")
-    .insert(insertRow)
-    .select("id, quote_no")
+    .insert(row)
+    .select(
+      "id, quote_no, customer_name, customer_email, customer_id, total_cents, currency, status, created_at, data"
+    )
     .single();
 
-  if (createErr) throw createErr;
-  return created;
+  if (res.error) {
+    const msg = String(res.error.message || "").toLowerCase();
+    if (msg.includes("customer_id") && (msg.includes("column") || msg.includes("schema"))) {
+      const retry = { ...row };
+      delete retry.customer_id;
+      res = await supabase
+        .from("quotes")
+        .insert(retry)
+        .select(
+          "id, quote_no, customer_name, customer_email, total_cents, currency, status, created_at, data"
+        )
+        .single();
+    }
+  }
+
+  if (res.error) throw new Error(res.error.message);
+  return res.data;
 }
