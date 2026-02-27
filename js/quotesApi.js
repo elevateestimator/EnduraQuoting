@@ -171,7 +171,9 @@ export async function getQuote(quoteId) {
   const { data, error } = await supabase
     .from("quotes")
     .select(
-      "id, quote_no, customer_name, customer_email, customer_id, total_cents, currency, status, created_at, updated_at, created_by, data"
+      // Some projects don't have an `updated_at` column on quotes.
+      // Selecting a non-existent column hard-fails in PostgREST.
+      "id, quote_no, customer_name, customer_email, customer_id, total_cents, currency, status, created_at, created_by, data"
     )
     .eq("id", quoteId)
     .eq("company_id", companyId)
@@ -240,7 +242,8 @@ export async function updateQuote(quoteId, patch = {}) {
     .eq("id", quoteId)
     .eq("company_id", companyId)
     .select(
-      "id, quote_no, customer_name, customer_email, customer_id, total_cents, currency, status, created_at, updated_at, created_by, data"
+      // Keep compatible with schemas that don't include `updated_at`.
+      "id, quote_no, customer_name, customer_email, customer_id, total_cents, currency, status, created_at, created_by, data"
     )
     .single();
 
