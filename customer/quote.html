@@ -3,63 +3,70 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Endura Metal Roofing Ltd. — Quote</title>
-    <link rel="stylesheet" href="./quote.css?v=6" />
+    <title>Elevate Estimator — Quote Builder</title>
+    <link rel="stylesheet" href="./quote.css" />
   </head>
 
   <body>
-    <header class="sitebar no-print">
-      <div class="sitebrand">
-        <img class="site-logo" src="../assets/logo.jpg" alt="Endura Metal Roofing Ltd." />
-        <div class="sitebrand-text">
-          <div class="sitebrand-title">Endura Metal Roofing Ltd.</div>
-          <div class="sitebrand-sub">
-            <span id="v-quote-code">—</span>
+    <!-- Top app bar (screen only) -->
+    <header class="topbar no-print">
+      <div class="brand">
+        <img class="logo" src="../assets/elevate_estimator_logo_light.png" alt="Elevate Estimator" />
+        <div class="brand-text">
+          <div class="brand-title">Quote Builder</div>
+          <div class="brand-sub">
+            <span id="quote-code">…</span>
             <span class="dot">•</span>
-            <span id="v-quote-status">—</span>
+            <span id="quote-status">…</span>
           </div>
         </div>
       </div>
 
-      <div class="site-actions">
-        <button id="download-btn" class="btn" type="button">Download PDF</button>
-        <button id="accept-jump-btn" class="btn brand" type="button">Accept &amp; Sign</button>
+      <div class="actions">
+        <button id="back-btn" class="btn ghost" type="button">Back</button>
+        <button id="save-btn" class="btn primary" type="button">Save</button>
+        <button id="pdf-btn" class="btn" type="button">Download PDF</button>
+        <button id="send-btn" class="btn brand" type="button">Send to Customer</button>
       </div>
     </header>
 
-    <main class="container">
-      <div id="banner" class="banner" hidden></div>
+    <main class="wrap">
+      <div id="msg" class="msg" hidden></div>
 
-      <div id="loading" class="loading">
-        Loading your quote…
-      </div>
-
-      <!-- Quote display -->
-      <section id="quote-page" class="page" hidden>
+      <!-- This is the page we capture into PDF -->
+      <section id="quote-page" class="page">
+        <!-- Letterhead -->
         <header class="doc-header avoid-break">
           <div class="letterhead">
             <div class="logo-col">
               <div class="logo-box">
-                <img src="../assets/logo.jpg" alt="Endura Metal Roofing Ltd." class="doc-logo" />
+                <img
+                  id="company-logo"
+                  src="../assets/elevate_estimator_logo_light.png"
+                  alt="Company logo"
+                  class="doc-logo"
+                  crossorigin="anonymous"
+                />
               </div>
             </div>
 
             <div class="company-col">
               <div class="company-row">
                 <div class="company-block">
-                  <div class="company-name" id="v-company-name"></div>
+                  <div class="company-name" data-company="name"></div>
 
                   <div class="company-contact">
-                    <span id="v-company-addr"></span>
-                    <span id="v-company-phone"></span>
-                    <span id="v-company-email"></span>
-                    <span id="v-company-web"></span>
+                    <span data-company="addr1"></span>
+                    <span data-company="addr2"></span>
+                    <span data-company="phone"></span>
+                    <span data-company="email"></span>
+                    <span data-company="web"></span>
                   </div>
                 </div>
 
                 <div class="doc-block">
                   <div class="doc-pill">QUOTE</div>
-                  <div class="doc-code" id="v-doc-quote-code">—</div>
+                  <div class="doc-code" id="doc-quote-code">…</div>
                 </div>
               </div>
             </div>
@@ -69,85 +76,108 @@
             <div class="meta-strip full-span">
               <div class="meta-field">
                 <span>Quote #</span>
-                <div class="meta-val" id="v-meta-quote"></div>
+                <input type="text" data-bind="quote_no" readonly />
               </div>
 
               <div class="meta-field">
                 <span>Date</span>
-                <div class="meta-val" id="v-meta-date"></div>
+                <input type="date" data-bind="quote_date" />
               </div>
 
               <div class="meta-field">
                 <span>Expires</span>
-                <div class="meta-val" id="v-meta-expires"></div>
+                <input type="date" data-bind="quote_expires" />
               </div>
 
               <div class="meta-field">
                 <span>Prepared by</span>
-                <div class="meta-val" id="v-meta-prepared"></div>
+                <input type="text" data-bind="prepared_by" readonly />
               </div>
             </div>
           </div>
         </header>
 
+        <!-- Customer / Job -->
         <section class="grid-2 avoid-break">
-          <div class="card slim">
+          <div class="card">
             <h3>Bill To</h3>
-            <div class="kv">
-              <div class="kv-line" id="v-bill-name"></div>
-              <div class="kv-line" id="v-bill-phone"></div>
-              <div class="kv-line" id="v-bill-email"></div>
-              <div class="kv-line" id="v-bill-addr"></div>
+
+            <div class="bill-fields">
+              <input
+                type="text"
+                placeholder="Client / Homeowner"
+                data-bind="client_name"
+              />
+
+              <div class="two-col">
+                <input type="text" placeholder="Phone" data-bind="client_phone" />
+                <input type="text" placeholder="Email" data-bind="client_email" />
+              </div>
+
+              <input
+                type="text"
+                placeholder="Billing Address"
+                data-bind="client_addr"
+              />
             </div>
           </div>
 
-          <div class="card slim">
+          <div class="card">
             <h3>Job Site</h3>
-            <div class="kv">
-              <div class="kv-line" id="v-jobsite"></div>
+
+            <div class="job-fields">
+              <input
+                type="text"
+                placeholder="Installation address"
+                data-bind="project_location"
+              />
+              <p class="helper">
+                Installation address (if different from billing).
+              </p>
             </div>
           </div>
         </section>
 
+        <!-- Items -->
         <section class="card avoid-break">
-          <h3>Scope of Work</h3>
-          <div class="pre" id="v-scope"></div>
-        </section>
-
-        <section class="card avoid-break">
-          <h3>Items &amp; Pricing</h3>
-          
-          <div class="items-desktop">
-            <div class="table-wrap">
-              <table class="items-table" aria-label="Line items">
-                <colgroup>
-                  <col style="width: auto" />
-                  <col style="width: 11%" />
-                  <col style="width: 17%" />
-                  <col style="width: 8%" />
-                  <col style="width: 17%" />
-                </colgroup>
-
-                <thead>
-                  <tr>
-                    <th>Description</th>
-                    <th class="num">Qty</th>
-                    <th class="num">Rate</th>
-                    <th class="center">Tax</th>
-                    <th class="num">Line Total</th>
-                  </tr>
-                </thead>
-
-                <tbody id="v-item-rows"></tbody>
-              </table>
+          <div class="row-between">
+            <h3>Items & Pricing</h3>
+            <div class="row-actions no-print">
+              <button id="add-product" class="btn brand cta" type="button">Add from Products</button>
+              <button id="add-item" class="btn secondary" type="button">+ Custom line</button>
             </div>
           </div>
 
-          <!-- Mobile-friendly item cards -->
-          <div class="items-mobile" id="v-item-cards"></div>
+          <div class="table-wrap">
+            <table class="items-table" aria-label="Line items">
+              <colgroup>
+                <col style="width: auto" />
+                <col style="width: 10%" />
+                <col style="width: 11%" />
+                <col style="width: 16%" />
+                <col style="width: 8%" />
+                <col style="width: 15%" />
+                <col style="width: 4%" />
+              </colgroup>
+
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th class="num">Qty</th>
+                  <th class="center">Unit</th>
+                  <th class="num">Unit Price</th>
+                  <th class="center">Tax</th>
+                  <th class="num">Line Total</th>
+                  <th class="no-print slim"></th>
+                </tr>
+              </thead>
+
+              <tbody id="item-rows"></tbody>
+            </table>
+          </div>
         </section>
 
-
+        <!-- Totals -->
         <section class="card totals avoid-break">
           <h3>Summary</h3>
 
@@ -155,136 +185,161 @@
             <div class="row">
               <div class="label">Subtotal</div>
               <div class="spacer"></div>
-              <div class="value"><span class="curr">$</span><span class="amt" id="v-subtotal">0.00</span></div>
+              <div class="value">
+                <span class="curr">$</span><span class="amt" id="subtotal">0.00</span>
+              </div>
             </div>
 
             <div class="row">
-              <div class="label">Tax</div>
+              <div class="label" id="tax-rate-label">Tax Rate</div>
               <div class="spacer"></div>
-              <div class="value"><span class="curr">$</span><span class="amt" id="v-tax">0.00</span></div>
+              <div class="value">
+                <span class="curr curr-placeholder">$</span>
+                <span class="amt amt-input">
+                  <input id="tax-rate" type="text" inputmode="decimal" value="13" class="short" />
+                  <span class="suffix">%</span>
+                </span>
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="label" id="tax-amount-label">Tax</div>
+              <div class="spacer"></div>
+              <div class="value">
+                <span class="curr">$</span><span class="amt" id="tax-amount">0.00</span>
+              </div>
             </div>
 
             <div class="row">
               <div class="label">Additional Fees</div>
               <div class="spacer"></div>
-              <div class="value"><span class="curr">$</span><span class="amt" id="v-fees">0.00</span></div>
+              <div class="value">
+                <span class="curr">$</span>
+                <span class="amt amt-input">
+                  <input id="fees" type="text" inputmode="decimal" placeholder="0.00" />
+                </span>
+              </div>
             </div>
 
             <div class="row total">
               <div class="label">Total</div>
               <div class="spacer"></div>
-              <div class="value"><span class="curr">$</span><span class="amt" id="v-total">0.00</span></div>
+              <div class="value">
+                <span class="curr">$</span><span class="amt" id="grand-total">0.00</span>
+              </div>
             </div>
           </div>
         </section>
 
+        <!-- Deposit -->
         <section class="card avoid-break">
           <h3>Deposit</h3>
-          <div class="deposit-row">
-            <div class="deposit-label">Deposit Due</div>
-            <div class="deposit-value" id="v-deposit">$0.00</div>
+          <div class="stack-10">
+            <div class="inline-controls no-print">
+              <label class="radio"
+                ><input type="radio" name="deposit_mode" value="auto" checked />
+                Auto (40%)</label
+              >
+              <label class="radio"
+                ><input type="radio" name="deposit_mode" value="custom" />
+                Custom</label
+              >
+            </div>
+
+            <label class="inline">
+              <span class="label-mini">Deposit Due</span>
+              <input
+                id="deposit-due"
+                type="text"
+                inputmode="decimal"
+                placeholder="$0.00"
+              />
+            </label>
           </div>
         </section>
 
+        <!-- Terms -->
         <section class="card avoid-break">
-          <h3>Payment &amp; Terms</h3>
-          <div class="pre" id="v-terms"></div>
+          <h3>Payment & Terms</h3>
+          <textarea class="autogrow" rows="6" data-bind="terms"></textarea>
         </section>
 
+        <!-- Notes -->
         <section class="card avoid-break">
-          <h3>Notes &amp; Exclusions</h3>
-          <div class="pre" id="v-notes"></div>
+          <h3>Notes & Exclusions</h3>
+          <textarea
+            class="autogrow"
+            rows="3"
+            data-bind="notes"
+            placeholder="Project-specific exclusions, colour selections, deck repairs, etc."
+          ></textarea>
         </section>
 
+        <!-- Signatures -->
         <section class="signatures avoid-break">
           <div class="sig-block">
             <div class="sig-line signature">
               <span>Client Signature</span>
-              <img class="sig-image" id="v-client-signature-img" alt="Client signature" hidden />
+              <img class="sig-image" id="client-signature-img" alt="Client signature" hidden />
             </div>
 
             <div class="sig-inline two">
               <div class="sig-line">
                 <span>Printed Name</span>
-                <div class="sig-value" id="v-client-name"></div>
+                <div class="sig-value" id="client-signed-name"></div>
               </div>
               <div class="sig-line">
                 <span>Date</span>
-                <div class="sig-value" id="v-client-date"></div>
+                <div class="sig-value" id="client-signed-date"></div>
               </div>
             </div>
           </div>
 
           <div class="sig-block">
             <div class="sig-line signature">
-              <span>Endura Representative Signature</span>
-              <div class="sig-signature" id="v-rep-signature">Jacob Docherty</div>
+              <span>Representative Signature</span>
+              <div class="sig-signature" id="rep-signature"></div>
             </div>
 
             <div class="sig-inline two">
               <div class="sig-line">
                 <span>Printed Name</span>
-                <div class="sig-value">Jacob Docherty</div>
+                <div class="sig-value" id="rep-printed-name"></div>
               </div>
+
               <div class="sig-line">
                 <span>Date</span>
-                <div class="sig-value" id="v-rep-date"></div>
+                <div class="sig-value" id="rep-date"></div>
               </div>
             </div>
           </div>
         </section>
       </section>
-
-      <!-- Acceptance -->
-      
-      <!-- Acceptance -->
-      <section id="accept-section" class="accept-card no-print" hidden>
-        <div class="accept-head">
-          <h2>Accept &amp; Sign</h2>
-          <div class="pill" id="accept-pill">Ready</div>
-        </div>
-
-        <p class="accept-help">
-          When you're ready, tap <strong>Sign Now</strong> and draw your signature.
-          This confirms acceptance of the scope, pricing, and terms in this quote.
-        </p>
-
-        <button id="sign-now-btn" class="btn brand wide" type="button">
-          Sign Now
-        </button>
-
-        <p class="accept-foot">
-          You can download a PDF copy at any time.
-        </p>
-      </section>
     </main>
-<!-- Signature modal (screen only) -->
-    <div id="sig-modal" class="modal-overlay no-print" hidden>
-      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="sig-title">
-        <div class="modal-head">
-          <div class="modal-title" id="sig-title">Draw your signature</div>
-          <button id="sig-close" class="icon-btn" type="button" aria-label="Close">✕</button>
-        </div>
 
-        <div class="modal-sub">
-          Signing as <strong id="sig-name">Client</strong>
+    <!-- Add from Products dialog (screen only) -->
+    <dialog id="products-dialog" class="dialog no-print">
+      <div class="dialog-head">
+        <div>
+          <div class="dialog-title">Add sale items</div>
+          <div class="dialog-sub">Pick from your Products &amp; Services catalog.</div>
         </div>
-
-        <div class="sig-pad">
-          <canvas id="sig-canvas" aria-label="Signature pad"></canvas>
-        </div>
-
-        <div class="modal-actions">
-          <button id="sig-clear" class="btn" type="button">Clear</button>
-          <button id="sig-submit" class="btn brand" type="button">Sign &amp; Accept</button>
-        </div>
-
-        <div class="modal-note">
-          By signing, you accept this quote including scope, pricing, and terms.
-        </div>
+        <button id="products-close" class="btn small ghost" type="button">Close</button>
       </div>
-    </div>
 
-    <script type="module" src="./quote.js?v=6"></script>
+      <div class="dialog-search">
+        <input id="products-search" type="text" placeholder="Search products…" />
+      </div>
+
+      <div id="products-msg" class="dialog-msg" hidden></div>
+
+      <div id="products-list" class="products-list" aria-label="Products list"></div>
+
+      <div id="products-empty" class="dialog-empty" hidden>
+        No products found. Add items in <strong>Products &amp; Services</strong>.
+      </div>
+    </dialog>
+
+    <script type="module" src="./quote.js"></script>
   </body>
 </html>
