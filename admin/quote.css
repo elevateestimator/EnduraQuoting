@@ -245,6 +245,10 @@ body{
   letter-spacing: .12em;
   text-transform: uppercase;
   color: #6b7280;
+  /* Align label directly above the centered value */
+  display: block;
+  width: 100%;
+  text-align: center;
 }
 .meta-field input{
   width:100%;
