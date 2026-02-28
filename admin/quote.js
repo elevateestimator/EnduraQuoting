@@ -1032,6 +1032,7 @@ function computeCutPositionsPx(clone, scaleFactor, idealPageHeightPxCanvas) {
 
 function buildPdfClone() {
   const clone = quotePageEl.cloneNode(true);
+  clone.classList.add("pdf-export");
 
   // Remove screen-only controls (add/remove buttons etc.)
   clone.querySelectorAll(".no-print").forEach((n) => n.remove());
@@ -1047,11 +1048,61 @@ function buildPdfClone() {
   clone.style.boxSizing = "border-box";
   clone.style.padding = getComputedStyle(quotePageEl).padding;
 
+  // Normalize Bill To + Job Site blocks so partial info doesn’t look scattered in the PDF
+  const billFields = clone.querySelector(".bill-fields");
+  if (billFields) {
+    const name = billFields.querySelector('[data-bind="client_name"]')?.value?.trim() || "";
+    const phone = billFields.querySelector('[data-bind="client_phone"]')?.value?.trim() || "";
+    const email = billFields.querySelector('[data-bind="client_email"]')?.value?.trim() || "";
+    const addr = billFields.querySelector('[data-bind="client_addr"]')?.value?.trim() || "";
+
+    const contact = document.createElement("div");
+    contact.className = "pdf-contact";
+
+    const nameEl = document.createElement("div");
+    nameEl.className = "pdf-contact-name";
+    nameEl.textContent = name || "Client";
+    contact.appendChild(nameEl);
+
+    const subParts = [];
+    if (phone) subParts.push(phone);
+    if (email) subParts.push(email);
+    if (subParts.length) {
+      const subEl = document.createElement("div");
+      subEl.className = "pdf-contact-sub";
+      subEl.textContent = subParts.join(" • ");
+      contact.appendChild(subEl);
+    }
+
+    if (addr) {
+      const addrEl = document.createElement("div");
+      addrEl.className = "pdf-contact-addr";
+      addrEl.textContent = addr;
+      contact.appendChild(addrEl);
+    }
+
+    billFields.replaceWith(contact);
+  }
+
+  const jobFields = clone.querySelector(".job-fields");
+  if (jobFields) {
+    const loc = jobFields.querySelector('[data-bind="project_location"]')?.value?.trim() || "";
+    const field = document.createElement("div");
+    field.className = "pdf-field";
+    field.textContent = loc || "Same as billing address";
+
+    const card = jobFields.closest(".card");
+    card?.querySelectorAll(".helper").forEach((n) => n.remove());
+
+    jobFields.innerHTML = "";
+    jobFields.appendChild(field);
+  }
+
   // Replace inputs/textareas with clean, printed-looking text blocks (no “typing boxes”)
   clone.querySelectorAll("input, textarea, select").forEach((el) => {
     if (el.type === "checkbox") {
       const mark = document.createElement("span");
-      mark.textContent = el.checked ? "✓" : "—";
+      mark.textContent = el.checked ? "✓" : "";
       mark.style.display = "inline-block";
       mark.style.width = "100%";
       mark.style.textAlign = "center";
@@ -1114,7 +1165,7 @@ function buildPdfClone() {
         out.style.minHeight = "34px";
 
         if (bindKey === "quote_no") {
-          out.style.letterSpacing = ".12em";
+          out.style.letterSpacing = ".10em";
         }
       } else if (inBill || inJob) {
         out.style.textAlign = "left";
