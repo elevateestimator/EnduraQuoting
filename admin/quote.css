@@ -235,13 +235,15 @@ body{
   background: #f8fafc;
   padding: 12px;
   display:grid;
-  grid-template-columns: 1.4fr 1fr 1fr 1.2fr;
+  /* Equal columns so the row feels perfectly centered */
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 
 .meta-field{
   display:grid;
   gap: 6px;
+  text-align: center;
 }
 .meta-field span{
   font-size: 10px;
