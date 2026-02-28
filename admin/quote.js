@@ -1281,6 +1281,9 @@ function applyItemsTablePdfRules(table) {
 
   if (!anyShowsBreakdown) {
     removeTableColumns(table, breakdownCols);
+    // After collapsing columns, re-balance widths so large totals never
+    // spill outside the right edge in the PDF (eg. $122,000.00).
+    tuneCollapsedItemsTable(table);
     return;
   }
 
@@ -1292,6 +1295,16 @@ function applyItemsTablePdfRules(table) {
       if (cell) cell.textContent = "";
     });
   });
+}
+
+function tuneCollapsedItemsTable(table) {
+  // Collapsed layout is: 0 Item | 1 Tax | 2 Line Total
+  const cg = table.querySelector("colgroup");
+  if (cg && cg.children.length === 3) {
+    cg.children[0].style.width = "auto";
+    cg.children[1].style.width = "10%";
+    cg.children[2].style.width = "22%";
+  }
 }
 
 function removeTableColumns(table, colIndexes) {

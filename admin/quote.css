@@ -431,6 +431,8 @@ textarea.autogrow{
 .items-table tbody td{
   border-bottom: 1px solid var(--border);
   vertical-align: top;
+  /* Keep non-input text (eg. Line Total) aligned with our 13px doc typography */
+  font-size: 13px;
 }
 
 .items-table tbody tr:nth-child(even) td{
@@ -450,7 +452,14 @@ textarea.autogrow{
 .items-table .center{ text-align:center; }
 .items-table .slim{ width: 1%; white-space: nowrap; }
 .items-table .line-total{ text-align:right; padding: 0; font-weight: 950; }
-.items-table .line-total span{ display:block; padding: 10px; }
+.items-table .line-total span{
+  display:block;
+  padding: 10px;
+  font-size: 13px;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 
 /* Item cell (name + description) */
 .items-table .i-name{
