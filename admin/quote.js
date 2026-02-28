@@ -1047,7 +1047,7 @@ function buildPdfClone() {
   clone.style.boxSizing = "border-box";
   clone.style.padding = getComputedStyle(quotePageEl).padding;
 
-  // Replace inputs/textareas with plain blocks (clean PDF)
+  // Replace inputs/textareas with clean, printed-looking text blocks (no “typing boxes”)
   clone.querySelectorAll("input, textarea, select").forEach((el) => {
     if (el.type === "checkbox") {
       const mark = document.createElement("span");
@@ -1061,12 +1061,35 @@ function buildPdfClone() {
 
     const inItems = !!el.closest(".items-table");
     const inTotals = !!el.closest(".totals-grid");
+    const inMeta = !!el.closest(".meta-strip");
+    const inBill = !!el.closest(".bill-fields");
+    const inJob  = !!el.closest(".job-fields");
+    const inInline = !!el.closest(".inline");
     const isArea = el.tagName === "TEXTAREA";
 
+    const bindKey = el.getAttribute?.("data-bind") || "";
+
+    // Prefer human-readable values in the PDF
+    let value = "";
+    if (el.tagName === "SELECT") {
+      value = el.options?.[el.selectedIndex]?.textContent ?? el.value ?? "";
+    } else {
+      value = el.value ?? "";
+    }
+    if (el.type === "date" && value) value = formatDateDisplay(value);
+
     const out = document.createElement("div");
-    out.textContent = el.value ?? "";
+    out.textContent = value;
     out.style.whiteSpace = "pre-wrap";
     out.style.display = "block";
+
+    // Base typography for PDF text replacements
+    out.style.border = "0";
+    out.style.background = "transparent";
+    out.style.color = "#0b0f14";
+    out.style.fontSize = isArea ? "12.5px" : "13px";
+    out.style.lineHeight = isArea ? "1.55" : "1.35";
+    out.style.padding = "0";
 
     if (inItems) {
       out.style.padding = "10px";
@@ -1078,13 +1101,43 @@ function buildPdfClone() {
       out.style.fontWeight = "900";
       out.style.textAlign = "right";
     } else {
-      out.style.border = "1px solid #d9dee8";
-      out.style.borderRadius = "10px";
-      out.style.padding = "10px 12px";
-      out.style.background = "#ffffff";
-      out.style.fontSize = "13px";
-      out.style.color = "#0b0f14";
-      if (!isArea) out.style.textAlign = "center";
+      // Everything else should read like printed content
+      out.style.border = "0";
+      out.style.background = "transparent";
+
+      if (inMeta) {
+        // Keep meta strip height + create a “printed label/value” feel
+        out.style.textAlign = "center";
+        out.style.fontWeight = "950";
+        out.style.letterSpacing = ".02em";
+        out.style.padding = "9px 0 7px";
+        out.style.minHeight = "34px";
+
+        if (bindKey === "quote_no") {
+          out.style.letterSpacing = ".12em";
+        }
+      } else if (inBill || inJob) {
+        out.style.textAlign = "left";
+        out.style.padding = "2px 0";
+        out.style.minHeight = "18px";
+
+        if (bindKey === "client_name") {
+          out.style.fontWeight = "950";
+          out.style.fontSize = "14px";
+        } else {
+          out.style.fontWeight = "700";
+        }
+      } else if (inInline) {
+        // Deposit due row – keep it clean but aligned like a number
+        out.style.textAlign = "right";
+        out.style.fontWeight = "950";
+        out.style.minWidth = "160px";
+      } else {
+        // Default: plain printed text (no borders)
+        out.style.textAlign = isArea ? "left" : "left";
+        out.style.fontWeight = isArea ? "700" : "700";
+        if (isArea) out.style.paddingTop = "2px";
+      }
     }
 
     el.parentNode.replaceChild(out, el);

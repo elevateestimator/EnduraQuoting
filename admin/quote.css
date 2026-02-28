@@ -687,8 +687,9 @@ textarea.autogrow{
   background: transparent;
   overflow: hidden;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  /* Align the logo with the company name (less “droop”) */
+  align-items: flex-start;
+  justify-content: flex-start;
 }
 
 .doc-logo{
@@ -703,6 +704,9 @@ textarea.autogrow{
   display: block;
   transform: scale(1.08);
   transform-origin: left center;
+  /* Your logo file has built-in whitespace; nudge up slightly for optical alignment */
+  position: relative;
+  top: -4px;
 }
 
 /* =========================================================
