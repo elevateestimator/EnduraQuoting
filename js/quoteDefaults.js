@@ -47,6 +47,7 @@ export function makeDefaultQuoteData({ customer_name = "", customer_email = "" }
     items: [],
 
     // Money + calc
+    tax_name: "Tax",
     tax_rate: 13,
     fees_cents: 0,
 

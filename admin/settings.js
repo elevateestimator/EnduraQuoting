@@ -32,6 +32,8 @@ const companyPermsNote = document.getElementById("company-perms-note");
 
 // Quote defaults
 const companyPaymentTermsEl = document.getElementById("company_payment_terms");
+const companyTaxNameEl = document.getElementById("company_tax_name");
+const companyTaxRateEl = document.getElementById("company_tax_rate");
 const saveQuoteDefaultsBtn = document.getElementById("btn-save-quote-defaults");
 const quoteDefaultsPermsNote = document.getElementById("quote-defaults-perms-note");
 
@@ -209,6 +211,9 @@ function fillCompanyForm(company) {
   companyAddressEl.value = company?.address || "";
 
   if (companyPaymentTermsEl) companyPaymentTermsEl.value = company?.payment_terms || "";
+
+  if (companyTaxNameEl) companyTaxNameEl.value = company?.tax_name || "Tax";
+  if (companyTaxRateEl) companyTaxRateEl.value = company?.tax_rate ?? "";
 
   // Logo (public url stored)
   if (company?.logo_url) {
@@ -417,6 +422,15 @@ function normalizeOptional(s) {
   return v ? v : null;
 }
 
+function normalizeNumber(s, { min = 0, max = 100 } = {}) {
+  const v = sanitizeString(s);
+  if (!v) return null;
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  const clamped = Math.min(Math.max(n, min), max);
+  return clamped;
+}
+
 async function saveCompany() {
   if (!state.isAdmin) {
     toast("Only owners/admins can edit company settings.");
@@ -472,6 +486,8 @@ async function saveQuoteDefaults() {
   try {
     const updates = {
       payment_terms: normalizeOptional(companyPaymentTermsEl?.value),
+      tax_name: normalizeOptional(companyTaxNameEl?.value),
+      tax_rate: normalizeNumber(companyTaxRateEl?.value, { min: 0, max: 100 }),
     };
 
     const { data, error } = await supabase
@@ -485,12 +501,14 @@ async function saveQuoteDefaults() {
 
     state.company = data;
     if (companyPaymentTermsEl) companyPaymentTermsEl.value = data?.payment_terms || "";
+    if (companyTaxNameEl) companyTaxNameEl.value = data?.tax_name || "Tax";
+    if (companyTaxRateEl) companyTaxRateEl.value = data?.tax_rate ?? "";
     toast("Quote defaults saved.");
   } catch (e) {
     // If the column hasn't been added yet, Supabase will error here.
     setError(
       e?.message ||
-        "Failed to save quote defaults. Make sure you added companies.payment_terms in Supabase."
+        "Failed to save quote defaults. Make sure you added companies.payment_terms, companies.tax_name, and companies.tax_rate in Supabase."
     );
   } finally {
     saveQuoteDefaultsBtn.disabled = !state.isAdmin;

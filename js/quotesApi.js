@@ -245,6 +245,17 @@ if (payload.use_company_terms !== false) {
 }
 
 
+// Tax snapshot (name + rate) from Company Settings.
+// Stored inside quote.data so historical quotes do NOT change if settings change later.
+if (payload.use_company_tax !== false) {
+  const tn = safeStr(company.tax_name) || safeStr(data.tax_name) || "Tax";
+  const tr = Number(company.tax_rate);
+
+  data.tax_name = tn;
+  if (Number.isFinite(tr)) data.tax_rate = tr;
+}
+
+
       // Company (letterhead) snapshot
       if (payload.use_company_letterhead !== false) {
         const { addr1, addr2 } = splitAddressLines(company.address);

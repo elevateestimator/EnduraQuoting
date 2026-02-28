@@ -273,6 +273,28 @@
     ></textarea>
   </label>
 
+  <div class="form-grid" style="margin-top: 12px">
+    <label class="field">
+      <span>Tax name</span>
+      <input id="company_tax_name" type="text" placeholder="HST" />
+    </label>
+
+    <label class="field">
+      <span>Tax rate (%)</span>
+      <input
+        id="company_tax_rate"
+        type="number"
+        inputmode="decimal"
+        step="0.01"
+        min="0"
+        max="100"
+        placeholder="13"
+      />
+    </label>
+  </div>
+
+
+
   <div class="notice muted small" style="margin-top: 10px" id="quote-defaults-note">
     These terms are copied into new quotes. You can still edit terms per quote when needed.
   </div>
