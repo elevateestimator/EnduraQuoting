@@ -86,7 +86,8 @@ body{
 
 .btn.brand{
   border:0;
-  background: linear-gradient(90deg, var(--brand), var(--brand-dark));
+  background: var(--brand);
+  background-image: none;
   color:#ffffff;
 }
 .btn.brand:hover{ filter: brightness(0.96); }
@@ -204,7 +205,8 @@ body{
   color: #ffffff;
   padding: 8px 12px;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--brand), var(--brand-dark));
+  background: var(--brand);
+  background-image: none;
   box-shadow: 0 6px 18px rgba(var(--brand-rgb), 0.18);
 }
 .doc-code{
@@ -220,7 +222,8 @@ body{
 .accent-bar{
   height: 4px;
   border-radius: 4px;
-  background: linear-gradient(90deg, var(--brand), rgba(var(--brand-rgb), 0.25));
+  background: var(--brand);
+  background-image: none;
   margin-top: 10px;
 }
 
@@ -285,7 +288,8 @@ body{
   position:absolute;
   top:0; bottom:0; left:0;
   width:4px;
-  background: linear-gradient(180deg, var(--brand), var(--brand-dark));
+  background: var(--brand);
+  background-image: none;
   border-top-left-radius: 16px;
   border-bottom-left-radius: 16px;
 }
@@ -406,14 +410,20 @@ textarea.autogrow{
 }
 
 .items-table thead th{
-  background: linear-gradient(90deg, var(--brand), var(--brand-dark));
+  background: var(--brand);
+  background-image: none;
   color:#fff;
   font-size: 11px;
   letter-spacing: .10em;
   text-transform: uppercase;
   text-align:left;
   padding: 10px;
-  border-bottom: 1px solid rgba(255,255,255,.18);
+  border-bottom: 1px solid rgba(255,255,255,.22);
+  border-right: 1px solid rgba(255,255,255,.14);
+}
+
+.items-table thead th:last-child{
+  border-right: none;
 }
 
 .items-table tbody td{
