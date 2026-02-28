@@ -268,6 +268,7 @@ if (payload.use_company_tax !== false) {
           email: safeStr(company.billing_email),
           web: safeStr(company.website),
           logo_url: safeStr(company.logo_url),
+          brand_color: safeStr(company.brand_color) || "#000000",
           currency: safeStr(company.default_currency) || row.currency || "CAD",
         };
       }

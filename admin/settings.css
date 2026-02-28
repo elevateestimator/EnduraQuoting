@@ -1083,6 +1083,10 @@ input:focus{
   gap: 10px;
 }
 
+.field.span-2{
+  grid-column: 1 / -1;
+}
+
 textarea{
   width: 100%;
   padding: 12px 12px;
@@ -1272,6 +1276,41 @@ select{
 select:focus{
   border-color: rgba(31, 78, 216, 0.55);
   box-shadow: 0 0 0 4px rgba(31, 78, 216, 0.12);
+}
+
+/* Brand color input (hex + picker) */
+.color-row{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+}
+
+.color-row input[type="text"]{
+  flex: 1;
+}
+
+.color-row input[type="color"]{
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.color-row input[type="color"]::-webkit-color-swatch-wrapper{
+  padding: 0;
+}
+
+.color-row input[type="color"]::-webkit-color-swatch{
+  border: 0;
+  border-radius: 11px;
+}
+
+.color-row input[type="color"]::-moz-color-swatch{
+  border: 0;
+  border-radius: 11px;
 }
 
 @media (max-width: 1040px){

@@ -13,6 +13,7 @@ export const DEFAULT_COMPANY = {
   email: "",
   web: "",
   logo_url: "",
+  brand_color: "#000000",
   currency: "CAD",
 };
 

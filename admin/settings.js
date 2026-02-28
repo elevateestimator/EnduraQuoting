@@ -27,6 +27,8 @@ const companyPhoneEl = document.getElementById("company_phone");
 const companyWebsiteEl = document.getElementById("company_website");
 const companyCurrencyEl = document.getElementById("company_currency");
 const companyAddressEl = document.getElementById("company_address");
+const companyBrandColorEl = document.getElementById("company_brand_color");
+const companyBrandColorPickerEl = document.getElementById("company_brand_color_picker");
 const saveCompanyBtn = document.getElementById("btn-save-company");
 const companyPermsNote = document.getElementById("company-perms-note");
 
@@ -210,6 +212,11 @@ function fillCompanyForm(company) {
   companyCurrencyEl.value = company?.default_currency || "CAD";
   companyAddressEl.value = company?.address || "";
 
+  // Brand color (optional). Default black.
+  if (companyBrandColorEl || companyBrandColorPickerEl) {
+    syncBrandColorInputs(company?.brand_color || "#000000");
+  }
+
   if (companyPaymentTermsEl) companyPaymentTermsEl.value = company?.payment_terms || "";
 
   if (companyTaxNameEl) companyTaxNameEl.value = company?.tax_name || "Tax";
@@ -242,7 +249,15 @@ function applyPermissions() {
 
   // Company fields
   const companyDisabled = !isAdmin;
-  for (const el of [companyNameEl, companyPhoneEl, companyWebsiteEl, companyCurrencyEl, companyAddressEl]) {
+  for (const el of [
+    companyNameEl,
+    companyPhoneEl,
+    companyWebsiteEl,
+    companyCurrencyEl,
+    companyAddressEl,
+    companyBrandColorEl,
+    companyBrandColorPickerEl,
+  ]) {
     el.disabled = companyDisabled;
   }
   saveCompanyBtn.disabled = companyDisabled;
@@ -431,6 +446,29 @@ function normalizeNumber(s, { min = 0, max = 100 } = {}) {
   return clamped;
 }
 
+function normalizeHexColor(s) {
+  let v = sanitizeString(s);
+  if (!v) return null;
+
+  // Allow "000000" or "#000000" or "000" / "#000"
+  if (!v.startsWith("#")) v = `#${v}`;
+
+  if (/^#[0-9a-fA-F]{3}$/.test(v)) {
+    const h = v.slice(1);
+    v = "#" + h.split("").map((c) => c + c).join("");
+  }
+
+  if (!/^#[0-9a-fA-F]{6}$/.test(v)) return null;
+
+  return v.toUpperCase();
+}
+
+function syncBrandColorInputs(value) {
+  const hex = normalizeHexColor(value) || "#000000";
+  if (companyBrandColorEl && companyBrandColorEl.value !== hex) companyBrandColorEl.value = hex;
+  if (companyBrandColorPickerEl && companyBrandColorPickerEl.value !== hex) companyBrandColorPickerEl.value = hex;
+}
+
 async function saveCompany() {
   if (!state.isAdmin) {
     toast("Only owners/admins can edit company settings.");
@@ -442,12 +480,15 @@ async function saveCompany() {
   saveCompanyBtn.textContent = "Saving…";
 
   try {
+    const brand = normalizeHexColor(companyBrandColorEl?.value) || "#000000";
+
     const updates = {
       name: sanitizeString(companyNameEl.value) || state.company.name,
       phone: normalizeOptional(companyPhoneEl.value),
       website: normalizeOptional(companyWebsiteEl.value),
       address: normalizeOptional(companyAddressEl.value),
       default_currency: sanitizeString(companyCurrencyEl.value) || "CAD",
+      brand_color: brand,
     };
 
     const { data, error } = await supabase
@@ -775,6 +816,23 @@ async function init() {
 
   if (saveProfileBtn) saveProfileBtn.addEventListener("click", saveProfile);
   if (sendResetBtn) sendResetBtn.addEventListener("click", sendResetEmail);
+
+  // Brand color sync (hex <-> picker)
+  if (companyBrandColorEl) {
+    companyBrandColorEl.addEventListener("input", () => {
+      const hex = normalizeHexColor(companyBrandColorEl.value);
+      if (hex && companyBrandColorPickerEl) companyBrandColorPickerEl.value = hex;
+    });
+    companyBrandColorEl.addEventListener("blur", () => {
+      // Snap to a clean, valid hex on blur
+      syncBrandColorInputs(companyBrandColorEl.value);
+    });
+  }
+  if (companyBrandColorPickerEl) {
+    companyBrandColorPickerEl.addEventListener("input", () => {
+      if (companyBrandColorEl) companyBrandColorEl.value = companyBrandColorPickerEl.value.toUpperCase();
+    });
+  }
 
   wireLogoPicker();
   wireInvite();

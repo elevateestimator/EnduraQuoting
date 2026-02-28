@@ -102,6 +102,56 @@ function debounce(fn, wait = 160) {
   };
 }
 
+/* ===== Brand color helpers (company theme) ===== */
+function normalizeHexColor(input) {
+  let v = String(input ?? "").trim();
+  if (!v) return null;
+  if (!v.startsWith("#")) v = `#${v}`;
+  if (/^#[0-9a-fA-F]{3}$/.test(v)) {
+    const h = v.slice(1);
+    v = "#" + h.split("").map((c) => c + c).join("");
+  }
+  if (!/^#[0-9a-fA-F]{6}$/.test(v)) return null;
+  return v.toUpperCase();
+}
+
+function hexToRgb(hex) {
+  const h = normalizeHexColor(hex);
+  if (!h) return null;
+  const r = parseInt(h.slice(1, 3), 16);
+  const g = parseInt(h.slice(3, 5), 16);
+  const b = parseInt(h.slice(5, 7), 16);
+  return { r, g, b };
+}
+
+function clamp255(n) {
+  return Math.min(255, Math.max(0, Math.round(n)));
+}
+
+function rgbToHex({ r, g, b }) {
+  const to2 = (n) => clamp255(n).toString(16).padStart(2, "0");
+  return `#${to2(r)}${to2(g)}${to2(b)}`.toUpperCase();
+}
+
+function darkenHex(hex, amount = 0.22) {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return "#000000";
+  const f = 1 - Math.min(Math.max(amount, 0), 0.9);
+  return rgbToHex({ r: rgb.r * f, g: rgb.g * f, b: rgb.b * f });
+}
+
+function applyQuoteBrandColor(hex) {
+  if (!quotePageEl) return;
+
+  const brand = normalizeHexColor(hex) || "#000000";
+  const rgb = hexToRgb(brand) || { r: 0, g: 0, b: 0 };
+  const dark = darkenHex(brand, 0.22);
+
+  quotePageEl.style.setProperty("--brand", brand);
+  quotePageEl.style.setProperty("--brand-dark", dark);
+  quotePageEl.style.setProperty("--brand-rgb", `${rgb.r}, ${rgb.g}, ${rgb.b}`);
+}
+
 
 /* ===== Money helpers ===== */
 function parseMoneyToCents(value) {
@@ -268,6 +318,7 @@ function companyToQuoteCompany(company) {
     email: safeStr(company?.billing_email) || safeStr(company?.owner_email),
     web: safeStr(company?.website),
     logo_url: safeStr(company?.logo_url),
+    brand_color: safeStr(company?.brand_color) || "#000000",
     currency: safeStr(company?.default_currency) || "CAD",
   };
 }
@@ -825,6 +876,9 @@ function fillUIFromData(qRow, data, ctx) {
   // Company snapshot (customer-facing letterhead)
   const company = ensureCompanySnapshot(data, ctx);
   applyCompanyToDom(company);
+
+  // Apply the company brand color to the quote (PDF + customer view consistency)
+  applyQuoteBrandColor(company?.brand_color || ctx?.company?.brand_color);
 
   // Prepared-by (quote creator)
   const preparedBy = ensurePreparedBy(data, ctx);
