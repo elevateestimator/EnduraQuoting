@@ -1283,6 +1283,14 @@ async function main() {
 
   const data = mergeDefaults(qRow.data, defaults);
 
+// If this quote has no saved terms yet (older quotes / imported quotes),
+// pull the current Company Settings *once* as a starting point.
+// After you save, the terms are stored on the quote and won't change when Settings change.
+if (!safeStr(data.terms) && safeStr(ctx?.company?.payment_terms)) {
+  data.terms = safeStr(ctx.company.payment_terms);
+}
+
+
   // If this quote is linked to a customer, pull in their phone/address so Bill To is pre-filled.
   ensureBillToFromQuoteRow(data, qRow);
   await hydrateBillToFromCustomer(data, qRow);

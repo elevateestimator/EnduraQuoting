@@ -235,13 +235,18 @@ export async function createQuote(payload = {}) {
         row.currency = safeStr(company.default_currency);
       }
 
-      // Payment & Terms snapshot
-      if (!safeStr(data.terms) && safeStr(company.payment_terms)) {
-        data.terms = safeStr(company.payment_terms);
-      }
+      
+// Payment & Terms snapshot (always pulled from Company Settings for new quotes)
+// This prevents old hardcoded defaults from leaking between tenants.
+// If you ever need to create a quote with custom terms programmatically:
+//   createQuote({ ..., use_company_terms: false, data: { terms: "..." } })
+if (payload.use_company_terms !== false) {
+  data.terms = safeStr(company.payment_terms);
+}
+
 
       // Company (letterhead) snapshot
-      if (!data.company || typeof data.company !== "object" || !safeStr(data.company.company_id)) {
+      if (payload.use_company_letterhead !== false) {
         const { addr1, addr2 } = splitAddressLines(company.address);
         data.company = {
           company_id: company.id,
