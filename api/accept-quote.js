@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import crypto from "crypto";
 
 /**
  * POST /api/accept-quote
@@ -65,7 +66,7 @@ export default async function handler(req, res) {
 
     const { data: quote, error } = await supabase
       .from("quotes")
-      .select("id,status,customer_name,customer_email,quote_no,data")
+      .select("id,status,customer_name,customer_email,quote_no,total_cents,data")
       .eq("id", quote_id)
       .single();
 
@@ -98,11 +99,44 @@ export default async function handler(req, res) {
     const billName = data?.bill_to?.client_name;
     const signerName = (billName || quote.customer_name || "Client").trim();
 
+    // =========================================================
+    // Acceptance audit trail (IP, UA, timestamp, document hash)
+    // =========================================================
+    const client_context = sanitizeClientContext(req.body?.client_context);
+    const auditBase = buildAcceptanceAudit(req);
+
+    // Snapshot the quote "document" at signing time so later edits don't destroy evidence.
+    const document_snapshot = buildDocumentSnapshot(data);
+
+    // Deterministic hashes (helps prove integrity later)
+    const document_sha256 = sha256Hex(
+      stableStringify({
+        quote_id: quote.id,
+        quote_no: quote.quote_no ?? null,
+        total_cents: quote.total_cents ?? null,
+        data: document_snapshot,
+      })
+    );
+    const signature_sha256 = sha256Hex(signature_data_url);
+
     data.acceptance = {
+      version: 2,
       accepted_at,
       accepted_date,
       name: signerName,
+      email: data?.bill_to?.client_email || quote.customer_email || null,
       signature_image_data_url: signature_data_url,
+
+      // Internal-only evidence (we strip this from the public customer API response)
+      audit: {
+        ...auditBase,
+        client_context: client_context || null,
+        signature_sha256,
+        document_sha256,
+      },
+
+      // Immutable snapshot of what was accepted (no signature, no runtime fields)
+      document_snapshot,
     };
 
     await supabase
@@ -248,6 +282,203 @@ async function sendPostmark({ token, payload }) {
 }
 
 
+
+
+/* =========================================================
+   Acceptance audit helpers (server-side)
+   ========================================================= */
+
+function getHeader(req, name) {
+  try {
+    const key = String(name || "").toLowerCase();
+    const v = (req?.headers && (req.headers[key] ?? req.headers[name])) ?? null;
+    if (Array.isArray(v)) return String(v[0] ?? "");
+    return v ? String(v) : "";
+  } catch {
+    return "";
+  }
+}
+
+function truncate(s, max = 500) {
+  const str = String(s || "");
+  if (!max || max <= 0) return str;
+  return str.length > max ? str.slice(0, max) : str;
+}
+
+function getClientIp(req) {
+  const xff = getHeader(req, "x-forwarded-for");
+  if (xff) {
+    // "client, proxy1, proxy2"
+    return xff.split(",")[0].trim();
+  }
+
+  const realIp = getHeader(req, "x-real-ip");
+  if (realIp) return realIp.trim();
+
+  const cfIp = getHeader(req, "cf-connecting-ip");
+  if (cfIp) return cfIp.trim();
+
+  return "";
+}
+
+function sanitizeClientContext(ctx) {
+  if (!ctx || typeof ctx !== "object") return null;
+
+  const out = {};
+
+  const s = (v, max = 200) => {
+    const str = String(v || "").trim();
+    if (!str) return null;
+    return truncate(str, max);
+  };
+
+  const n = (v) => {
+    const num = Number(v);
+    return Number.isFinite(num) ? num : null;
+  };
+
+  const timezone = s(ctx.timezone, 80);
+  const locale = s(ctx.locale, 40);
+  const platform = s(ctx.platform, 80);
+  const page_url = s(ctx.page_url, 600);
+  const referrer = s(ctx.referrer, 600);
+
+  const tz_offset_min = n(ctx.tz_offset_min);
+
+  if (timezone) out.timezone = timezone;
+  if (Number.isFinite(tz_offset_min)) out.tz_offset_min = tz_offset_min;
+  if (locale) out.locale = locale;
+  if (platform) out.platform = platform;
+  if (page_url) out.page_url = page_url;
+  if (referrer) out.referrer = referrer;
+
+  if (ctx.screen && typeof ctx.screen === "object") {
+    const sw = n(ctx.screen.w);
+    const sh = n(ctx.screen.h);
+    const dpr = n(ctx.screen.dpr);
+
+    const screen = {};
+    if (Number.isFinite(sw) && sw > 0 && sw < 30000) screen.w = sw;
+    if (Number.isFinite(sh) && sh > 0 && sh < 30000) screen.h = sh;
+    if (Number.isFinite(dpr) && dpr > 0 && dpr < 20) screen.dpr = dpr;
+
+    if (Object.keys(screen).length) out.screen = screen;
+  }
+
+  return Object.keys(out).length ? out : null;
+}
+
+function deepCloneJson(obj) {
+  try {
+    return obj ? JSON.parse(JSON.stringify(obj)) : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Store a snapshot of the quote contents at the moment of signing.
+ * This protects you if the quote is edited later.
+ *
+ * We intentionally remove:
+ * - acceptance (signature + audit)
+ * - runtime fields used for rendering
+ * - embedded logo binaries (not important for contract terms)
+ */
+function buildDocumentSnapshot(data) {
+  const snap = deepCloneJson(data || {});
+
+  // Remove acceptance (we store it separately)
+  try { delete snap.acceptance; } catch {}
+
+  // Remove render/runtime-only fields (non-contract evidence)
+  try { delete snap._supabase_url; } catch {}
+  try { delete snap.supabase_url; } catch {}
+  try { delete snap.logo_bucket; } catch {}
+  try { delete snap.logoBucket; } catch {}
+
+  // Remove embedded logo payloads to keep snapshot lean
+  if (snap.company && typeof snap.company === "object") {
+    const lu = String(snap.company.logo_url || "");
+    if (lu.startsWith("data:image/")) snap.company.logo_url = "[embedded image omitted]";
+    const ldu = String(snap.company.logo_data_url || "");
+    if (ldu.startsWith("data:image/")) snap.company.logo_data_url = "[embedded image omitted]";
+  }
+
+  return snap;
+}
+
+function buildAcceptanceAudit(req) {
+  const ip = getClientIp(req);
+
+  const audit = {
+    ip: ip || null,
+    x_forwarded_for: truncate(getHeader(req, "x-forwarded-for"), 400) || null,
+    user_agent: truncate(getHeader(req, "user-agent"), 400) || null,
+    accept_language: truncate(getHeader(req, "accept-language"), 200) || null,
+    referrer: truncate(getHeader(req, "referer") || getHeader(req, "referrer"), 600) || null,
+
+    // Helpful when investigating edge cases / fraud
+    vercel_id: truncate(getHeader(req, "x-vercel-id"), 120) || null,
+    sec_ch_ua: truncate(getHeader(req, "sec-ch-ua"), 300) || null,
+    sec_ch_ua_platform: truncate(getHeader(req, "sec-ch-ua-platform"), 80) || null,
+    sec_ch_ua_mobile: truncate(getHeader(req, "sec-ch-ua-mobile"), 40) || null,
+  };
+
+  const geo = {};
+  const country = truncate(getHeader(req, "x-vercel-ip-country"), 8);
+  const region = truncate(getHeader(req, "x-vercel-ip-country-region"), 80);
+  const city = truncate(getHeader(req, "x-vercel-ip-city"), 120);
+
+  if (country) geo.country = country;
+  if (region) geo.region = region;
+  if (city) geo.city = city;
+
+  const lat = Number(getHeader(req, "x-vercel-ip-latitude"));
+  const lon = Number(getHeader(req, "x-vercel-ip-longitude"));
+  if (Number.isFinite(lat)) geo.latitude = lat;
+  if (Number.isFinite(lon)) geo.longitude = lon;
+
+  if (Object.keys(geo).length) audit.geo = geo;
+
+  return audit;
+}
+
+/**
+ * Stable stringify (sorted keys) so hashes are deterministic.
+ */
+function stableStringify(value) {
+  if (value === null || value === undefined) return "null";
+
+  const t = typeof value;
+  if (t === "number" || t === "boolean") return String(value);
+  if (t === "string") return JSON.stringify(value);
+
+  if (Array.isArray(value)) {
+    return "[" + value.map((v) => stableStringify(v)).join(",") + "]";
+  }
+
+  if (t === "object") {
+    const keys = Object.keys(value).sort();
+    const parts = keys.map((k) => JSON.stringify(k) + ":" + stableStringify(value[k]));
+    return "{" + parts.join(",") + "}";
+  }
+
+  // functions / symbols shouldn't exist in our input; fall back to JSON encoding
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function sha256Hex(input) {
+  try {
+    return crypto.createHash("sha256").update(String(input || ""), "utf8").digest("hex");
+  } catch {
+    return "";
+  }
+}
 function isYmd(s) {
   return /^\d{4}-\d{2}-\d{2}$/.test(String(s || ""));
 }

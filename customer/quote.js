@@ -72,6 +72,24 @@ function ymdTodayLocal() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function buildClientContext() {
+  const ctx = {};
+  try { ctx.page_url = String(window.location.href || ""); } catch {}
+  try { ctx.referrer = String(document.referrer || ""); } catch {}
+  try { ctx.timezone = String(Intl.DateTimeFormat().resolvedOptions().timeZone || ""); } catch {}
+  try { ctx.tz_offset_min = new Date().getTimezoneOffset(); } catch {}
+  try { ctx.locale = String(navigator.language || ""); } catch {}
+  try { ctx.platform = String(navigator.platform || ""); } catch {}
+  try {
+    ctx.screen = {
+      w: Number(window.screen?.width || 0) || null,
+      h: Number(window.screen?.height || 0) || null,
+      dpr: Number(window.devicePixelRatio || 1) || 1,
+    };
+  } catch {}
+  return ctx;
+}
+
 function fmtDate(isoYmd) {
   if (!isoYmd) return "—";
   try {
@@ -766,6 +784,7 @@ async function submitSignature() {
       quote_id: _quoteRow.id,
       signature_data_url: dataUrl,
       accepted_date,
+      client_context: buildClientContext(),
     });
 
     // Optimistic UI (instant feedback) — we'll re-fetch right after.
