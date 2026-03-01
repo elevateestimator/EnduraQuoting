@@ -262,7 +262,8 @@ function applyPermissions() {
   }
   saveCompanyBtn.disabled = companyDisabled;
   pickLogoBtn.disabled = companyDisabled;
-  uploadLogoBtn.disabled = companyDisabled;
+  // Keep “Upload” disabled until a file is selected (avoids confusion).
+  uploadLogoBtn.disabled = companyDisabled || !(logoFileEl?.files && logoFileEl.files.length);
 
   if (companyPermsNote) companyPermsNote.hidden = isAdmin;
 
@@ -491,6 +492,31 @@ async function saveCompany() {
       brand_color: brand,
     };
 
+
+    // If a new logo file is selected, persist it when the user clicks “Save”.
+    // Otherwise the preview is only local and will revert on refresh.
+    const pendingLogoFile = logoFileEl?.files?.[0] || null;
+    if (pendingLogoFile) {
+      if (pendingLogoFile.type !== "image/png") {
+        throw new Error("Please upload a PNG file for the company logo.");
+      }
+
+      const embeddedDataUrl = await fileToEmbeddedLogoDataUrl(pendingLogoFile);
+      updates.logo_url = embeddedDataUrl;
+
+      // Optional: also upload to Storage as a backup (non-blocking).
+      try {
+        const path = `${state.company.id}/logo.png`;
+        const { error: upErr } = await supabase.storage
+          .from("company-logos")
+          .upload(path, pendingLogoFile, { upsert: true, contentType: "image/png" });
+
+        if (upErr) console.warn("Logo Storage upload error:", upErr);
+      } catch (e) {
+        console.warn("Logo Storage upload exception:", e);
+      }
+    }
+
     const { data, error } = await supabase
       .from("companies")
       .update(updates)
@@ -502,6 +528,14 @@ async function saveCompany() {
 
     state.company = data;
     fillCompanyForm(data);
+
+    if (pendingLogoFile) {
+      // Clear pending logo selection now that it's saved.
+      logoFileEl.value = "";
+      uploadLogoBtn.disabled = true;
+      setLogoMsg("Logo saved.");
+    }
+
     toast("Company saved.");
   } catch (e) {
     setError(e?.message || "Failed to save company.");
@@ -735,14 +769,28 @@ async function fileToEmbeddedLogoDataUrl(file) {
 function wireLogoPicker() {
   if (!pickLogoBtn || !logoFileEl) return;
 
-  pickLogoBtn.addEventListener("click", () => {
+  // People naturally click the logo itself — make that open the picker too.
+  const logoWrap = document.querySelector(".logo-preview-wrap");
+
+  const openPicker = () => {
     if (!state.isAdmin) {
       toast("Only owners/admins can upload a company logo.");
       return;
     }
     setLogoMsg("");
     logoFileEl.click();
-  });
+  };
+
+  if (companyLogoImg) {
+    companyLogoImg.style.cursor = "pointer";
+    companyLogoImg.addEventListener("click", openPicker);
+  }
+  if (logoWrap) {
+    logoWrap.style.cursor = "pointer";
+    logoWrap.addEventListener("click", openPicker);
+  }
+
+  pickLogoBtn.addEventListener("click", openPicker);
 
   logoFileEl.addEventListener("change", () => {
     setLogoMsg("");
@@ -756,10 +804,12 @@ function wireLogoPicker() {
       return;
     }
 
-    // Preview
+    // Preview (local) — the actual save happens when you click “Save” or “Upload”.
     const url = URL.createObjectURL(file);
     companyLogoImg.src = url;
+
     uploadLogoBtn.disabled = false;
+    setLogoMsg("Selected. Click Save to persist this logo (or click Upload).");
   });
 
   uploadLogoBtn.addEventListener("click", uploadLogo);
