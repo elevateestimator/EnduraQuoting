@@ -209,6 +209,30 @@ function initialsFromName(name) {
   return (a + b).toUpperCase();
 }
 
+function setLogoWithFallback(imgEl, fallbackEl, initials, url) {
+  if (!imgEl) return;
+
+  // Always clear previous error handler to avoid stacking.
+  imgEl.onerror = null;
+
+  const showFallback = () => {
+    try { imgEl.hidden = true; } catch {}
+    if (fallbackEl) {
+      fallbackEl.textContent = initials;
+      fallbackEl.hidden = false;
+    }
+  };
+
+  if (!url) return showFallback();
+
+  // Prefer image, but fall back to initials if it fails.
+  if (fallbackEl) fallbackEl.hidden = true;
+  imgEl.hidden = false;
+  imgEl.crossOrigin = "anonymous";
+  imgEl.onerror = showFallback;
+  imgEl.src = url;
+}
+
 /* =========================================================
    Items rendering
    ========================================================= */
@@ -399,32 +423,11 @@ function fillQuote(quote) {
   // Logo
   const logoUrl = safeStr(company.logo_url || company.logoUrl || company.logo || "");
 
-  if (logoUrl) {
-    if (siteLogoEl) {
-      siteLogoEl.crossOrigin = "anonymous";
-      siteLogoEl.src = logoUrl;
-    }
-    if (docLogoEl) {
-      docLogoEl.crossOrigin = "anonymous";
-      docLogoEl.src = logoUrl;
-    }
-    if (siteLogoFallbackEl) siteLogoFallbackEl.hidden = true;
-    if (docLogoInitialsEl) docLogoInitialsEl.hidden = true;
-  } else {
-    // Hide broken default and use initials fallback.
-    const initials = initialsFromName(companyName || "Company");
-    if (siteLogoEl) siteLogoEl.hidden = true;
-    if (siteLogoFallbackEl) {
-      siteLogoFallbackEl.textContent = initials;
-      siteLogoFallbackEl.hidden = false;
-    }
-
-    if (docLogoEl) docLogoEl.hidden = true;
-    if (docLogoInitialsEl) {
-      docLogoInitialsEl.textContent = initials;
-      docLogoInitialsEl.hidden = false;
-    }
-  }
+  // Always show a mark (logo or initials). If the image fails to load (bad URL/private bucket),
+  // fall back to initials so the customer never sees a broken header.
+  const initials = initialsFromName(companyName || "Company");
+  setLogoWithFallback(siteLogoEl, siteLogoFallbackEl, initials, logoUrl);
+  setLogoWithFallback(docLogoEl, docLogoInitialsEl, initials, logoUrl);
 
   // Contact
   const addr1 = safeStr(company.addr1 || company.address1 || company.address || "");
@@ -673,6 +676,22 @@ async function submitSignature() {
       accepted_date,
     });
 
+    // Optimistic UI (instant feedback) — we'll re-fetch right after.
+    try {
+      if (!_quoteData) _quoteData = {};
+      _quoteData.acceptance = {
+        accepted_at: new Date().toISOString(),
+        accepted_date_local: accepted_date,
+        signature_data_url: dataUrl,
+        name:
+          safeStr(_quoteData?.bill_to?.client_name) ||
+          safeStr(_quoteRow?.customer_name) ||
+          "Client",
+      };
+      _quoteRow = { ..._quoteRow, status: "accepted", data: _quoteData };
+      fillQuote(_quoteRow);
+    } catch {}
+
     // Re-fetch (ensures we render server truth)
     const refreshed = await getJSON(`/api/public-quote?id=${encodeURIComponent(_quoteRow.id)}`);
     _quoteRow = refreshed.quote;
@@ -739,54 +758,55 @@ async function waitForAssets(root, timeoutMs = 8000) {
 function createPdfSandbox() {
   const sandbox = document.createElement("div");
   sandbox.id = "pdf-sandbox";
-  sandbox.style.position = "absolute";
-  sandbox.style.left = "0";
+  // Keep it rendered (so html2canvas can measure/layout) but far off-screen.
+  sandbox.style.position = "fixed";
+  sandbox.style.left = "-12000px";
   sandbox.style.top = "0";
-  sandbox.style.opacity = "0";
+  sandbox.style.opacity = "1";
   sandbox.style.pointerEvents = "none";
   sandbox.style.background = "#ffffff";
   sandbox.style.width = `${PAGE_W_CSS}px`;
   sandbox.style.minHeight = `${PAGE_H_CSS}px`;
+  sandbox.style.zIndex = "-1";
   document.body.appendChild(sandbox);
   return sandbox;
 }
 
-function computeCutPositionsPx(clone, scaleFactor, idealPageHeightPxCanvas) {
+function computeCutPositionsCss(clone, idealPageHeightCss) {
+  // Prefer cutting after logical blocks so we don't split cards/tables across pages.
   const selectors = [".doc-header", ".grid-2", ".card", ".signatures", ".table-wrap", ".items-table", ".avoid-break"];
   const rect = clone.getBoundingClientRect();
 
-  const bottomsCss = new Set([0]);
+  const bottoms = new Set([0]);
   selectors.forEach((sel) => {
     clone.querySelectorAll(sel).forEach((el) => {
       const r = el.getBoundingClientRect();
       const bottomCss = r.bottom - rect.top;
-      if (bottomCss > 0) bottomsCss.add(Math.round(bottomCss));
+      if (bottomCss > 0) bottoms.add(Math.round(bottomCss));
     });
   });
 
-  const bottomsCanvas = Array.from(bottomsCss)
-    .map((css) => Math.round(css * scaleFactor))
-    .sort((a, b) => a - b);
-
-  const maxBottom = bottomsCanvas[bottomsCanvas.length - 1] || Math.round(clone.offsetHeight * scaleFactor);
+  const bottomsSorted = Array.from(bottoms).sort((a, b) => a - b);
+  const maxBottom = bottomsSorted[bottomsSorted.length - 1] || Math.round(clone.scrollHeight || 0);
 
   const cuts = [];
   let y = 0;
-  const minStep = Math.round(220 * scaleFactor);
+  const minStep = 220;
 
   while (y + 1 < maxBottom) {
-    const target = y + idealPageHeightPxCanvas;
+    const target = y + idealPageHeightCss;
     let candidate = Math.min(target, maxBottom);
 
-    for (let i = bottomsCanvas.length - 1; i >= 0; i--) {
-      const b = bottomsCanvas[i];
+    // Find the nearest "safe" bottom before the target.
+    for (let i = bottomsSorted.length - 1; i >= 0; i--) {
+      const b = bottomsSorted[i];
       if (b <= target && b > y + minStep) {
         candidate = b;
         break;
       }
     }
 
-    if (candidate <= y) candidate = Math.min(y + idealPageHeightPxCanvas, maxBottom);
+    if (candidate <= y) candidate = Math.min(y + idealPageHeightCss, maxBottom);
     cuts.push(candidate);
     y = candidate;
 
@@ -823,23 +843,26 @@ async function exportPdfManual() {
     await ensurePdfLibs();
 
     const sandbox = createPdfSandbox();
+
+    // Wrap in a clipping frame so we can render one page slice at a time.
+    // This avoids giant canvases that can truncate on mobile (iOS/Android).
+    const frame = document.createElement("div");
+    frame.style.width = `${PAGE_W_CSS}px`;
+    frame.style.background = "#ffffff";
+    frame.style.overflow = "hidden";
+    frame.style.boxSizing = "border-box";
+    sandbox.appendChild(frame);
+
     const clone = buildPdfClone();
-    sandbox.appendChild(clone);
+    frame.appendChild(clone);
 
     await waitForAssets(clone);
 
-    const scale = 2; // sharp, still reasonable for serverless/memory
+    const scale = 2;
 
-    const canvas = await window.html2canvas(clone, {
-      scale,
-      useCORS: true,
-      allowTaint: false,
-      backgroundColor: "#ffffff",
-      windowWidth: PAGE_W_CSS,
-      windowHeight: Math.max(PAGE_H_CSS, clone.scrollHeight),
-      scrollX: 0,
-      scrollY: 0,
-    });
+    // Compute cut points in CSS pixels.
+    const cuts = computeCutPositionsCss(clone, PAGE_H_CSS);
+    const pages = [0, ...cuts];
 
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({
@@ -848,42 +871,39 @@ async function exportPdfManual() {
       format: [PAGE_W_CSS, PAGE_H_CSS],
     });
 
-    const pageW = PAGE_W_CSS;
-    const pageH = PAGE_H_CSS;
-
-    const fullW = canvas.width;
-    const fullH = canvas.height;
-
-    const scaleToPdf = pageW / fullW;
-    const idealSliceH = Math.round(pageH / scaleToPdf);
-
-    const cuts = computeCutPositionsPx(clone, scale, Math.round(idealSliceH * scale));
-    const pages = [0, ...cuts];
-
     for (let i = 0; i < pages.length - 1; i++) {
       const y0 = pages[i];
       const y1 = pages[i + 1];
       const sliceH = y1 - y0;
+      if (sliceH < 10) continue;
 
-      if (sliceH < 10) continue; // prevent blank trailing page
+      frame.style.height = `${sliceH}px`;
+      clone.style.transform = `translateY(-${y0}px)`;
+      clone.style.transformOrigin = "top left";
 
-      const sliceCanvas = document.createElement("canvas");
-      sliceCanvas.width = fullW;
-      sliceCanvas.height = sliceH;
-      const ctx = sliceCanvas.getContext("2d");
-      ctx.drawImage(canvas, 0, y0, fullW, sliceH, 0, 0, fullW, sliceH);
+      // Let layout settle for a frame (important for some mobile browsers).
+      await new Promise((r) => requestAnimationFrame(() => r()));
 
-      const imgData = sliceCanvas.toDataURL("image/jpeg", 0.92);
+      const canvas = await window.html2canvas(frame, {
+        scale,
+        useCORS: true,
+        allowTaint: false,
+        backgroundColor: "#ffffff",
+        windowWidth: PAGE_W_CSS,
+        windowHeight: sliceH,
+        scrollX: 0,
+        scrollY: 0,
+      });
 
-      if (i > 0) pdf.addPage([pageW, pageH], "p");
+      const imgData = canvas.toDataURL("image/jpeg", 0.92);
 
-      const renderH = sliceH * scaleToPdf;
-      pdf.addImage(imgData, "JPEG", 0, 0, pageW, renderH);
+      if (i > 0) pdf.addPage([PAGE_W_CSS, PAGE_H_CSS], "p");
+      pdf.addImage(imgData, "JPEG", 0, 0, PAGE_W_CSS, sliceH);
     }
 
-    try {
-      sandbox.remove();
-    } catch {}
+    // Cleanup
+    clone.style.transform = "";
+    try { sandbox.remove(); } catch {}
 
     const code = safeStr($("#v-doc-quote-code")?.textContent) || "quote";
     pdf.save(`${code}.pdf`);
