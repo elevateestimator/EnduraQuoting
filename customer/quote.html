@@ -3,17 +3,28 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Quote — View &amp; Sign</title>
+    <title>Quote</title>
     <link rel="stylesheet" href="./quote.css" />
   </head>
 
   <body>
-    <header class="sitebar no-print">
-      <div class="sitebrand">
-        <img id="site-logo" class="site-logo" src="../assets/logo.jpg" alt="Company logo" />
-        <div class="sitebrand-text">
-          <div id="site-company-name" class="sitebrand-title">Company</div>
-          <div class="sitebrand-sub">
+    <!-- Customer top bar (screen only) -->
+    <header class="topbar no-print">
+      <div class="brand">
+        <div class="logo-wrap">
+          <img
+            id="site-logo"
+            class="logo"
+            src="../assets/elevate_estimator_logo_light.png"
+            alt="Company logo"
+            crossorigin="anonymous"
+          />
+          <div id="site-logo-fallback" class="logo-fallback" hidden></div>
+        </div>
+
+        <div class="brand-text">
+          <div id="site-company-name" class="brand-title">Quote</div>
+          <div class="brand-sub">
             <span id="v-quote-code">—</span>
             <span class="dot">•</span>
             <span id="v-quote-status">—</span>
@@ -21,26 +32,32 @@
         </div>
       </div>
 
-      <div class="site-actions">
+      <div class="actions">
         <button id="download-btn" class="btn" type="button">Download PDF</button>
         <button id="accept-jump-btn" class="btn brand" type="button">Accept &amp; Sign</button>
       </div>
     </header>
 
-    <main class="container">
-      <div id="banner" class="banner" hidden></div>
+    <main class="wrap">
+      <div id="banner" class="msg" hidden></div>
 
-      <div id="loading" class="loading">
-        Loading your quote…
-      </div>
+      <div id="loading" class="loading">Loading your quote…</div>
 
-      <!-- Quote display -->
+      <!-- Quote document (this is what we render + export to PDF) -->
       <section id="quote-page" class="page" hidden>
+        <!-- Letterhead -->
         <header class="doc-header avoid-break">
           <div class="letterhead">
             <div class="logo-col">
               <div class="logo-box">
-                <img id="doc-logo" src="../assets/logo.jpg" alt="Company logo" class="doc-logo" />
+                <img
+                  id="doc-logo"
+                  src="../assets/elevate_estimator_logo_light.png"
+                  alt="Company logo"
+                  class="doc-logo"
+                  crossorigin="anonymous"
+                />
+                <div id="doc-logo-initials" class="logo-initials" hidden></div>
               </div>
             </div>
 
@@ -49,8 +66,9 @@
                 <div class="company-block">
                   <div class="company-name" id="v-company-name"></div>
 
-                  <div class="company-contact">
-                    <span id="v-company-addr"></span>
+                  <div class="company-contact" id="v-company-contact">
+                    <span id="v-company-addr1"></span>
+                    <span id="v-company-addr2"></span>
                     <span id="v-company-phone"></span>
                     <span id="v-company-email"></span>
                     <span id="v-company-web"></span>
@@ -69,75 +87,60 @@
             <div class="meta-strip full-span">
               <div class="meta-field">
                 <span>Quote #</span>
-                <div class="meta-val" id="v-meta-quote"></div>
+                <div class="meta-val" id="v-meta-quote">—</div>
               </div>
 
               <div class="meta-field">
                 <span>Date</span>
-                <div class="meta-val" id="v-meta-date"></div>
+                <div class="meta-val" id="v-meta-date">—</div>
               </div>
 
               <div class="meta-field">
                 <span>Expires</span>
-                <div class="meta-val" id="v-meta-expires"></div>
+                <div class="meta-val" id="v-meta-expires">—</div>
               </div>
 
               <div class="meta-field">
                 <span>Prepared by</span>
-                <div class="meta-val" id="v-meta-prepared"></div>
+                <div class="meta-val" id="v-meta-prepared">—</div>
               </div>
             </div>
           </div>
         </header>
 
+        <!-- Customer / Job -->
         <section class="grid-2 avoid-break">
-          <div class="card slim">
+          <div class="card">
             <h3>Bill To</h3>
-            <div class="kv">
-              <div class="kv-line" id="v-bill-name"></div>
-              <div class="kv-line" id="v-bill-phone"></div>
-              <div class="kv-line" id="v-bill-email"></div>
-              <div class="kv-line" id="v-bill-addr"></div>
+            <div class="contact-block">
+              <div class="contact-name" id="v-bill-name">—</div>
+              <div class="contact-sub" id="v-bill-sub"></div>
+              <div class="contact-addr" id="v-bill-addr"></div>
             </div>
           </div>
 
-          <div class="card slim">
+          <div class="card">
             <h3>Job Site</h3>
-            <div class="kv">
-              <div class="kv-line" id="v-jobsite"></div>
+            <div class="contact-block">
+              <div class="contact-name" id="v-jobsite">—</div>
+              <div class="contact-sub" id="v-jobsite-sub"></div>
             </div>
           </div>
         </section>
 
+        <!-- Items -->
         <section class="card avoid-break">
-          <h3>Scope of Work</h3>
-          <div class="pre" id="v-scope"></div>
-        </section>
+          <div class="row-between">
+            <h3>Items &amp; Pricing</h3>
+          </div>
 
-        <section class="card avoid-break">
-          <h3>Items &amp; Pricing</h3>
-          
           <div class="items-desktop">
             <div class="table-wrap">
               <table class="items-table" aria-label="Line items">
-                <colgroup>
-                  <col style="width: auto" />
-                  <col style="width: 11%" />
-                  <col style="width: 17%" />
-                  <col style="width: 8%" />
-                  <col style="width: 17%" />
-                </colgroup>
-
+                <colgroup id="items-colgroup"></colgroup>
                 <thead>
-                  <tr>
-                    <th>Description</th>
-                    <th class="num">Qty</th>
-                    <th class="num">Rate</th>
-                    <th class="center">Tax</th>
-                    <th class="num">Line Total</th>
-                  </tr>
+                  <tr id="items-head-row"></tr>
                 </thead>
-
                 <tbody id="v-item-rows"></tbody>
               </table>
             </div>
@@ -147,7 +150,7 @@
           <div class="items-mobile" id="v-item-cards"></div>
         </section>
 
-
+        <!-- Totals -->
         <section class="card totals avoid-break">
           <h3>Summary</h3>
 
@@ -155,16 +158,16 @@
             <div class="row">
               <div class="label">Subtotal</div>
               <div class="spacer"></div>
-              <div class="value"><span class="curr">$</span><span class="amt" id="v-subtotal">0.00</span></div>
+              <div class="value"><span class="curr" id="v-curr">$</span><span class="amt" id="v-subtotal">0.00</span></div>
             </div>
 
             <div class="row">
-              <div class="label">Tax</div>
+              <div class="label" id="v-tax-label">Tax</div>
               <div class="spacer"></div>
               <div class="value"><span class="curr">$</span><span class="amt" id="v-tax">0.00</span></div>
             </div>
 
-            <div class="row">
+            <div class="row" id="fees-row">
               <div class="label">Additional Fees</div>
               <div class="spacer"></div>
               <div class="value"><span class="curr">$</span><span class="amt" id="v-fees">0.00</span></div>
@@ -178,6 +181,7 @@
           </div>
         </section>
 
+        <!-- Deposit -->
         <section class="card avoid-break">
           <h3>Deposit</h3>
           <div class="deposit-row">
@@ -186,16 +190,19 @@
           </div>
         </section>
 
-        <section class="card avoid-break">
+        <!-- Terms -->
+        <section class="card avoid-break" id="terms-card">
           <h3>Payment &amp; Terms</h3>
           <div class="pre" id="v-terms"></div>
         </section>
 
-        <section class="card avoid-break">
+        <!-- Notes -->
+        <section class="card avoid-break" id="notes-card">
           <h3>Notes &amp; Exclusions</h3>
           <div class="pre" id="v-notes"></div>
         </section>
 
+        <!-- Signatures -->
         <section class="signatures avoid-break">
           <div class="sig-block">
             <div class="sig-line signature">
@@ -217,14 +224,14 @@
 
           <div class="sig-block">
             <div class="sig-line signature">
-              <span>Endura Representative Signature</span>
-              <div class="sig-signature" id="v-rep-signature">Jacob Docherty</div>
+              <span>Representative Signature</span>
+              <div class="sig-signature" id="v-rep-signature"></div>
             </div>
 
             <div class="sig-inline two">
               <div class="sig-line">
                 <span>Printed Name</span>
-                <div class="sig-value">Jacob Docherty</div>
+                <div class="sig-value" id="v-rep-printed-name"></div>
               </div>
               <div class="sig-line">
                 <span>Date</span>
@@ -235,9 +242,7 @@
         </section>
       </section>
 
-      <!-- Acceptance -->
-      
-      <!-- Acceptance -->
+      <!-- Acceptance (screen only) -->
       <section id="accept-section" class="accept-card no-print" hidden>
         <div class="accept-head">
           <h2>Accept &amp; Sign</h2>
@@ -246,19 +251,16 @@
 
         <p class="accept-help">
           When you're ready, tap <strong>Sign Now</strong> and draw your signature.
-          This confirms acceptance of the scope, pricing, and terms in this quote.
+          This confirms acceptance of the items, pricing, and terms in this quote.
         </p>
 
-        <button id="sign-now-btn" class="btn brand wide" type="button">
-          Sign Now
-        </button>
+        <button id="sign-now-btn" class="btn brand wide" type="button">Sign Now</button>
 
-        <p class="accept-foot">
-          You can download a PDF copy at any time.
-        </p>
+        <p class="accept-foot">You can download a PDF copy at any time.</p>
       </section>
     </main>
-<!-- Signature modal (screen only) -->
+
+    <!-- Signature modal (screen only) -->
     <div id="sig-modal" class="modal-overlay no-print" hidden>
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="sig-title">
         <div class="modal-head">
@@ -266,9 +268,7 @@
           <button id="sig-close" class="icon-btn" type="button" aria-label="Close">✕</button>
         </div>
 
-        <div class="modal-sub">
-          Signing as <strong id="sig-name">Client</strong>
-        </div>
+        <div class="modal-sub">Signing as <strong id="sig-name">Client</strong></div>
 
         <div class="sig-pad">
           <canvas id="sig-canvas" aria-label="Signature pad"></canvas>
@@ -279,9 +279,7 @@
           <button id="sig-submit" class="btn brand" type="button">Sign &amp; Accept</button>
         </div>
 
-        <div class="modal-note">
-          By signing, you accept this quote including scope, pricing, and terms.
-        </div>
+        <div class="modal-note">By signing, you accept this quote.</div>
       </div>
     </div>
 

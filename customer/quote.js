@@ -10,17 +10,18 @@ const quotePageEl = $("#quote-page");
 const acceptSectionEl = $("#accept-section");
 
 const downloadBtn = $("#download-btn");
-const acceptBtn = $("#accept-jump-btn"); // header CTA
-const signNowBtn = $("#sign-now-btn");   // in-page CTA (optional)
+const acceptJumpBtn = $("#accept-jump-btn");
+const signNowBtn = $("#sign-now-btn");
 
 const vQuoteCode = $("#v-quote-code");
 const vQuoteStatus = $("#v-quote-status");
 const vDocQuoteCode = $("#v-doc-quote-code");
 
-// Company branding in the top bar / document
 const siteCompanyNameEl = $("#site-company-name");
 const siteLogoEl = $("#site-logo");
+const siteLogoFallbackEl = $("#site-logo-fallback");
 const docLogoEl = $("#doc-logo");
+const docLogoInitialsEl = $("#doc-logo-initials");
 
 // Signature modal
 const sigModal = $("#sig-modal");
@@ -30,8 +31,21 @@ const sigClearBtn = $("#sig-clear");
 const sigSubmitBtn = $("#sig-submit");
 const sigNameEl = $("#sig-name");
 
-// Signature output on document
+// Signature output
 const clientSigImg = $("#v-client-signature-img");
+
+// Items table parts
+const itemsColgroupEl = $("#items-colgroup");
+const itemsHeadRowEl = $("#items-head-row");
+const itemsBodyEl = $("#v-item-rows");
+const itemsCardsEl = $("#v-item-cards");
+
+/* =========================================================
+   State
+   ========================================================= */
+let _quoteRow = null;
+let _quoteData = null;
+let _currency = "CAD";
 
 /* =========================================================
    Helpers
@@ -46,34 +60,125 @@ function showBanner(text) {
   bannerEl.textContent = text;
 }
 
-function money(cents) {
-  const n = (Number(cents) || 0) / 100;
-  return n.toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function safeStr(v) {
+  return String(v ?? "").trim();
 }
-function moneyWithSymbol(cents) {
-  const n = (Number(cents) || 0) / 100;
-  return n.toLocaleString("en-CA", { style: "currency", currency: "CAD" });
+
+function ymdTodayLocal() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
-function fmtDate(iso) {
-  if (!iso) return "—";
+
+function fmtDate(isoYmd) {
+  if (!isoYmd) return "—";
   try {
-    return new Date(`${iso}T00:00:00`).toLocaleDateString("en-CA", {
+    return new Date(`${isoYmd}T00:00:00`).toLocaleDateString("en-CA", {
       year: "numeric",
       month: "short",
       day: "2-digit",
     });
   } catch {
-    return iso;
+    return isoYmd;
+  }
+}
+
+function isHexColor(s) {
+  return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(String(s || ""));
+}
+
+function normalizeHex(hex) {
+  const h = String(hex || "").trim();
+  if (!isHexColor(h)) return "#000000";
+  if (h.length === 4) {
+    return "#" + h.slice(1).split("").map((c) => c + c).join("");
+  }
+  return h.toLowerCase();
+}
+
+function hexToRgb(hex) {
+  const h = normalizeHex(hex).slice(1);
+  const n = parseInt(h, 16);
+  return {
+    r: (n >> 16) & 255,
+    g: (n >> 8) & 255,
+    b: n & 255,
+  };
+}
+
+function darkenHex(hex, amt = 0.18) {
+  const { r, g, b } = hexToRgb(hex);
+  const f = (x) => Math.max(0, Math.min(255, Math.round(x * (1 - amt))));
+  return `#${[f(r), f(g), f(b)].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+}
+
+function applyBrandColor(hex) {
+  const brand = normalizeHex(hex);
+  const { r, g, b } = hexToRgb(brand);
+  const brandDark = darkenHex(brand, 0.18);
+
+  // Apply globally so header CTA matches company brand.
+  const root = document.documentElement;
+  root.style.setProperty("--brand", brand);
+  root.style.setProperty("--brand-dark", brandDark);
+  root.style.setProperty("--brand-rgb", `${r},${g},${b}`);
+
+  // Also apply on the doc itself to ensure PDF clone inherits correctly.
+  quotePageEl?.style.setProperty("--brand", brand);
+  quotePageEl?.style.setProperty("--brand-dark", brandDark);
+  quotePageEl?.style.setProperty("--brand-rgb", `${r},${g},${b}`);
+}
+
+function currencySymbol(currency) {
+  try {
+    const parts = new Intl.NumberFormat("en", {
+      style: "currency",
+      currency,
+      currencyDisplay: "narrowSymbol",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).formatToParts(0);
+    const cur = parts.find((p) => p.type === "currency");
+    return cur?.value || "$";
+  } catch {
+    return "$";
+  }
+}
+
+function formatMoneyNoSymbol(cents, currency) {
+  const amount = (Number(cents) || 0) / 100;
+  try {
+    // Keep it consistent with your current customer base (Canada)
+    return new Intl.NumberFormat("en-CA", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  } catch {
+    return amount.toFixed(2);
+  }
+}
+
+function formatMoney(cents, currency) {
+  const amount = (Number(cents) || 0) / 100;
+  try {
+    return new Intl.NumberFormat("en-CA", { style: "currency", currency }).format(amount);
+  } catch {
+    return `$${formatMoneyNoSymbol(cents, currency)}`;
   }
 }
 
 async function getJSON(url) {
   const res = await fetch(url, { method: "GET" });
   let data = null;
-  try { data = await res.json(); } catch {}
+  try {
+    data = await res.json();
+  } catch {}
   if (!res.ok) throw new Error((data && (data.error || data.message)) || `Request failed (${res.status})`);
   return data;
 }
+
 async function postJSON(url, body) {
   const res = await fetch(url, {
     method: "POST",
@@ -81,7 +186,9 @@ async function postJSON(url, body) {
     body: JSON.stringify(body || {}),
   });
   let data = null;
-  try { data = await res.json(); } catch {}
+  try {
+    data = await res.json();
+  } catch {}
   if (!res.ok) throw new Error((data && (data.error || data.message)) || `Request failed (${res.status})`);
   return data;
 }
@@ -95,145 +202,495 @@ function escapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
-/* =========================================================
-   Render quote (read-only)
-   ========================================================= */
-function buildItemsRows(items = []) {
-  const tbody = $("#v-item-rows");
-  tbody.innerHTML = "";
+function initialsFromName(name) {
+  const parts = safeStr(name).split(/\s+/).filter(Boolean);
+  const a = parts[0]?.[0] || "";
+  const b = parts.length > 1 ? parts[parts.length - 1][0] : (parts[0]?.[1] || "");
+  return (a + b).toUpperCase();
+}
 
-  if (!items.length) {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `<td colspan="5" style="padding:12px;color:#6b7280;">No line items</td>`;
-    tbody.appendChild(tr);
-    return;
-  }
+/* =========================================================
+   Items rendering
+   ========================================================= */
+function computeTotals(items, taxRate, feesCents) {
+  let subtotal = 0;
+  let taxableBase = 0;
 
   for (const it of items) {
     const qty = Number(it.qty || 0);
-    const rateC = Number(it.unit_price_cents || 0);
-    const taxable = !!it.taxable;
-    const lineTotal = Math.round(qty * rateC);
+    const unit = Number(it.unit_price_cents || 0);
+    const line = Math.round(qty * unit);
+    subtotal += line;
+    if (it.taxable !== false) taxableBase += line;
+  }
+
+  const rate = Number(taxRate || 0);
+  const tax = Math.round(taxableBase * (rate / 100));
+  const fees = Number(feesCents || 0);
+  const total = Math.max(0, subtotal + tax + fees);
+
+  return { subtotal, tax, fees, total };
+}
+
+function buildItemsTable(items, currency) {
+  itemsColgroupEl.innerHTML = "";
+  itemsHeadRowEl.innerHTML = "";
+  itemsBodyEl.innerHTML = "";
+  itemsCardsEl.innerHTML = "";
+
+  const anyBreakdown = items.some((it) => it.show_qty_unit_price !== false);
+
+  // Columns
+  const cols = anyBreakdown
+    ? [
+        { key: "item", label: "Item", width: "auto", align: "left" },
+        { key: "qty", label: "Qty", width: "10%", align: "num" },
+        { key: "unit", label: "Unit", width: "12%", align: "num" },
+        { key: "unit_price", label: "Unit Price", width: "16%", align: "num" },
+        { key: "tax", label: "Tax", width: "10%", align: "center" },
+        { key: "line_total", label: "Line Total", width: "18%", align: "num" },
+      ]
+    : [
+        { key: "item", label: "Item", width: "auto", align: "left" },
+        { key: "tax", label: "Tax", width: "12%", align: "center" },
+        { key: "line_total", label: "Line Total", width: "22%", align: "num" },
+      ];
+
+  // Colgroup
+  for (const c of cols) {
+    const col = document.createElement("col");
+    col.style.width = c.width;
+    itemsColgroupEl.appendChild(col);
+  }
+
+  // Head
+  for (const c of cols) {
+    const th = document.createElement("th");
+    th.textContent = c.label;
+    if (c.align === "num") th.classList.add("num");
+    if (c.align === "center") th.classList.add("center");
+    itemsHeadRowEl.appendChild(th);
+  }
+
+  if (!items.length) {
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = cols.length;
+    td.style.padding = "12px";
+    td.style.color = "#6b7280";
+    td.textContent = "No line items";
+    tr.appendChild(td);
+    itemsBodyEl.appendChild(tr);
+    return;
+  }
+
+  // Rows
+  for (const it of items) {
+    const qty = Number(it.qty || 0);
+    const unitType = safeStr(it.unit_type) || "Each";
+    const unitC = Number(it.unit_price_cents || 0);
+    const taxable = it.taxable !== false;
+    const line = Math.round(qty * unitC);
+    const showBreakdown = it.show_qty_unit_price !== false;
+
+    const name = safeStr(it.name) || safeStr(it.item) || "Item";
+    const desc = safeStr(it.description);
 
     const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td><div style="padding:10px;white-space:pre-wrap;">${escapeHtml(it.description || "")}</div></td>
-      <td class="num"><div style="padding:10px;">${qty || ""}</div></td>
-      <td class="num"><div style="padding:10px;">$${money(rateC)}</div></td>
-      <td class="center"><div style="padding:10px;">${taxable ? "✓" : "—"}</div></td>
-      <td class="num"><div style="padding:10px;font-weight:950;">$${money(lineTotal)}</div></td>
+
+    const addCell = (html, cls = "") => {
+      const td = document.createElement("td");
+      if (cls) td.className = cls;
+      td.innerHTML = html;
+      tr.appendChild(td);
+    };
+
+    // Item cell
+    addCell(
+      `<div class="item-title">${escapeHtml(name)}</div>` +
+        (desc ? `<div class="item-desc">${escapeHtml(desc)}</div>` : ""),
+      ""
+    );
+
+    if (anyBreakdown) {
+      addCell(showBreakdown ? escapeHtml(qty ? String(qty) : "") : "", "num");
+      addCell(showBreakdown ? escapeHtml(unitType) : "", "num");
+      addCell(showBreakdown ? escapeHtml(formatMoneyNoSymbol(unitC, currency)) : "", "num");
+    }
+
+    addCell(taxable ? "✓" : "—", "center");
+
+    addCell(`<span class="line-total">${escapeHtml(formatMoney(line, currency))}</span>`, "num");
+
+    itemsBodyEl.appendChild(tr);
+
+    // Mobile card
+    const card = document.createElement("div");
+    card.className = "item-card";
+    card.innerHTML = `
+      <div class="item-card-head">
+        <div>
+          <div class="item-card-name">${escapeHtml(name)}</div>
+          ${desc ? `<div class="item-card-desc">${escapeHtml(desc)}</div>` : ""}
+        </div>
+        <div class="item-card-total">${escapeHtml(formatMoney(line, currency))}</div>
+      </div>
+      <div class="item-card-grid">
+        ${showBreakdown ? `
+          <div>
+            <div class="item-k">Qty</div>
+            <div class="item-v">${escapeHtml(qty ? String(qty) : "—")}</div>
+          </div>
+          <div>
+            <div class="item-k">Unit</div>
+            <div class="item-v">${escapeHtml(unitType)}</div>
+          </div>
+          <div>
+            <div class="item-k">Unit Price</div>
+            <div class="item-v">${escapeHtml(formatMoney(unitC, currency))}</div>
+          </div>
+        ` : ""}
+        <div>
+          <div class="item-k">Tax</div>
+          <div class="item-v">${taxable ? "Yes" : "No"}</div>
+        </div>
+      </div>
     `;
-    tbody.appendChild(tr);
+    itemsCardsEl.appendChild(card);
   }
 }
 
+/* =========================================================
+   Render quote (read-only)
+   ========================================================= */
 function fillQuote(quote) {
   const data = quote.data || {};
   const company = data.company || {};
   const meta = data.meta || {};
   const bill = data.bill_to || {};
   const project = data.project || {};
-  const computed = data.computed || {};
 
-  const quoteCode = data.quote_code || quote.quote_code || meta.quote_no || quote.quote_no || quote.code || "—";
+  _currency = safeStr(company.currency) || safeStr(data.currency) || "CAD";
 
-  // Header / status
+  const quoteCode =
+    safeStr(data.quote_code) ||
+    safeStr(quote.quote_code) ||
+    safeStr(meta.quote_no) ||
+    (quote.quote_no ? `Q-${quote.quote_no}` : "") ||
+    (quote.id ? `Q-${String(quote.id).slice(0, 8)}` : "—");
+
+  // Status
   vQuoteCode.textContent = quoteCode;
   vDocQuoteCode.textContent = quoteCode;
-  vQuoteStatus.textContent = quote.status || "Quote";
+  vQuoteStatus.textContent = safeStr(quote.status) || "Quote";
 
   // Company
-  const companyName = company.name || "Company";
+  const companyName = safeStr(company.name) || "Company";
   $("#v-company-name").textContent = companyName;
 
-  // Keep the page header/title in sync for a more polished customer experience
   if (siteCompanyNameEl) siteCompanyNameEl.textContent = companyName;
   try {
-    document.title = `${companyName} — Quote`;
+    document.title = `${companyName} — Quote ${quoteCode}`;
   } catch {}
 
-  // Logo swap (optional). If you store a company logo URL in quote.data.company.logo_url,
-  // it will show for the customer automatically.
-  const logoUrl = company.logo_url || company.logoUrl || company.logo || "";
+  // Brand color
+  applyBrandColor(company.brand_color || company.brandColour || company.brand || "#000000");
+
+  // Logo
+  const logoUrl = safeStr(company.logo_url || company.logoUrl || company.logo || "");
+
   if (logoUrl) {
-    if (siteLogoEl) siteLogoEl.src = logoUrl;
-    if (docLogoEl) docLogoEl.src = logoUrl;
+    if (siteLogoEl) {
+      siteLogoEl.crossOrigin = "anonymous";
+      siteLogoEl.src = logoUrl;
+    }
+    if (docLogoEl) {
+      docLogoEl.crossOrigin = "anonymous";
+      docLogoEl.src = logoUrl;
+    }
+    if (siteLogoFallbackEl) siteLogoFallbackEl.hidden = true;
+    if (docLogoInitialsEl) docLogoInitialsEl.hidden = true;
+  } else {
+    // Hide broken default and use initials fallback.
+    const initials = initialsFromName(companyName || "Company");
+    if (siteLogoEl) siteLogoEl.hidden = true;
+    if (siteLogoFallbackEl) {
+      siteLogoFallbackEl.textContent = initials;
+      siteLogoFallbackEl.hidden = false;
+    }
+
+    if (docLogoEl) docLogoEl.hidden = true;
+    if (docLogoInitialsEl) {
+      docLogoInitialsEl.textContent = initials;
+      docLogoInitialsEl.hidden = false;
+    }
   }
-  const addr = [company.addr1, company.addr2].filter(Boolean).join(", ");
-  $("#v-company-addr").textContent = addr || "";
-  $("#v-company-phone").textContent = company.phone || "";
-  $("#v-company-email").textContent = company.email || "";
-  $("#v-company-web").textContent = company.web || "";
+
+  // Contact
+  const addr1 = safeStr(company.addr1 || company.address1 || company.address || "");
+  const addr2 = safeStr(company.addr2 || company.address2 || "");
+
+  $("#v-company-addr1").textContent = addr1;
+  $("#v-company-addr2").textContent = addr2;
+  $("#v-company-phone").textContent = safeStr(company.phone);
+  $("#v-company-email").textContent = safeStr(company.email);
+  $("#v-company-web").textContent = safeStr(company.web);
+
+  // Remove empty contact spans (avoids stray bullets)
+  $$("#v-company-contact span").forEach((el) => {
+    if (!safeStr(el.textContent)) el.remove();
+  });
 
   // Meta
   $("#v-meta-quote").textContent = quoteCode;
   $("#v-meta-date").textContent = fmtDate(meta.quote_date);
   $("#v-meta-expires").textContent = fmtDate(meta.quote_expires);
-  $("#v-meta-prepared").textContent = meta.prepared_by || "Jacob Docherty";
+  $("#v-meta-prepared").textContent = safeStr(meta.prepared_by) || "—";
 
-  // Bill / Job
-  $("#v-bill-name").textContent = bill.client_name || quote.customer_name || "—";
-  $("#v-bill-phone").textContent = bill.client_phone || "";
-  $("#v-bill-email").textContent = bill.client_email || quote.customer_email || "";
-  $("#v-bill-addr").textContent = bill.client_addr || "";
-  $("#v-jobsite").textContent = project.project_location || "—";
+  // Bill To
+  const clientName = safeStr(bill.client_name || quote.customer_name) || "—";
+  const clientPhone = safeStr(bill.client_phone);
+  const clientEmail = safeStr(bill.client_email || quote.customer_email);
+  const clientAddr = safeStr(bill.client_addr);
 
-  // Scope / Terms / Notes
-  $("#v-scope").textContent = data.scope || "—";
-  $("#v-terms").textContent = data.terms || "—";
-  $("#v-notes").textContent = data.notes || "—";
+  $("#v-bill-name").textContent = clientName;
+  const subParts = [];
+  if (clientPhone) subParts.push(clientPhone);
+  if (clientEmail) subParts.push(clientEmail);
+  $("#v-bill-sub").textContent = subParts.join(" • ");
+  $("#v-bill-addr").textContent = clientAddr;
+
+  // Job site
+  const job = safeStr(project.project_location);
+  $("#v-jobsite").textContent = job || "Same as billing address";
+  $("#v-jobsite-sub").textContent = job ? "Installation address" : "";
+
+  // Rep signature/date
+  const preparedBy = safeStr(meta.prepared_by) || "Representative";
+  $("#v-rep-signature").textContent = preparedBy;
+  $("#v-rep-printed-name").textContent = preparedBy;
+  $("#v-rep-date").textContent = fmtDate(meta.quote_date);
 
   // Items
-  buildItemsRows(Array.isArray(data.items) ? data.items : []);
+  const items = Array.isArray(data.items) ? data.items : [];
+  buildItemsTable(items, _currency);
 
-  // Totals
-  const subtotal = computed.subtotal_cents ?? quote.subtotal_cents ?? 0;
-  const tax = computed.tax_cents ?? quote.tax_cents ?? 0;
-  const fees = computed.fees_cents ?? data.fees_cents ?? quote.fees_cents ?? 0;
-  const total = computed.total_cents ?? quote.total_cents ?? 0;
+  // Tax label / totals
+  const taxName = safeStr(data.tax_name) || "Tax";
+  const taxRate = Number(data.tax_rate ?? 0);
+  const feesCents = Number(data.fees_cents || 0);
 
-  $("#v-subtotal").textContent = money(subtotal);
-  $("#v-tax").textContent = money(tax);
-  $("#v-fees").textContent = money(fees);
-  $("#v-total").textContent = money(total);
+  const totals = computeTotals(items, taxRate, feesCents);
+
+  const currSymbol = currencySymbol(_currency);
+  $("#v-curr").textContent = currSymbol;
+
+  $("#v-subtotal").textContent = formatMoneyNoSymbol(totals.subtotal, _currency);
+  $("#v-tax").textContent = formatMoneyNoSymbol(totals.tax, _currency);
+  $("#v-fees").textContent = formatMoneyNoSymbol(totals.fees, _currency);
+  $("#v-total").textContent = formatMoneyNoSymbol(totals.total, _currency);
+
+  // Fees row (hide if 0)
+  const feesRow = $("#fees-row");
+  if (feesRow) feesRow.hidden = totals.fees <= 0;
+
+  const rateLabel = Number.isFinite(taxRate) && taxRate > 0 ? `${taxName} (${taxRate}%)` : taxName;
+  $("#v-tax-label").textContent = rateLabel;
 
   // Deposit
   let depositCents = 0;
-  if (data.deposit_mode === "custom") {
-    depositCents = data.deposit_cents || 0;
-  } else {
-    depositCents = Math.round(total * 0.4);
-  }
-  $("#v-deposit").textContent = moneyWithSymbol(depositCents);
+  if (data.deposit_mode === "custom") depositCents = Number(data.deposit_cents || 0);
+  else depositCents = Math.round(totals.total * 0.4);
 
-  // Rep date (use quote date)
-  $("#v-rep-date").textContent = fmtDate(meta.quote_date);
+  $("#v-deposit").textContent = formatMoney(depositCents, _currency);
 
-  // Acceptance fields (if already accepted)
+  // Terms / Notes
+  const terms = safeStr(data.terms);
+  const notes = safeStr(data.notes);
+
+  const termsCard = $("#terms-card");
+  const notesCard = $("#notes-card");
+
+  $("#v-terms").textContent = terms;
+  $("#v-notes").textContent = notes;
+
+  if (termsCard) termsCard.hidden = !terms;
+  if (notesCard) notesCard.hidden = !notes;
+
+  // Acceptance
   const acceptance = data.acceptance || null;
-  const sigImg = $("#v-client-signature-img");
+  const status = safeStr(quote.status).toLowerCase();
 
   if (acceptance?.accepted_at) {
-    const name = acceptance.name || bill.client_name || quote.customer_name || "Client";
-    const dateIso = (acceptance.accepted_at || "").slice(0, 10);
+    const name = safeStr(acceptance.name) || clientName || "Client";
+    const dateIso = safeStr(acceptance.accepted_date) || safeStr(acceptance.accepted_at).slice(0, 10);
 
     const src = acceptance.signature_image_data_url || acceptance.signature_data_url || "";
-    if (sigImg && src) {
-      sigImg.src = src;
-      sigImg.hidden = false;
+    if (clientSigImg && src) {
+      clientSigImg.crossOrigin = "anonymous";
+      clientSigImg.src = src;
+      clientSigImg.hidden = false;
     }
 
     $("#v-client-name").textContent = name;
     $("#v-client-date").textContent = fmtDate(dateIso);
 
-    $("#accept-pill").textContent = "Accepted";
+    // Hide accept UI
+    if (acceptSectionEl) acceptSectionEl.hidden = true;
+    if (acceptJumpBtn) {
+      acceptJumpBtn.disabled = true;
+      acceptJumpBtn.textContent = "Signed";
+    }
   } else {
-    if (sigImg) {
-      sigImg.src = "";
-      sigImg.hidden = true;
+    // Not accepted yet
+    if (clientSigImg) {
+      clientSigImg.src = "";
+      clientSigImg.hidden = true;
     }
     $("#v-client-name").textContent = "";
     $("#v-client-date").textContent = "";
+
+    if (status === "cancelled") {
+      if (acceptSectionEl) acceptSectionEl.hidden = true;
+      if (acceptJumpBtn) {
+        acceptJumpBtn.disabled = true;
+        acceptJumpBtn.textContent = "Cancelled";
+      }
+    } else {
+      if (acceptSectionEl) acceptSectionEl.hidden = false;
+      if (acceptJumpBtn) {
+        acceptJumpBtn.disabled = false;
+        acceptJumpBtn.textContent = "Accept & Sign";
+      }
+    }
+  }
+
+  // Keep header quote code in doc pill
+  $("#v-doc-quote-code").textContent = quoteCode;
+}
+
+/* =========================================================
+   Signature pad
+   ========================================================= */
+let _sigCtx = null;
+let _drawing = false;
+let _hasStroke = false;
+
+function openSigModal() {
+  if (!sigModal) return;
+  sigModal.hidden = false;
+  document.body.style.overflow = "hidden";
+  _hasStroke = false;
+
+  const billName = safeStr($("#v-bill-name")?.textContent) || "Client";
+  if (sigNameEl) sigNameEl.textContent = billName;
+
+  setupCanvas();
+}
+
+function closeSigModal() {
+  if (!sigModal) return;
+  sigModal.hidden = true;
+  document.body.style.overflow = "";
+}
+
+function setupCanvas() {
+  if (!sigCanvas) return;
+
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  const rect = sigCanvas.getBoundingClientRect();
+
+  sigCanvas.width = Math.round(rect.width * dpr);
+  sigCanvas.height = Math.round(rect.height * dpr);
+
+  _sigCtx = sigCanvas.getContext("2d");
+  _sigCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  _sigCtx.lineWidth = 2.6;
+  _sigCtx.lineCap = "round";
+  _sigCtx.lineJoin = "round";
+  _sigCtx.strokeStyle = "#0b0f14";
+
+  _sigCtx.clearRect(0, 0, rect.width, rect.height);
+}
+
+function canvasPos(e) {
+  const rect = sigCanvas.getBoundingClientRect();
+  return {
+    x: e.clientX - rect.left,
+    y: e.clientY - rect.top,
+  };
+}
+
+function onPointerDown(e) {
+  if (!_sigCtx) return;
+  _drawing = true;
+  _hasStroke = true;
+  sigCanvas.setPointerCapture?.(e.pointerId);
+  const p = canvasPos(e);
+  _sigCtx.beginPath();
+  _sigCtx.moveTo(p.x, p.y);
+}
+
+function onPointerMove(e) {
+  if (!_drawing || !_sigCtx) return;
+  const p = canvasPos(e);
+  _sigCtx.lineTo(p.x, p.y);
+  _sigCtx.stroke();
+}
+
+function onPointerUp(e) {
+  _drawing = false;
+  try { sigCanvas.releasePointerCapture?.(e.pointerId); } catch {}
+}
+
+function clearSignature() {
+  if (!_sigCtx || !sigCanvas) return;
+  const rect = sigCanvas.getBoundingClientRect();
+  _sigCtx.clearRect(0, 0, rect.width, rect.height);
+  _hasStroke = false;
+}
+
+async function submitSignature() {
+  if (!_quoteRow) return;
+  if (!_hasStroke) {
+    showBanner("Please draw your signature first.");
+    return;
+  }
+
+  sigSubmitBtn.disabled = true;
+  sigSubmitBtn.textContent = "Submitting…";
+  showBanner("");
+
+  try {
+    // Use the canvas pixels (hi-res) as a PNG data URL
+    const dataUrl = sigCanvas.toDataURL("image/png");
+
+    const accepted_date = ymdTodayLocal();
+
+    await postJSON("/api/accept-quote", {
+      quote_id: _quoteRow.id,
+      signature_data_url: dataUrl,
+      accepted_date,
+    });
+
+    // Re-fetch (ensures we render server truth)
+    const refreshed = await getJSON(`/api/public-quote?id=${encodeURIComponent(_quoteRow.id)}`);
+    _quoteRow = refreshed.quote;
+    _quoteData = _quoteRow.data || {};
+
+    fillQuote(_quoteRow);
+
+    closeSigModal();
+
+    showBanner("Signed. Thank you — you can download a PDF copy any time.");
+
+    // Scroll back to top for clarity
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  } catch (e) {
+    showBanner(e?.message || "Failed to submit signature.");
+  } finally {
+    sigSubmitBtn.disabled = false;
+    sigSubmitBtn.textContent = "Sign & Accept";
   }
 }
 
@@ -242,7 +699,7 @@ function fillQuote(quote) {
    ========================================================= */
 const PX_PER_IN = 96;
 const PAGE_W_CSS = Math.round(8.5 * PX_PER_IN); // 816
-const PAGE_H_CSS = Math.round(11  * PX_PER_IN); // 1056
+const PAGE_H_CSS = Math.round(11 * PX_PER_IN);  // 1056
 
 function loadScript(src) {
   return new Promise((res, rej) => {
@@ -254,6 +711,7 @@ function loadScript(src) {
     document.head.appendChild(s);
   });
 }
+
 async function ensurePdfLibs() {
   if (!window.html2canvas) {
     await loadScript("https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js");
@@ -262,6 +720,7 @@ async function ensurePdfLibs() {
     await loadScript("https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js");
   }
 }
+
 async function waitForAssets(root, timeoutMs = 8000) {
   const waitFonts = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
   const imgs = Array.from(root.querySelectorAll("img"));
@@ -279,6 +738,7 @@ async function waitForAssets(root, timeoutMs = 8000) {
 
 function createPdfSandbox() {
   const sandbox = document.createElement("div");
+  sandbox.id = "pdf-sandbox";
   sandbox.style.position = "absolute";
   sandbox.style.left = "0";
   sandbox.style.top = "0";
@@ -338,11 +798,9 @@ function computeCutPositionsPx(clone, scaleFactor, idealPageHeightPxCanvas) {
 
 function buildPdfClone() {
   const clone = quotePageEl.cloneNode(true);
+  clone.classList.add("pdf-export");
 
-  // Remove screen-only controls
-  clone.querySelectorAll(".no-print").forEach((n) => n.remove());
-
-  // Hard-pin dimensions to avoid layout drift
+  // Hard-pin dimensions to avoid drift
   clone.style.width = `${PAGE_W_CSS}px`;
   clone.style.minHeight = `${PAGE_H_CSS}px`;
   clone.style.margin = "0";
@@ -351,325 +809,167 @@ function buildPdfClone() {
   clone.style.borderRadius = "0";
   clone.style.background = "#ffffff";
   clone.style.boxSizing = "border-box";
-  // Consistent padding for PDF regardless of screen size
-  clone.style.padding = "0.62in";
-
-  // Force “desktop” layout even though width is 816 (prevents mobile stacking)
-  const style = document.createElement("style");
-  style.textContent = `
-    .letterhead{ grid-template-columns: 150px 1fr !important; }
-    .company-row{ flex-direction: row !important; }
-    .doc-block{ align-items: flex-end !important; }
-    .meta-strip{ grid-template-columns: 1.4fr 1fr 1fr 1.2fr !important; }
-    .grid-2{ grid-template-columns: 1.25fr 0.75fr !important; }
-    .signatures{ grid-template-columns: 1fr 1fr !important; }
-  `;
-  clone.prepend(style);
 
   return clone;
 }
 
-async function exportPdfManual({ filename }) {
-  await ensurePdfLibs();
+async function exportPdfManual() {
+  if (!quotePageEl || quotePageEl.hidden) return;
 
-  const sandbox = createPdfSandbox();
-  sandbox.innerHTML = "";
+  downloadBtn.disabled = true;
+  downloadBtn.textContent = "Preparing…";
 
-  const clone = buildPdfClone();
-  sandbox.appendChild(clone);
+  try {
+    await ensurePdfLibs();
 
-  await waitForAssets(clone);
+    const sandbox = createPdfSandbox();
+    const clone = buildPdfClone();
+    sandbox.appendChild(clone);
 
-  const scale = 2;
-  const canvas = await window.html2canvas(clone, {
-    scale,
-    useCORS: true,
-    allowTaint: true,
-    backgroundColor: "#ffffff",
-    scrollX: 0,
-    scrollY: 0,
-    windowWidth: PAGE_W_CSS,
-  });
+    await waitForAssets(clone);
 
-  const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF({ unit: "pt", format: "letter", orientation: "portrait" });
+    const scale = 2; // sharp, still reasonable for serverless/memory
 
-  const pdfW = pdf.internal.pageSize.getWidth();
-  const pdfH = pdf.internal.pageSize.getHeight();
+    const canvas = await window.html2canvas(clone, {
+      scale,
+      useCORS: true,
+      allowTaint: false,
+      backgroundColor: "#ffffff",
+      windowWidth: PAGE_W_CSS,
+      windowHeight: Math.max(PAGE_H_CSS, clone.scrollHeight),
+      scrollX: 0,
+      scrollY: 0,
+    });
 
-  const marginPt = 22;
-  const contentW = pdfW - marginPt * 2;
-  const contentH = pdfH - marginPt * 2;
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({
+      orientation: "p",
+      unit: "px",
+      format: [PAGE_W_CSS, PAGE_H_CSS],
+    });
 
-  const canvasW = canvas.width;
-  const canvasH = canvas.height;
+    const pageW = PAGE_W_CSS;
+    const pageH = PAGE_H_CSS;
 
-  const scaleFactor = canvasW / clone.offsetWidth;
-  const idealPageHeightPxCanvas = Math.floor(canvasW * (contentH / contentW));
-  const cuts = computeCutPositionsPx(clone, scaleFactor, idealPageHeightPxCanvas);
+    const fullW = canvas.width;
+    const fullH = canvas.height;
 
-  const contentEnd = cuts.length ? cuts[cuts.length - 1] : canvasH;
-  const midCuts = cuts.length > 1 ? cuts.slice(0, -1) : [];
+    const scaleToPdf = pageW / fullW;
+    const idealSliceH = Math.round(pageH / scaleToPdf);
 
-  const boundaries = [0, ...midCuts, contentEnd]
-    .map((v) => Math.max(0, Math.min(v, canvasH)))
-    .filter((v, i, arr) => i === 0 || v > arr[i - 1] + 2);
+    const cuts = computeCutPositionsPx(clone, scale, Math.round(idealSliceH * scale));
+    const pages = [0, ...cuts];
 
-  const pageCanvas = document.createElement("canvas");
-  pageCanvas.width = canvasW;
+    for (let i = 0; i < pages.length - 1; i++) {
+      const y0 = pages[i];
+      const y1 = pages[i + 1];
+      const sliceH = y1 - y0;
 
-  let pageIndex = 0;
+      if (sliceH < 10) continue; // prevent blank trailing page
 
-  for (let i = 1; i < boundaries.length; i++) {
-    const prev = boundaries[i - 1];
-    const next = boundaries[i];
-    const sliceH = next - prev;
+      const sliceCanvas = document.createElement("canvas");
+      sliceCanvas.width = fullW;
+      sliceCanvas.height = sliceH;
+      const ctx = sliceCanvas.getContext("2d");
+      ctx.drawImage(canvas, 0, y0, fullW, sliceH, 0, 0, fullW, sliceH);
 
-    if (sliceH < Math.round(24 * scale)) continue;
+      const imgData = sliceCanvas.toDataURL("image/jpeg", 0.92);
 
-    pageCanvas.height = sliceH;
-    const ctx = pageCanvas.getContext("2d", { alpha: false });
+      if (i > 0) pdf.addPage([pageW, pageH], "p");
 
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvasW, sliceH);
+      const renderH = sliceH * scaleToPdf;
+      pdf.addImage(imgData, "JPEG", 0, 0, pageW, renderH);
+    }
 
-    ctx.drawImage(canvas, 0, prev, canvasW, sliceH, 0, 0, canvasW, sliceH);
+    try {
+      sandbox.remove();
+    } catch {}
 
-    const imgData = pageCanvas.toDataURL("image/jpeg", 0.98);
-    const imgHpt = (sliceH / canvasW) * contentW;
-
-    if (pageIndex > 0) pdf.addPage();
-
-    pdf.setFillColor(255, 255, 255);
-    pdf.rect(0, 0, pdfW, pdfH, "F");
-
-    pdf.addImage(imgData, "JPEG", marginPt, marginPt, contentW, imgHpt);
-
-    pageIndex++;
+    const code = safeStr($("#v-doc-quote-code")?.textContent) || "quote";
+    pdf.save(`${code}.pdf`);
+  } catch (e) {
+    console.error(e);
+    showBanner(e?.message || "Failed to export PDF.");
+  } finally {
+    downloadBtn.disabled = false;
+    downloadBtn.textContent = "Download PDF";
   }
-
-  pdf.save(filename);
-  sandbox.remove();
-}
-
-/* =========================================================
-   Signature modal (drawpad)
-   ========================================================= */
-let sigCtx = null;
-let sigDrawing = false;
-let sigHasInk = false;
-
-function openSigModal({ customerName }) {
-  if (!sigModal) return;
-  if (sigNameEl) sigNameEl.textContent = customerName || "Client";
-  sigModal.hidden = false;
-  document.body.style.overflow = "hidden";
-
-  // Wait one frame so layout is updated before measuring canvas size
-  requestAnimationFrame(() => {
-    setupSignaturePad();
-  });
-}
-
-function closeSigModal() {
-  if (!sigModal) return;
-  sigModal.hidden = true;
-  document.body.style.overflow = "";
-}
-
-function setupSignaturePad() {
-  if (!sigCanvas) return;
-
-  const ratio = Math.min(2, window.devicePixelRatio || 1);
-  const rect = sigCanvas.getBoundingClientRect();
-
-  sigCanvas.width = Math.round(rect.width * ratio);
-  sigCanvas.height = Math.round(rect.height * ratio);
-
-  sigCtx = sigCanvas.getContext("2d");
-  sigCtx.setTransform(ratio, 0, 0, ratio, 0, 0);
-  sigCtx.lineWidth = 2.2;
-  sigCtx.lineCap = "round";
-  sigCtx.lineJoin = "round";
-  sigCtx.strokeStyle = "#111827";
-
-  clearSignature();
-}
-
-function clearSignature() {
-  if (!sigCtx || !sigCanvas) return;
-  sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
-  sigHasInk = false;
-}
-
-function sigPoint(e) {
-  const rect = sigCanvas.getBoundingClientRect();
-  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
-}
-
-function onSigPointerDown(e) {
-  if (!sigCtx) return;
-  sigDrawing = true;
-  sigHasInk = true;
-  sigCanvas.setPointerCapture?.(e.pointerId);
-  const p = sigPoint(e);
-  sigCtx.beginPath();
-  sigCtx.moveTo(p.x, p.y);
-}
-function onSigPointerMove(e) {
-  if (!sigDrawing || !sigCtx) return;
-  const p = sigPoint(e);
-  sigCtx.lineTo(p.x, p.y);
-  sigCtx.stroke();
-}
-function onSigPointerUp(e) {
-  sigDrawing = false;
-  try { sigCanvas.releasePointerCapture?.(e.pointerId); } catch {}
 }
 
 /* =========================================================
    Boot
    ========================================================= */
-async function main() {
-  const id = new URLSearchParams(window.location.search).get("id");
-  if (!id) {
-    showBanner("Missing quote id.");
-    loadingEl.textContent = "Missing quote id.";
-    return;
-  }
-
+async function init() {
   try {
-    const result = await getJSON(`/api/public-quote?id=${encodeURIComponent(id)}`);
-    const quote = result.quote;
-
-    fillQuote(quote);
-
-    // Determine customer name (for modal + printed name)
-    const customerName =
-      (quote.data?.bill_to?.client_name || quote.customer_name || "Client").trim();
-
-    // Show UI
-    loadingEl.hidden = true;
-    quotePageEl.hidden = false;
-
-    const isCancelled = (quote.status || "").toLowerCase() === "cancelled";
-    const isAccepted =
-      (quote.status || "").toLowerCase() === "accepted" ||
-      !!quote.data?.acceptance?.accepted_at;
-
-    if (isCancelled) {
-      acceptSectionEl.hidden = true;
-      showBanner("This quote has been cancelled.");
-    } else {
-      acceptSectionEl.hidden = false;
+    const id = new URLSearchParams(window.location.search).get("id");
+    if (!id) {
+      showBanner("Missing quote link. Please open the link from your email.");
+      loadingEl.hidden = true;
+      return;
     }
 
-    // Buttons
-    downloadBtn.addEventListener("click", async () => {
-      downloadBtn.disabled = true;
-      try {
-        const code = (quote.data?.quote_code || "Quote").replace(/[^\w\-]+/g, "_");
-        const companySlug = (quote.data?.company?.name || "Quote")
-          .replace(/[^\w\-]+/g, "_")
-          .slice(0, 40);
-        const filename = `${companySlug}_${code}.pdf`;
-        await exportPdfManual({ filename });
-      } finally {
-        downloadBtn.disabled = false;
+    // Wire buttons
+    downloadBtn?.addEventListener("click", exportPdfManual);
+
+    acceptJumpBtn?.addEventListener("click", () => {
+      if (acceptSectionEl && !acceptSectionEl.hidden) {
+        acceptSectionEl.scrollIntoView({ behavior: "smooth", block: "start" });
+        // Give a small hint (focus)
+        setTimeout(() => signNowBtn?.focus?.(), 250);
       }
     });
 
-    function openIfAllowed() {
-      if (isCancelled || isAccepted) return;
-      openSigModal({ customerName });
-    }
+    signNowBtn?.addEventListener("click", openSigModal);
 
-    acceptBtn.addEventListener("click", openIfAllowed);
-    signNowBtn?.addEventListener("click", openIfAllowed);
-
-    // Modal close handlers
     sigCloseBtn?.addEventListener("click", closeSigModal);
     sigModal?.addEventListener("click", (e) => {
       if (e.target === sigModal) closeSigModal();
     });
 
-    // Signature pad handlers
-    if (sigCanvas) {
-      sigCanvas.onpointerdown = onSigPointerDown;
-      sigCanvas.onpointermove = onSigPointerMove;
-      sigCanvas.onpointerup = onSigPointerUp;
-      sigCanvas.onpointercancel = onSigPointerUp;
-      sigCanvas.onpointerleave = onSigPointerUp;
-    }
-
     sigClearBtn?.addEventListener("click", clearSignature);
+    sigSubmitBtn?.addEventListener("click", submitSignature);
 
-    sigSubmitBtn?.addEventListener("click", async () => {
-      if (isCancelled || isAccepted) return;
-
-      if (!sigHasInk) {
-        showBanner("Please draw your signature to continue.");
-        return;
-      }
-
-      sigSubmitBtn.disabled = true;
-      sigClearBtn.disabled = true;
-      sigCloseBtn.disabled = true;
-      $("#accept-pill").textContent = "Sending…";
-      showBanner("");
-
-      try {
-        const signature_data_url = sigCanvas.toDataURL("image/png");
-
-        const out = await postJSON("/api/accept-quote", {
-          quote_id: id,
-          signature_data_url,
-        });
-
-        // Update doc signature fields
-        if (clientSigImg) {
-          clientSigImg.src = signature_data_url;
-          clientSigImg.hidden = false;
-        }
-
-        $("#v-client-name").textContent = customerName || "Client";
-        $("#v-client-date").textContent = fmtDate(out.accepted_at.slice(0, 10));
-
-        vQuoteStatus.textContent = "Accepted";
-        $("#accept-pill").textContent = "Accepted";
-
-        // lock CTAs
-        acceptBtn.disabled = true;
-        if (signNowBtn) signNowBtn.disabled = true;
-
-        closeSigModal();
-        showBanner("Accepted. Thank you — we’ll be in touch to schedule the next steps.");
-      } catch (e) {
-        $("#accept-pill").textContent = "Ready";
-        showBanner(e?.message || "Acceptance failed.");
-      } finally {
-        sigSubmitBtn.disabled = false;
-        sigClearBtn.disabled = false;
-        sigCloseBtn.disabled = false;
-      }
+    window.addEventListener("resize", () => {
+      if (!sigModal?.hidden) setupCanvas();
     });
 
-    // If already accepted, lock CTAs
-    if (isAccepted) {
-      $("#accept-pill").textContent = "Accepted";
-      acceptBtn.disabled = true;
-      if (signNowBtn) signNowBtn.disabled = true;
+    // Canvas drawing events
+    sigCanvas?.addEventListener("pointerdown", onPointerDown);
+    sigCanvas?.addEventListener("pointermove", onPointerMove);
+    sigCanvas?.addEventListener("pointerup", onPointerUp);
+    sigCanvas?.addEventListener("pointercancel", onPointerUp);
+
+    // Fetch quote (PUBLIC endpoint — no auth required)
+    const out = await getJSON(`/api/public-quote?id=${encodeURIComponent(id)}`);
+    _quoteRow = out.quote;
+    _quoteData = _quoteRow.data || {};
+
+    loadingEl.hidden = true;
+    quotePageEl.hidden = false;
+
+    fillQuote(_quoteRow);
+
+    // Show acceptance section if needed
+    const acceptance = _quoteData?.acceptance;
+    const status = safeStr(_quoteRow.status).toLowerCase();
+    if (!acceptance?.accepted_at && status !== "cancelled") {
+      acceptSectionEl.hidden = false;
+      $("#accept-pill").textContent = "Ready";
+    } else if (acceptance?.accepted_at) {
+      acceptSectionEl.hidden = true;
     }
 
-    // Ensure modal canvas scales properly when device rotates
-    window.addEventListener("resize", () => {
-      if (sigModal && !sigModal.hidden) setupSignaturePad();
-    });
+    // If accepted, ensure header CTA reflects it
+    if (acceptance?.accepted_at && acceptJumpBtn) {
+      acceptJumpBtn.disabled = true;
+      acceptJumpBtn.textContent = "Signed";
+    }
+
   } catch (e) {
     console.error(e);
+    loadingEl.hidden = true;
     showBanner(e?.message || "Failed to load quote.");
-    loadingEl.textContent = "Failed to load quote.";
   }
 }
 
-main();
+init();
