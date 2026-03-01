@@ -713,13 +713,28 @@ body{
   min-height: 11in !important;
   padding: 0.62in !important;
 }
-.pdf-export .letterhead{ grid-template-columns: 140px 1fr !important; }
+
+/* Force desktop letterhead + grids even when the real viewport is mobile */
+.pdf-export .letterhead{
+  grid-template-columns: 140px 1fr !important;
+  text-align: left !important;
+}
+.pdf-export .logo-col{ justify-content:flex-start !important; }
+.pdf-export .logo-box{ margin: 0 !important; }
+.pdf-export .company-row{
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+}
+.pdf-export .company-contact{ justify-content:flex-start !important; }
+.pdf-export .doc-block{ align-items:flex-end !important; }
+
 .pdf-export .meta-strip{ grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
 .pdf-export .grid-2{ grid-template-columns: 1fr 1fr !important; }
 .pdf-export .signatures{ grid-template-columns: 1fr 1fr !important; }
+
 .pdf-export .items-desktop{ display:block !important; }
 .pdf-export .items-mobile{ display:none !important; }
-
 .btn:disabled{
   opacity: 0.55;
   cursor: not-allowed;

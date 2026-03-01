@@ -995,7 +995,7 @@ async function exportPdfManual() {
         useCORS: true,
         allowTaint: true,
         backgroundColor: "#ffffff",
-        windowWidth: PAGE_W_CSS,
+        windowWidth: 1200, // force desktop layout for PDF (prevents mobile-stacked header)
         windowHeight: sliceH,
         scrollX: 0,
         scrollY: 0,
