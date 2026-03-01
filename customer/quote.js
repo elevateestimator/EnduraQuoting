@@ -209,27 +209,72 @@ function initialsFromName(name) {
   return (a + b).toUpperCase();
 }
 
-function setLogoWithFallback(imgEl, fallbackEl, initials, url) {
+function setLogoWithFallback(imgEl, fallbackEl, initials, primaryUrl, proxyUrl) {
   if (!imgEl) return;
 
-  // Always clear previous error handler to avoid stacking.
+  // Reset handlers so we don't stack multiple listeners.
   imgEl.onerror = null;
+  imgEl.onload = null;
 
   const showFallback = () => {
-    try { imgEl.hidden = true; } catch {}
+    try {
+      imgEl.hidden = true;
+    } catch {}
     if (fallbackEl) {
       fallbackEl.textContent = initials;
       fallbackEl.hidden = false;
     }
   };
 
-  if (!url) return showFallback();
+  const tryLoad = (src, onFail) => {
+    const s = safeStr(src);
+    if (!s) return onFail?.();
 
-  // Prefer image, but fall back to initials if it fails.
-  if (fallbackEl) fallbackEl.hidden = true;
-  imgEl.hidden = false;
-  imgEl.onerror = showFallback;
-  imgEl.src = url;
+    // Hide fallback while attempting.
+    if (fallbackEl) fallbackEl.hidden = true;
+    try {
+      imgEl.hidden = false;
+    } catch {}
+
+    // Helps PDF canvas capture when src is cross-origin, and doesn't hurt for same-origin.
+    try {
+      imgEl.crossOrigin = "anonymous";
+    } catch {}
+
+    imgEl.onload = () => {
+      if (fallbackEl) fallbackEl.hidden = true;
+      try {
+        imgEl.hidden = false;
+      } catch {}
+    };
+
+    imgEl.onerror = () => {
+      onFail?.();
+    };
+
+    imgEl.src = s;
+  };
+
+  const p = safeStr(primaryUrl);
+  const proxy = safeStr(proxyUrl);
+
+  // Strategy:
+  // 1) Try whatever URL we have (data URL / public URL)
+  // 2) If it errors, fall back to a same-origin proxy endpoint (/api/company-logo)
+  // 3) If that errors too, fall back to initials.
+  if (p) {
+    let usedProxy = false;
+    return tryLoad(p, () => {
+      if (!usedProxy && proxy) {
+        usedProxy = true;
+        return tryLoad(proxy, showFallback);
+      }
+      showFallback();
+    });
+  }
+
+  if (proxy) return tryLoad(proxy, showFallback);
+  showFallback();
 }
 
 function pickLogoUrl(company = {}, data = {}) {
@@ -456,12 +501,16 @@ function fillQuote(quote) {
 
   // Logo
   const logoUrl = pickLogoUrl(company, data);
+  // Same-origin proxy as a bulletproof fallback (solves: private buckets, bad snapshot URLs, CORS/PDF issues)
+  const proxyLogoUrl = quote?.id
+    ? `/api/company-logo?quote_id=${encodeURIComponent(quote.id)}&v=${Date.now()}`
+    : "";
 
-  // Always show a mark (logo or initials). If the image fails to load (bad URL/private bucket),
-  // fall back to initials so the customer never sees a broken header.
+  // Always show a mark (logo or initials). If the primary URL fails to load,
+  // we automatically fall back to the proxy, then to initials.
   const initials = initialsFromName(companyName || "Company");
-  setLogoWithFallback(siteLogoEl, siteLogoFallbackEl, initials, logoUrl);
-  setLogoWithFallback(docLogoEl, docLogoInitialsEl, initials, logoUrl);
+  setLogoWithFallback(siteLogoEl, siteLogoFallbackEl, initials, logoUrl, proxyLogoUrl);
+  setLogoWithFallback(docLogoEl, docLogoInitialsEl, initials, logoUrl, proxyLogoUrl);
 
   // Contact
   const addr1 = safeStr(company.addr1 || company.address1 || company.address || "");
