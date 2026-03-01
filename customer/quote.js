@@ -500,17 +500,21 @@ function fillQuote(quote) {
   applyBrandColor(company.brand_color || company.brandColour || company.brand || "#000000");
 
   // Logo
-  const logoUrl = pickLogoUrl(company, data);
-  // Same-origin proxy as a bulletproof fallback (solves: private buckets, bad snapshot URLs, CORS/PDF issues)
-  const proxyLogoUrl = quote?.id
-    ? `/api/company-logo?quote_id=${encodeURIComponent(quote.id)}&v=${Date.now()}`
-    : "";
+const logoUrl = pickLogoUrl(company, data);
+// Same-origin proxy (best default for public pages + PDFs)
+const proxyLogoUrl = quote?.id
+  ? `/api/company-logo?quote_id=${encodeURIComponent(quote.id)}&v=${Date.now()}`
+  : "";
 
-  // Always show a mark (logo or initials). If the primary URL fails to load,
-  // we automatically fall back to the proxy, then to initials.
-  const initials = initialsFromName(companyName || "Company");
-  setLogoWithFallback(siteLogoEl, siteLogoFallbackEl, initials, logoUrl, proxyLogoUrl);
-  setLogoWithFallback(docLogoEl, docLogoInitialsEl, initials, logoUrl, proxyLogoUrl);
+// Always show a mark (logo or initials). Prefer embedded data URL if present (best for PDF),
+// otherwise prefer proxy (same-origin, avoids CORS/canvas issues), then fall back to any URL we have.
+const initials = initialsFromName(companyName || "Company");
+const hasDataLogo = !!logoUrl && logoUrl.startsWith("data:");
+const primaryLogo = hasDataLogo ? logoUrl : (proxyLogoUrl || logoUrl);
+const secondaryLogo = hasDataLogo ? "" : (logoUrl && logoUrl !== primaryLogo ? logoUrl : "");
+
+setLogoWithFallback(siteLogoEl, siteLogoFallbackEl, initials, primaryLogo, secondaryLogo);
+setLogoWithFallback(docLogoEl, docLogoInitialsEl, initials, primaryLogo, secondaryLogo);
 
   // Contact
   const addr1 = safeStr(company.addr1 || company.address1 || company.address || "");

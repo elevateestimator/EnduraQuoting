@@ -3,6 +3,9 @@ import { createClient } from "@supabase/supabase-js";
 /**
  * GET /api/public-quote?id=<quote_id>
  * Returns a sanitized payload for the customer quote page.
+ *
+ * This endpoint is allowed to use the Service Role key because it only returns
+ * a single quote by ID, plus the company snapshot needed to render the quote.
  */
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -24,7 +27,9 @@ export default async function handler(req, res) {
       return;
     }
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false },
+    });
 
     const { data: quote, error } = await supabase
       .from("quotes")
@@ -39,22 +44,32 @@ export default async function handler(req, res) {
 
     const LOGO_BUCKET_DEFAULT = "company-logos";
 
+    const safeDecode = (s = "") => {
+      try {
+        return decodeURIComponent(String(s));
+      } catch {
+        return String(s);
+      }
+    };
+
     const stripQuery = (u = "") => String(u).split("?")[0];
 
     const mimeFromPath = (p = "") => {
-      const lower = p.toLowerCase();
+      const lower = String(p).toLowerCase();
       if (lower.endsWith(".png")) return "image/png";
       if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
       if (lower.endsWith(".svg")) return "image/svg+xml";
+      if (lower.endsWith(".webp")) return "image/webp";
       return "image/png";
     };
 
-    const parsePublicStorageUrl = (url) => {
-      // https://<project>.supabase.co/storage/v1/object/public/<bucket>/<path>
+    const parseSupabaseStorageUrl = (url) => {
+      // public: .../storage/v1/object/public/<bucket>/<path>
+      // signed: .../storage/v1/object/sign/<bucket>/<path>?token=...
       const clean = stripQuery(url);
-      const m = clean.match(/\/storage\/v1\/object\/public\/([^/]+)\/(.+)$/);
+      const m = clean.match(/\/storage\/v1\/object\/(?:public|sign)\/([^/]+)\/(.+)$/);
       if (!m) return null;
-      return { bucket: m[1], path: m[2] };
+      return { bucket: m[1], path: safeDecode(m[2]) };
     };
 
     const blobToDataUrl = async (blob, mimeFallback = "image/png") => {
@@ -66,16 +81,17 @@ export default async function handler(req, res) {
 
     const tryDownloadFromStorage = async (bucket, path) => {
       if (!bucket || !path) return null;
+      const cleanPath = String(path).replace(/^\/+/, "");
       try {
-        const { data: b, error: e } = await supabase.storage.from(bucket).download(path);
+        const { data: b, error: e } = await supabase.storage.from(bucket).download(cleanPath);
         if (e || !b) return null;
-        return { blob: b, bucket, path };
+        return { blob: b, bucket, path: cleanPath };
       } catch {
         return null;
       }
     };
 
-    const tryFetchPublicUrl = async (url) => {
+    const tryFetchHttpImage = async (url) => {
       try {
         const r = await fetch(url);
         if (!r.ok) return null;
@@ -91,83 +107,85 @@ export default async function handler(req, res) {
     const resolveLogoDataUrl = async (company) => {
       if (!company) return null;
 
-      // 1) If logo_url is a Supabase public storage URL, parse bucket/path and download server-side.
       const logoUrl = String(company.logo_url || "").trim();
       const candidates = [];
 
       if (logoUrl) {
-        const parsed = logoUrl.startsWith("http") ? parsePublicStorageUrl(logoUrl) : null;
-        if (parsed) candidates.push(parsed);
+        if (logoUrl.startsWith("http")) {
+          const parsed = parseSupabaseStorageUrl(logoUrl);
+          if (parsed) candidates.push(parsed);
+        }
 
-        // If logo_url is a raw storage path (no domain), treat it as a path in the default bucket.
-        if (!parsed && !logoUrl.startsWith("http") && !logoUrl.startsWith("data:")) {
-          candidates.push({ bucket: LOGO_BUCKET_DEFAULT, path: logoUrl.replace(/^\/+/, "") });
+        // Raw storage path
+        if (!logoUrl.startsWith("http") && !logoUrl.startsWith("data:")) {
+          candidates.push({ bucket: LOGO_BUCKET_DEFAULT, path: safeDecode(logoUrl).replace(/^\/+/, "") });
         }
       }
 
-      // 2) Default path used by Settings upload.
+      // Conventional path used by Settings upload
       if (company.id) {
         candidates.push({ bucket: LOGO_BUCKET_DEFAULT, path: `${company.id}/logo.png` });
         candidates.push({ bucket: LOGO_BUCKET_DEFAULT, path: `${company.id}/logo.jpg` });
         candidates.push({ bucket: LOGO_BUCKET_DEFAULT, path: `${company.id}/logo.jpeg` });
+        candidates.push({ bucket: LOGO_BUCKET_DEFAULT, path: `${company.id}/logo.svg` });
+        candidates.push({ bucket: LOGO_BUCKET_DEFAULT, path: `${company.id}/logo.webp` });
       }
 
-      // Try downloads.
       for (const c of candidates) {
         const hit = await tryDownloadFromStorage(c.bucket, c.path);
-        if (hit?.blob) {
-          return await blobToDataUrl(hit.blob, mimeFromPath(hit.path));
-        }
+        if (hit?.blob) return await blobToDataUrl(hit.blob, mimeFromPath(hit.path));
       }
 
-      // 3) If still not found, try listing the company folder (handles custom filenames).
+      // If still not found, list the company folder (handles custom filenames)
       if (company.id) {
         try {
           const { data: files } = await supabase.storage.from(LOGO_BUCKET_DEFAULT).list(company.id, {
-            limit: 50,
+            limit: 100,
             sortBy: { column: "name", order: "asc" },
           });
 
           const pick = (files || []).find((f) => {
             const n = String(f?.name || "").toLowerCase();
-            return n.endsWith(".png") || n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".svg");
+            return n.endsWith(".png") || n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".svg") || n.endsWith(".webp");
           });
 
           if (pick?.name) {
             const p = `${company.id}/${pick.name}`;
             const hit = await tryDownloadFromStorage(LOGO_BUCKET_DEFAULT, p);
-            if (hit?.blob) {
-              return await blobToDataUrl(hit.blob, mimeFromPath(p));
-            }
+            if (hit?.blob) return await blobToDataUrl(hit.blob, mimeFromPath(p));
           }
         } catch {
           // ignore
         }
       }
 
-      // 4) Last resort: if logo_url is an HTTP URL (non-storage), fetch it and embed as data URL.
+      // External HTTP logo (non-storage)
       if (logoUrl && logoUrl.startsWith("http")) {
-        const fetched = await tryFetchPublicUrl(logoUrl);
+        const fetched = await tryFetchHttpImage(logoUrl);
         if (fetched?.dataUrl) return fetched.dataUrl;
       }
 
       return null;
     };
 
-    // Merge live company fields as fallbacks so older quotes still render properly.
-    // Snapshot fields (quote.data.company) take precedence.
+    // ========= Merge company defaults (live DB) into quote snapshot =========
+    // IMPORTANT: Quotes are rendered from snapshot (quote.data.company) for immutability.
+    // But for public viewing we still merge any missing fields from the company record.
     try {
-      if (quote?.company_id) {
+      const companyId =
+        quote.company_id ||
+        quote?.data?.company_id ||
+        quote?.data?.company?.id ||
+        null;
+
+      if (companyId) {
         const { data: company } = await supabase
           .from("companies")
-          .select(
-            "id,name,addr1,addr2,phone,email,web,logo_url,brand_color,currency,tax_name,tax_rate,payment_terms"
-          )
-          .eq("id", quote.company_id)
+          .select("id,name,addr1,addr2,phone,email,web,logo_url,brand_color,currency,tax_name,tax_rate,payment_terms")
+          .eq("id", companyId)
           .maybeSingle();
 
         if (company) {
-          // Embed logo as a data URL to make it bulletproof on the public customer page + PDFs.
           try {
             const logoDataUrl = await resolveLogoDataUrl(company);
             if (logoDataUrl) company.logo_data_url = logoDataUrl;
@@ -176,7 +194,6 @@ export default async function handler(req, res) {
           }
 
           quote.data = quote.data || {};
-          // Helpful for older rows that stored only a storage path.
           quote.data._supabase_url = SUPABASE_URL;
           quote.data.logo_bucket = LOGO_BUCKET_DEFAULT;
 
@@ -188,7 +205,6 @@ export default async function handler(req, res) {
       // ignore
     }
 
-    // Minimal sanitization: customer sees their own details anyway.
     res.status(200).json({
       ok: true,
       quote: {
