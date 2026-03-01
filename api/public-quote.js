@@ -197,8 +197,18 @@ export default async function handler(req, res) {
           quote.data._supabase_url = SUPABASE_URL;
           quote.data.logo_bucket = LOGO_BUCKET_DEFAULT;
 
-          // company defaults first, then snapshot overrides
-          quote.data.company = { ...(company || {}), ...(quote.data.company || {}) };
+// Company defaults first, then snapshot overrides.
+// BUT: don't let empty strings in old quote snapshots wipe out newer company settings
+// (especially the logo).
+const snapCompany =
+  quote.data.company && typeof quote.data.company === "object" ? quote.data.company : {};
+const mergedCompany = { ...(company || {}) };
+for (const [k, v] of Object.entries(snapCompany)) {
+  if (v === null || v === undefined) continue;
+  if (typeof v === "string" && v.trim() === "") continue;
+  mergedCompany[k] = v;
+}
+quote.data.company = mergedCompany;
         }
       }
     } catch {

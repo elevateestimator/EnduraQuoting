@@ -500,34 +500,19 @@ function fillQuote(quote) {
   applyBrandColor(company.brand_color || company.brandColour || company.brand || "#000000");
 
   // Logo
-const logoUrl = pickLogoUrl(company, data);
-// Same-origin proxy (best default for public pages + PDFs)
-let proxyLogoUrl = "";
+  const logoUrl = pickLogoUrl(company, data);
 
-// Prefer passing company_id (avoids failures if quote IDs are not UUIDs / public tokens are used)
-const companyIdForLogo =
-  safeStr(quote.company_id) ||
-  safeStr(data.company_id) ||
-  safeStr(company.id) ||
-  safeStr(company.company_id) ||
-  "";
+  // Optional same-origin proxy. Use ONLY as a fallback if the direct URL fails.
+  // When the logo is stored as a data: URL from Settings, the proxy is never needed.
+  const proxyLogoUrl = quote?.id
+    ? `/api/company-logo?quote_id=${encodeURIComponent(quote.id)}&v=${Date.now()}`
+    : "";
 
-if (companyIdForLogo) {
-  proxyLogoUrl = `/api/company-logo?company_id=${encodeURIComponent(companyIdForLogo)}&v=${Date.now()}`;
-} else if (quote?.id) {
-  proxyLogoUrl = `/api/company-logo?quote_id=${encodeURIComponent(quote.id)}&v=${Date.now()}`;
-}
+  const initials = initialsFromName(companyName || "Company");
 
-
-// Always show a mark (logo or initials). Prefer embedded data URL if present (best for PDF),
-// otherwise prefer proxy (same-origin, avoids CORS/canvas issues), then fall back to any URL we have.
-const initials = initialsFromName(companyName || "Company");
-const hasDataLogo = !!logoUrl && logoUrl.startsWith("data:");
-const primaryLogo = hasDataLogo ? logoUrl : (proxyLogoUrl || logoUrl);
-const secondaryLogo = hasDataLogo ? "" : (logoUrl && logoUrl !== primaryLogo ? logoUrl : "");
-
-setLogoWithFallback(siteLogoEl, siteLogoFallbackEl, initials, primaryLogo, secondaryLogo);
-setLogoWithFallback(docLogoEl, docLogoInitialsEl, initials, primaryLogo, secondaryLogo);
+  // Try the direct logo first (data URL / public URL). If it fails, fall back to the proxy, then initials.
+  setLogoWithFallback(siteLogoEl, siteLogoFallbackEl, initials, logoUrl, proxyLogoUrl);
+  setLogoWithFallback(docLogoEl, docLogoInitialsEl, initials, logoUrl, proxyLogoUrl);
 
   // Contact
   const addr1 = safeStr(company.addr1 || company.address1 || company.address || "");

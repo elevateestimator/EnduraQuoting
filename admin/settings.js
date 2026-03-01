@@ -652,6 +652,85 @@ async function sendResetEmail() {
   }
 }
 
+/* =========================================================
+   Logo helpers (embed logo as data URL for 100% reliability)
+   ========================================================= */
+
+/**
+ * Read a File as a data: URL (base64).
+ */
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    try {
+      const fr = new FileReader();
+      fr.onload = () => resolve(String(fr.result || ""));
+      fr.onerror = () => reject(new Error("Failed to read image file."));
+      fr.readAsDataURL(file);
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
+/**
+ * Resize an image data URL to a smaller PNG data URL.
+ * This keeps the stored logo lightweight while still crisp.
+ */
+function resizeImageDataUrlToPng(dataUrl, { maxWidth = 520, maxHeight = 220 } = {}) {
+  return new Promise((resolve, reject) => {
+    try {
+      const img = new Image();
+      img.decoding = "async";
+      img.onload = () => {
+        try {
+          const w = img.naturalWidth || img.width || 1;
+          const h = img.naturalHeight || img.height || 1;
+
+          // Never upscale
+          const scale = Math.min(1, maxWidth / w, maxHeight / h);
+          const outW = Math.max(1, Math.round(w * scale));
+          const outH = Math.max(1, Math.round(h * scale));
+
+          const canvas = document.createElement("canvas");
+          canvas.width = outW;
+          canvas.height = outH;
+
+          const ctx = canvas.getContext("2d");
+          if (!ctx) throw new Error("Canvas not supported.");
+
+          ctx.clearRect(0, 0, outW, outH);
+          ctx.drawImage(img, 0, 0, outW, outH);
+
+          const out = canvas.toDataURL("image/png");
+          resolve(out);
+        } catch (e) {
+          reject(e);
+        }
+      };
+      img.onerror = () => reject(new Error("Could not load image for resizing."));
+      img.src = String(dataUrl || "");
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
+/**
+ * Convert the uploaded logo file into an embedded PNG data URL.
+ * This avoids Storage permission/CORS issues and guarantees the logo renders
+ * on public customer quote pages and in PDFs.
+ */
+async function fileToEmbeddedLogoDataUrl(file) {
+  const raw = await readFileAsDataUrl(file);
+  try {
+    // Keep it small and fast. Adjust if you want larger letterhead logos.
+    return await resizeImageDataUrlToPng(raw, { maxWidth: 520, maxHeight: 220 });
+  } catch {
+    // If resizing fails for any reason, fall back to the original data URL.
+    return raw;
+  }
+}
+
 /* Logo upload flow */
 function wireLogoPicker() {
   if (!pickLogoBtn || !logoFileEl) return;
@@ -699,22 +778,27 @@ async function uploadLogo() {
 
   try {
     const companyId = state.company.id;
-    const path = `${companyId}/logo.png`;
 
-    const { error: upErr } = await supabase.storage
-      .from("company-logos")
-      .upload(path, file, { upsert: true, contentType: "image/png" });
+    // 1) Create an embedded logo (data URL) that ALWAYS works on public pages/PDFs.
+    const embeddedDataUrl = await fileToEmbeddedLogoDataUrl(file);
 
-    if (upErr) throw upErr;
+    // 2) Optional: also upload to Storage for backup/future use (non-blocking).
+    //    The customer-facing app will rely on the embedded data URL, not Storage.
+    try {
+      const path = `${companyId}/logo.png`;
+      const { error: upErr } = await supabase.storage
+        .from("company-logos")
+        .upload(path, file, { upsert: true, contentType: "image/png" });
 
-    const { data } = supabase.storage.from("company-logos").getPublicUrl(path);
-    const publicUrl = data?.publicUrl ? `${data.publicUrl}?v=${Date.now()}` : null;
+      if (upErr) console.warn("Logo Storage upload error:", upErr);
+    } catch (e) {
+      console.warn("Logo Storage upload exception:", e);
+    }
 
-    if (!publicUrl) throw new Error("Failed to generate logo URL.");
-
+    // 3) Save the embedded data URL to the company record.
     const { data: c2, error: cErr } = await supabase
       .from("companies")
-      .update({ logo_url: publicUrl })
+      .update({ logo_url: embeddedDataUrl })
       .eq("id", companyId)
       .select("*")
       .single();
@@ -722,9 +806,9 @@ async function uploadLogo() {
     if (cErr) throw cErr;
 
     state.company = c2;
-    companyLogoImg.src = publicUrl;
+    companyLogoImg.src = embeddedDataUrl;
 
-    setLogoMsg("Logo uploaded.");
+    setLogoMsg("Logo updated (stored as embedded image for reliable customer viewing).");
     toast("Logo updated.");
   } catch (e) {
     setError(e?.message || "Failed to upload logo.");
