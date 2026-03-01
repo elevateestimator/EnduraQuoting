@@ -518,16 +518,24 @@ function fillQuote(quote) {
   const addr1 = safeStr(company.addr1 || company.address1 || company.address || "");
   const addr2 = safeStr(company.addr2 || company.address2 || "");
 
-  $("#v-company-addr1").textContent = addr1;
-  $("#v-company-addr2").textContent = addr2;
-  $("#v-company-phone").textContent = safeStr(company.phone);
-  $("#v-company-email").textContent = safeStr(company.email);
-  $("#v-company-web").textContent = safeStr(company.web);
+  const phone = safeStr(company.phone);
+  const email = safeStr(company.email || company.owner_email || "");
+  const web = safeStr(company.web || company.website || "");
 
-  // Remove empty contact spans (avoids stray bullets)
-  $$("#v-company-contact span").forEach((el) => {
-    if (!safeStr(el.textContent)) el.remove();
-  });
+  // IMPORTANT:
+  // We rebuild the contact line each render instead of removing individual spans.
+  // The old approach removed empty spans from the DOM, which caused crashes on re-render
+  // (e.g. after signing) when we tried to update a span that no longer existed.
+  const contactWrap = $("#v-company-contact");
+  if (contactWrap) {
+    contactWrap.innerHTML = "";
+    const parts = [addr1, addr2, phone, email, web].filter((p) => safeStr(p));
+    for (const part of parts) {
+      const sp = document.createElement("span");
+      sp.textContent = part;
+      contactWrap.appendChild(sp);
+    }
+  }
 
   // Meta
   $("#v-meta-quote").textContent = quoteCode;
