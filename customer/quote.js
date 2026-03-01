@@ -501,36 +501,33 @@ function fillQuote(quote) {
 
   // Logo
 const logoUrl = pickLogoUrl(company, data);
+// Same-origin proxy (best default for public pages + PDFs)
+let proxyLogoUrl = "";
 
-// Same-origin proxy (works for public pages + PDFs and avoids CORS/canvas issues)
-const proxyLogoUrl = quote?.id
-  ? `/api/company-logo?quote_id=${encodeURIComponent(quote.id)}&v=${Date.now()}`
-  : "";
+// Prefer passing company_id (avoids failures if quote IDs are not UUIDs / public tokens are used)
+const companyIdForLogo =
+  safeStr(quote.company_id) ||
+  safeStr(data.company_id) ||
+  safeStr(company.id) ||
+  safeStr(company.company_id) ||
+  "";
 
-// Always show a mark (logo or initials).
-// Load order matters:
-// 1) Use the logo URL/data we already have (shows the real company logo immediately when available).
-// 2) Fall back to the same-origin proxy (works even when the logo URL is private or lacks CORS headers).
-// 3) Fall back to initials.
-const initials = initialsFromName(companyName || "Company");
-
-let primaryLogo = "";
-let fallbackLogo = "";
-
-if (logoUrl) {
-  primaryLogo = logoUrl;
-  fallbackLogo = proxyLogoUrl || "";
-} else {
-  primaryLogo = proxyLogoUrl || "";
-  fallbackLogo = "";
+if (companyIdForLogo) {
+  proxyLogoUrl = `/api/company-logo?company_id=${encodeURIComponent(companyIdForLogo)}&v=${Date.now()}`;
+} else if (quote?.id) {
+  proxyLogoUrl = `/api/company-logo?quote_id=${encodeURIComponent(quote.id)}&v=${Date.now()}`;
 }
 
-// Avoid pointless double-tries.
-if (primaryLogo && fallbackLogo && primaryLogo === fallbackLogo) fallbackLogo = "";
 
-setLogoWithFallback(siteLogoEl, siteLogoFallbackEl, initials, primaryLogo, fallbackLogo);
-setLogoWithFallback(docLogoEl, docLogoInitialsEl, initials, primaryLogo, fallbackLogo);
+// Always show a mark (logo or initials). Prefer embedded data URL if present (best for PDF),
+// otherwise prefer proxy (same-origin, avoids CORS/canvas issues), then fall back to any URL we have.
+const initials = initialsFromName(companyName || "Company");
+const hasDataLogo = !!logoUrl && logoUrl.startsWith("data:");
+const primaryLogo = hasDataLogo ? logoUrl : (proxyLogoUrl || logoUrl);
+const secondaryLogo = hasDataLogo ? "" : (logoUrl && logoUrl !== primaryLogo ? logoUrl : "");
 
+setLogoWithFallback(siteLogoEl, siteLogoFallbackEl, initials, primaryLogo, secondaryLogo);
+setLogoWithFallback(docLogoEl, docLogoInitialsEl, initials, primaryLogo, secondaryLogo);
 
   // Contact
   const addr1 = safeStr(company.addr1 || company.address1 || company.address || "");

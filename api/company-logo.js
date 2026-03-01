@@ -1,54 +1,69 @@
+import { createClient } from "@supabase/supabase-js";
+
 /**
- * /api/company-logo
- * Returns the company logo image (PNG/JPG/etc) for a given quote or company.
+ * GET /api/company-logo
+ *
+ * Returns the company logo image for a given company or quote.
  *
  * Why this exists:
  * - Customer quote pages are PUBLIC (no Supabase auth session).
- * - Company logos live in Supabase Storage + companies.logo_url.
- * - Fetching the logo via same-origin (/api/...) avoids CORS issues and ensures PDF capture works.
+ * - Company logos often live in Supabase Storage (sometimes PRIVATE).
+ * - Returning the logo via same-origin avoids CORS/canvas issues (PDF export).
  *
- * Inputs:
- * - quote_id (preferred) OR quote OR id  -> the quote UUID used in your public quote link (?id=...)
- * - company_id                           -> alternatively fetch logo by company id
- *
- * Notes:
- * - This handler is intentionally resilient:
- *   - If companies.logo_url is a full URL, we can fetch it.
- *   - If companies.logo_url is only a Storage path, we can download it using the Service Role key.
- *   - If the bucket is PRIVATE, downloading via Supabase Storage still works (service role bypasses RLS).
- * - On any failure, we return an SVG placeholder so the <img> never breaks the layout.
+ * Query params:
+ * - company_id (best)           -> fetch logo by company id (no quote lookup)
+ * - quote_id / id / quote       -> fallback: resolve company id from quote
+ * - bucket / logo_bucket        -> optional override for the storage bucket name
+ * - debug=1                     -> returns JSON debug instead of an image
  */
 
-const { createClient } = require("@supabase/supabase-js");
-
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SERVICE_ROLE =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  process.env.SUPABASE_SERVICE_ROLE_KEY /* back-compat typo */ ||
-  process.env.SUPABASE_SERVICE_ROLE ||
-  process.env.SERVICE_ROLE_KEY;
+const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-const LOGO_BUCKET_DEFAULT = process.env.COMPANY_LOGO_BUCKET || "company-logos";
-
-function safeStr(v) {
-  return String(v ?? "").trim();
-}
-
-function setCommonHeaders(res) {
-  // Helpful when the page is embedded or when html2canvas fetches with CORS.
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("X-Content-Type-Options", "nosniff");
-}
+// If you ever rename the bucket, you can set COMPANY_LOGO_BUCKET in Vercel.
+const DEFAULT_BUCKET =
+  process.env.COMPANY_LOGO_BUCKET ||
+  process.env.LOGO_BUCKET ||
+  "company-logos";
 
 function svgPlaceholder(text = "LOGO") {
-  const safe = String(text || "LOGO").slice(0, 4).toUpperCase();
+  const safe = String(text || "LOGO")
+    .replace(/[^a-z0-9]/gi, "")
+    .slice(0, 4)
+    .toUpperCase();
+
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200">
   <rect x="0" y="0" width="300" height="200" rx="24" fill="#f8fafc" stroke="#d9dee8"/>
   <text x="150" y="112" text-anchor="middle"
         font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial"
-        font-size="48" font-weight="800" fill="#1d4ed8">${safe}</text>
+        font-size="48" font-weight="800" fill="#1d4ed8">${safe || "LOGO"}</text>
 </svg>`;
+}
+
+function initialsFromName(name = "") {
+  const parts = String(name || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  const initials = parts
+    .slice(0, 2)
+    .map((p) => p[0])
+    .join("")
+    .toUpperCase();
+  return initials || "LOGO";
+}
+
+function safeDecode(s = "") {
+  try {
+    return decodeURIComponent(String(s));
+  } catch {
+    return String(s);
+  }
+}
+
+function stripQuery(u = "") {
+  return String(u).split("?")[0];
 }
 
 function mimeFromPath(p = "") {
@@ -60,18 +75,6 @@ function mimeFromPath(p = "") {
   return "image/png";
 }
 
-function stripQuery(u = "") {
-  return String(u).split("?")[0];
-}
-
-function safeDecode(s = "") {
-  try {
-    return decodeURIComponent(String(s));
-  } catch {
-    return String(s);
-  }
-}
-
 function parseSupabaseStorageUrl(url) {
   // public: .../storage/v1/object/public/<bucket>/<path>
   // signed: .../storage/v1/object/sign/<bucket>/<path>?token=...
@@ -81,221 +84,317 @@ function parseSupabaseStorageUrl(url) {
   return { bucket: m[1], path: safeDecode(m[2]) };
 }
 
-async function downloadFromStorage(supabase, bucket, path) {
+function sendSvg(res, text, cacheControl = "public, max-age=600, s-maxage=600") {
+  res.statusCode = 200;
+  res.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
+  res.setHeader("Cache-Control", cacheControl);
+  res.end(svgPlaceholder(text));
+}
+
+function sendJson(res, status, body) {
+  res.statusCode = status;
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.end(JSON.stringify(body));
+}
+
+async function blobToBuffer(blob) {
+  const ab = await blob.arrayBuffer();
+  return Buffer.from(ab);
+}
+
+async function tryDownloadFromStorage(supabase, bucket, path) {
   if (!bucket || !path) return null;
   const cleanPath = String(path).replace(/^\/+/, "");
+
   try {
     const { data: blob, error } = await supabase.storage.from(bucket).download(cleanPath);
     if (error || !blob) return null;
-    const ab = await blob.arrayBuffer();
-    const buf = Buffer.from(ab);
+
+    const buf = await blobToBuffer(blob);
     const ct = blob.type || mimeFromPath(cleanPath);
-    return { buf, ct, bucket, path: cleanPath };
+
+    return { buf, contentType: ct, bucket, path: cleanPath };
   } catch {
     return null;
   }
 }
 
-async function fetchRemoteImage(url) {
-  const u = safeStr(url);
-  if (!u) return null;
+async function tryFetchHttpImage(url) {
   try {
-    const r = await fetch(u, { method: "GET" });
+    const r = await fetch(url);
     if (!r.ok) return null;
     const ab = await r.arrayBuffer();
-    const buf = Buffer.from(ab);
     const ct = r.headers.get("content-type") || "image/png";
-    return { buf, ct };
+    return { buf: Buffer.from(ab), contentType: ct };
   } catch {
     return null;
   }
 }
 
-function initialsFromName(name = "") {
-  const parts = safeStr(name).split(/\s+/).filter(Boolean);
-  const a = parts[0]?.[0] || "";
-  const b = parts.length > 1 ? parts[parts.length - 1][0] : (parts[0]?.[1] || "");
-  return (a + b).toUpperCase() || "LOGO";
-}
+async function resolveLogoBuffer({ supabase, company, bucket }) {
+  const logoUrl = String(company?.logo_url || "").trim();
+  const companyId = String(company?.id || "").trim();
 
-module.exports = async (req, res) => {
-  try {
-    setCommonHeaders(res);
-
-    if (!SUPABASE_URL || !SERVICE_ROLE) {
-      res.statusCode = 200;
-      res.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
-      res.setHeader("Cache-Control", "no-store");
-      return res.end(svgPlaceholder("ENV"));
-    }
-
-    // Parse query from URL (works on Vercel serverless & node http servers)
-    const base = `https://${req.headers.host || "localhost"}`;
-    const u = new URL(req.url, base);
-
-    let quoteId =
-      u.searchParams.get("quote_id") ||
-      u.searchParams.get("quote") ||
-      u.searchParams.get("id") ||
-      "";
-    let companyId = u.searchParams.get("company_id") || "";
-
-    // If nothing passed, try infer from referer (helps when <img src="/api/company-logo">)
-    if (!quoteId && !companyId) {
-      const ref = req.headers.referer || req.headers.referrer;
-      if (ref) {
-        try {
-          const ru = new URL(ref);
-          quoteId =
-            ru.searchParams.get("id") ||
-            ru.searchParams.get("quote_id") ||
-            ru.searchParams.get("quote") ||
-            "";
-          companyId = ru.searchParams.get("company_id") || "";
-        } catch {
-          // ignore
-        }
-      }
-    }
-
-    // Create admin client (service role)
-    const supabase = createClient(SUPABASE_URL, SERVICE_ROLE, {
-      auth: { persistSession: false },
-    });
-
-    // Resolve companyId from quote
-    if (!companyId) {
-      if (!quoteId) {
-        res.statusCode = 200;
-        res.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
-        res.setHeader("Cache-Control", "public, max-age=600, s-maxage=600");
-        return res.end(svgPlaceholder("NOID"));
-      }
-
-      // Try quotes.id (uuid)
-      let q = null;
+  // 1) If logo_url is a data URL, decode it directly.
+  if (logoUrl.startsWith("data:")) {
+    const m = logoUrl.match(/^data:([^;,]+)(;base64)?,(.*)$/i);
+    if (m) {
+      const ct = m[1] || "image/png";
+      const isB64 = !!m[2];
+      const payload = m[3] || "";
       try {
-        const { data } = await supabase
-          .from("quotes")
-          .select("company_id")
-          .eq("id", quoteId)
-          .maybeSingle();
-        q = data || null;
+        const buf = isB64 ? Buffer.from(payload, "base64") : Buffer.from(decodeURIComponent(payload), "utf-8");
+        return { buf, contentType: ct };
       } catch {
-        // ignore
-      }
-
-      // Optional fallback if you use a separate public_id on quotes
-      if (!q) {
-        try {
-          const { data } = await supabase
-            .from("quotes")
-            .select("company_id")
-            .eq("public_id", quoteId)
-            .maybeSingle();
-          q = data || null;
-        } catch {
-          // ignore
-        }
-      }
-
-      companyId = q?.company_id || "";
-      if (!companyId) {
-        res.statusCode = 200;
-        res.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
-        res.setHeader("Cache-Control", "public, max-age=600, s-maxage=600");
-        return res.end(svgPlaceholder("404"));
+        // continue
       }
     }
+  }
 
-    // Pull company info
-    const { data: company } = await supabase
-      .from("companies")
-      .select("id,name,logo_url")
-      .eq("id", companyId)
-      .maybeSingle();
+  const candidates = [];
 
-    const companyName = safeStr(company?.name) || "Company";
-    const initials = initialsFromName(companyName);
+  // 2) If logo_url is a Supabase Storage URL, parse bucket/path.
+  if (logoUrl.startsWith("http")) {
+    const parsed = parseSupabaseStorageUrl(logoUrl);
+    if (parsed?.bucket && parsed?.path) candidates.push(parsed);
+  }
 
-    const logoUrl = safeStr(company?.logo_url);
+  // 3) If logo_url looks like a raw storage path (no http/data), try default bucket.
+  if (
+    logoUrl &&
+    !logoUrl.startsWith("http") &&
+    !logoUrl.startsWith("data:") &&
+    !logoUrl.startsWith("blob:") &&
+    !logoUrl.startsWith("/")
+  ) {
+    candidates.push({ bucket, path: safeDecode(logoUrl) });
+  }
 
-    // ===== Resolve logo bytes (prefer Storage download; it works for public + private buckets) =====
-    let hit = null;
+  // 4) Conventional paths used by common upload patterns.
+  if (companyId) {
+    candidates.push({ bucket, path: `${companyId}/logo.png` });
+    candidates.push({ bucket, path: `${companyId}/logo.jpg` });
+    candidates.push({ bucket, path: `${companyId}/logo.jpeg` });
+    candidates.push({ bucket, path: `${companyId}/logo.svg` });
+    candidates.push({ bucket, path: `${companyId}/logo.webp` });
+  }
 
-    // 1) If logo_url is a Supabase Storage URL, download it via Storage (service role).
-    if (!hit && logoUrl && logoUrl.startsWith("http")) {
-      const parsed = parseSupabaseStorageUrl(logoUrl);
-      if (parsed?.bucket && parsed?.path) {
-        hit = await downloadFromStorage(supabase, parsed.bucket, parsed.path);
-      }
-    }
+  // Try candidate downloads.
+  for (const c of candidates) {
+    const hit = await tryDownloadFromStorage(supabase, c.bucket, c.path);
+    if (hit?.buf) return { buf: hit.buf, contentType: hit.contentType };
+  }
 
-    // 2) If logo_url is a raw Storage path (common during migrations), download from default bucket.
-    if (!hit && logoUrl && !logoUrl.startsWith("http") && !logoUrl.startsWith("data:")) {
-      hit = await downloadFromStorage(supabase, LOGO_BUCKET_DEFAULT, logoUrl);
-    }
+  // 5) If still not found: list the company folder and pick the first image.
+  if (companyId) {
+    try {
+      const { data: files, error } = await supabase.storage.from(bucket).list(companyId, {
+        limit: 100,
+        sortBy: { column: "name", order: "asc" },
+      });
 
-    // 3) Conventional path used by Settings upload
-    if (!hit && companyId) {
-      const candidates = [
-        `${companyId}/logo.png`,
-        `${companyId}/logo.jpg`,
-        `${companyId}/logo.jpeg`,
-        `${companyId}/logo.svg`,
-        `${companyId}/logo.webp`,
-      ];
-      for (const p of candidates) {
-        hit = await downloadFromStorage(supabase, LOGO_BUCKET_DEFAULT, p);
-        if (hit) break;
-      }
-    }
-
-    // 4) If still not found, list the company folder (handles custom filenames)
-    if (!hit && companyId) {
-      try {
-        const { data: files } = await supabase.storage
-          .from(LOGO_BUCKET_DEFAULT)
-          .list(companyId, { limit: 100, sortBy: { column: "name", order: "asc" } });
-
-        const pick = (files || []).find((f) => {
+      if (!error && Array.isArray(files)) {
+        const pick = files.find((f) => {
           const n = String(f?.name || "").toLowerCase();
           return n.endsWith(".png") || n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".svg") || n.endsWith(".webp");
         });
 
         if (pick?.name) {
-          hit = await downloadFromStorage(supabase, LOGO_BUCKET_DEFAULT, `${companyId}/${pick.name}`);
+          const p = `${companyId}/${pick.name}`;
+          const hit = await tryDownloadFromStorage(supabase, bucket, p);
+          if (hit?.buf) return { buf: hit.buf, contentType: hit.contentType };
         }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // 6) External HTTP logo (non-storage)
+  if (logoUrl.startsWith("http")) {
+    const fetched = await tryFetchHttpImage(logoUrl);
+    if (fetched?.buf) return fetched;
+  }
+
+  return null;
+}
+
+async function findQuoteRow(supabase, token) {
+  const t = String(token || "").trim();
+  if (!t) return null;
+
+  // We try a few common columns. Missing columns or type mismatches are ignored.
+  const colsToTry = ["id", "public_id", "public_token", "publicId", "publicToken"];
+
+  for (const col of colsToTry) {
+    try {
+      const { data, error } = await supabase
+        .from("quotes")
+        .select("id,company_id,data")
+        .eq(col, t)
+        .maybeSingle();
+
+      if (data && !error) return data;
+    } catch {
+      // ignore
+    }
+  }
+
+  return null;
+}
+
+export default async function handler(req, res) {
+  // Only GET/HEAD (images)
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    res.statusCode = 405;
+    res.setHeader("Allow", "GET, HEAD");
+    return res.end("Method not allowed");
+  }
+
+  const base = `https://${req.headers.host || "localhost"}`;
+  const u = new URL(req.url || "/api/company-logo", base);
+
+  const debug = u.searchParams.get("debug") === "1";
+
+  // Grab params
+  let quoteId =
+    u.searchParams.get("quote_id") ||
+    u.searchParams.get("quote") ||
+    u.searchParams.get("id") ||
+    "";
+
+  let companyId = u.searchParams.get("company_id") || "";
+
+  const bucketOverride =
+    u.searchParams.get("bucket") ||
+    u.searchParams.get("logo_bucket") ||
+    "";
+
+  // Referer inference (helps when <img src="/api/company-logo">)
+  if (!quoteId && !companyId) {
+    const ref = req.headers.referer || req.headers.referrer;
+    if (ref) {
+      try {
+        const ru = new URL(String(ref));
+        quoteId =
+          ru.searchParams.get("id") ||
+          ru.searchParams.get("quote_id") ||
+          ru.searchParams.get("quote") ||
+          "";
+        companyId = ru.searchParams.get("company_id") || "";
       } catch {
         // ignore
       }
     }
-
-    // 5) External URL (non-storage) fallback: try fetching it directly.
-    if (!hit && logoUrl && logoUrl.startsWith("http")) {
-      hit = await fetchRemoteImage(logoUrl);
-    }
-
-    if (hit?.buf) {
-      res.statusCode = 200;
-      res.setHeader("Content-Type", hit.ct || "image/png");
-      res.setHeader(
-        "Cache-Control",
-        "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400"
-      );
-      return res.end(hit.buf);
-    }
-
-    // No logo set / couldn't fetch => placeholder with initials
-    res.statusCode = 200;
-    res.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
-    res.setHeader("Cache-Control", "public, max-age=600, s-maxage=600");
-    return res.end(svgPlaceholder(initials || "LOGO"));
-  } catch (err) {
-    setCommonHeaders(res);
-    res.statusCode = 200;
-    res.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
-    res.setHeader("Cache-Control", "no-store");
-    return res.end(svgPlaceholder("ERR"));
   }
-};
+
+  if (!SUPABASE_URL || !SERVICE_ROLE) {
+    if (debug) {
+      return sendJson(res, 500, {
+        ok: false,
+        error: "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY",
+      });
+    }
+    return sendSvg(res, "ERR", "no-store");
+  }
+
+  const supabase = createClient(SUPABASE_URL, SERVICE_ROLE, {
+    auth: { persistSession: false },
+  });
+
+  let quoteRow = null;
+  const debugTrace = {
+    quote_id: quoteId || null,
+    company_id_param: companyId || null,
+    bucket: bucketOverride || DEFAULT_BUCKET,
+    steps: [],
+  };
+
+  try {
+    // Resolve company id if not provided
+    if (!companyId && quoteId) {
+      debugTrace.steps.push("lookup_quote");
+      quoteRow = await findQuoteRow(supabase, quoteId);
+      const qCompanyId =
+        quoteRow?.company_id ||
+        quoteRow?.data?.company_id ||
+        quoteRow?.data?.company?.id ||
+        "";
+      if (qCompanyId) companyId = qCompanyId;
+    }
+
+    if (!companyId) {
+      if (debug) {
+        return sendJson(res, 200, {
+          ok: false,
+          error: "Could not resolve company_id (pass ?company_id=...)",
+          trace: debugTrace,
+        });
+      }
+      return sendSvg(res, "LOGO", "no-store");
+    }
+
+    // Fetch company
+    debugTrace.steps.push("lookup_company");
+    const { data: company, error: cErr } = await supabase
+      .from("companies")
+      .select("id,name,logo_url")
+      .eq("id", companyId)
+      .maybeSingle();
+
+    if (cErr || !company) {
+      if (debug) {
+        return sendJson(res, 200, {
+          ok: false,
+          error: "Company not found",
+          company_id: companyId,
+          supabase_error: cErr?.message || null,
+          trace: debugTrace,
+        });
+      }
+      return sendSvg(res, "LOGO", "no-store");
+    }
+
+    const bucket = bucketOverride || quoteRow?.data?.logo_bucket || DEFAULT_BUCKET;
+    debugTrace.bucket = bucket;
+
+    // Resolve logo bytes
+    debugTrace.steps.push("resolve_logo");
+    const hit = await resolveLogoBuffer({ supabase, company, bucket });
+
+    if (!hit?.buf) {
+      const initials = initialsFromName(company.name || "Company");
+      if (debug) {
+        return sendJson(res, 200, {
+          ok: false,
+          error: "Logo not found (returning placeholder)",
+          company: { id: company.id, name: company.name, logo_url: company.logo_url || null },
+          trace: debugTrace,
+        });
+      }
+      return sendSvg(res, initials, "public, max-age=300, s-maxage=300");
+    }
+
+    // Success
+    res.statusCode = 200;
+    res.setHeader("Content-Type", hit.contentType || "image/png");
+    res.setHeader(
+      "Cache-Control",
+      "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400"
+    );
+
+    // If HEAD, no body
+    if (req.method === "HEAD") return res.end();
+
+    return res.end(hit.buf);
+  } catch (e) {
+    if (debug) {
+      return sendJson(res, 200, {
+        ok: false,
+        error: e?.message || "Unhandled error",
+        trace: debugTrace,
+      });
+    }
+    return sendSvg(res, "ERR", "no-store");
+  }
+}
