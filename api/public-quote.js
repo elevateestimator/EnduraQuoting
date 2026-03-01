@@ -28,7 +28,7 @@ export default async function handler(req, res) {
 
     const { data: quote, error } = await supabase
       .from("quotes")
-      .select("id,status,customer_name,customer_email,quote_no,total_cents,data")
+      .select("id,company_id,status,customer_name,customer_email,quote_no,total_cents,data")
       .eq("id", id)
       .single();
 
@@ -36,6 +36,25 @@ export default async function handler(req, res) {
       res.status(404).json({ error: "Quote not found" });
       return;
     }
+
+    // Merge live company fields as fallbacks so older quotes still render properly.
+    // Snapshot fields (quote.data.company) take precedence.
+    try {
+      if (quote?.company_id) {
+        const { data: company } = await supabase
+          .from("companies")
+          .select(
+            "id,name,addr1,addr2,phone,email,web,logo_url,brand_color,currency,tax_name,tax_rate,payment_terms"
+          )
+          .eq("id", quote.company_id)
+          .maybeSingle();
+
+        if (company) {
+          quote.data = quote.data || {};
+          quote.data.company = { ...(company || {}), ...(quote.data.company || {}) };
+        }
+      }
+    } catch {}
 
     // Minimal sanitization: customer sees their own details anyway.
     res.status(200).json({

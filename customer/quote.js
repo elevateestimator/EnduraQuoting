@@ -228,9 +228,22 @@ function setLogoWithFallback(imgEl, fallbackEl, initials, url) {
   // Prefer image, but fall back to initials if it fails.
   if (fallbackEl) fallbackEl.hidden = true;
   imgEl.hidden = false;
-  imgEl.crossOrigin = "anonymous";
   imgEl.onerror = showFallback;
   imgEl.src = url;
+}
+
+function pickLogoUrl(company = {}, data = {}) {
+  // Back-compat across iterations / field names
+  return (
+    safeStr(company.logo_url) ||
+    safeStr(company.logoUrl) ||
+    safeStr(company.logo) ||
+    safeStr(company.logo_public_url) ||
+    safeStr(company.logoPublicUrl) ||
+    safeStr(data.company_logo_url) ||
+    safeStr(data.logo_url) ||
+    safeStr(data.logoUrl)
+  );
 }
 
 /* =========================================================
@@ -421,7 +434,7 @@ function fillQuote(quote) {
   applyBrandColor(company.brand_color || company.brandColour || company.brand || "#000000");
 
   // Logo
-  const logoUrl = safeStr(company.logo_url || company.logoUrl || company.logo || "");
+  const logoUrl = pickLogoUrl(company, data);
 
   // Always show a mark (logo or initials). If the image fails to load (bad URL/private bucket),
   // fall back to initials so the customer never sees a broken header.
@@ -773,47 +786,139 @@ function createPdfSandbox() {
 }
 
 function computeCutPositionsCss(clone, idealPageHeightCss) {
-  // Prefer cutting after logical blocks so we don't split cards/tables across pages.
-  const selectors = [".doc-header", ".grid-2", ".card", ".signatures", ".table-wrap", ".items-table", ".avoid-break"];
-  const rect = clone.getBoundingClientRect();
+  // Goal: avoid splitting "blocks" (cards, header, signatures) across pages.
+  // If a block would be cut by the page boundary AND it can fit on a fresh page,
+  // we cut BEFORE that block starts (push it to the next page).
+  // For long tables we allow splits, but prefer row boundaries.
 
-  const bottoms = new Set([0]);
-  selectors.forEach((sel) => {
-    clone.querySelectorAll(sel).forEach((el) => {
-      const r = el.getBoundingClientRect();
-      const bottomCss = r.bottom - rect.top;
-      if (bottomCss > 0) bottoms.add(Math.round(bottomCss));
-    });
+  const rootRect = clone.getBoundingClientRect();
+
+  // Blocks we try NOT to split.
+  const blockSelectors = [".doc-header", ".grid-2", ".card", ".signatures"];
+  const blockEls = new Set();
+  blockSelectors.forEach((sel) => clone.querySelectorAll(sel).forEach((el) => blockEls.add(el)));
+
+  const blocks = [];
+  for (const el of blockEls) {
+    const r = el.getBoundingClientRect();
+    const top = Math.round(r.top - rootRect.top);
+    const bottom = Math.round(r.bottom - rootRect.top);
+    const height = Math.max(0, bottom - top);
+    if (height > 2) blocks.push({ top, bottom, height });
+  }
+  blocks.sort((a, b) => a.top - b.top);
+
+  // Safe cut boundaries (CSS px): bottoms of blocks + table row bottoms.
+  const safeBottoms = new Set([0]);
+  blocks.forEach((b) => safeBottoms.add(b.bottom));
+  clone.querySelectorAll(".items-table tbody tr").forEach((tr) => {
+    const r = tr.getBoundingClientRect();
+    const bottom = Math.round(r.bottom - rootRect.top);
+    if (bottom > 0) safeBottoms.add(bottom);
   });
 
-  const bottomsSorted = Array.from(bottoms).sort((a, b) => a - b);
-  const maxBottom = bottomsSorted[bottomsSorted.length - 1] || Math.round(clone.scrollHeight || 0);
+  const safeBottomsSorted = Array.from(safeBottoms).sort((a, b) => a - b);
+  const docHeight = Math.max(
+    safeBottomsSorted[safeBottomsSorted.length - 1] || 0,
+    Math.round(clone.scrollHeight || 0)
+  );
 
   const cuts = [];
   let y = 0;
-  const minStep = 220;
+  const minStep = 180; // allow tighter pagination while still avoiding micro-pages
+  const maxPages = 40;
 
-  while (y + 1 < maxBottom) {
-    const target = y + idealPageHeightCss;
-    let candidate = Math.min(target, maxBottom);
+  while (y + 5 < docHeight && cuts.length < maxPages) {
+    const pageEnd = y + idealPageHeightCss;
 
-    // Find the nearest "safe" bottom before the target.
-    for (let i = bottomsSorted.length - 1; i >= 0; i--) {
-      const b = bottomsSorted[i];
-      if (b <= target && b > y + minStep) {
+    // Last page
+    if (pageEnd >= docHeight) {
+      cuts.push(docHeight);
+      break;
+    }
+
+    // 1) If a block crosses the page boundary, push it to the next page (cut at its TOP)
+    //    as long as the block can reasonably fit on a single page.
+    let cutAtTop = null;
+    for (const b of blocks) {
+      if (b.top <= y + 1) continue; // block starts before/at current page start
+      if (b.top >= pageEnd) break; // blocks are sorted, done
+
+      const crosses = b.top < pageEnd && b.bottom > pageEnd;
+      const fitsOnFreshPage = b.height <= idealPageHeightCss - 80;
+      const enoughRoomOnPrev = b.top - y >= minStep;
+
+      if (crosses && fitsOnFreshPage && enoughRoomOnPrev) {
+        if (cutAtTop === null || b.top > cutAtTop) cutAtTop = b.top;
+      }
+    }
+    if (cutAtTop !== null && cutAtTop > y) {
+      cuts.push(cutAtTop);
+      y = cutAtTop;
+      continue;
+    }
+
+    // 2) Otherwise, cut at the last safe bottom before pageEnd.
+    let candidate = null;
+    for (let i = safeBottomsSorted.length - 1; i >= 0; i--) {
+      const b = safeBottomsSorted[i];
+      if (b <= y + minStep) continue;
+      if (b <= pageEnd) {
         candidate = b;
         break;
       }
     }
 
-    if (candidate <= y) candidate = Math.min(y + idealPageHeightCss, maxBottom);
+    if (!candidate || candidate <= y) candidate = pageEnd;
     cuts.push(candidate);
     y = candidate;
-
-    if (maxBottom - y <= 5) break;
   }
 
+  // Ensure we always end exactly at docHeight.
+  if (cuts.length && cuts[cuts.length - 1] !== docHeight) cuts.push(docHeight);
+  if (!cuts.length) cuts.push(docHeight);
+
   return cuts;
+}
+
+async function fetchAsDataUrl(url) {
+  const res = await fetch(url, { mode: "cors", credentials: "omit" });
+  if (!res.ok) throw new Error(`Failed to fetch asset (${res.status})`);
+  const blob = await res.blob();
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function inlineImagesForPdf(root) {
+  // Helps html2canvas reliably include remote logos/signatures across browsers.
+  const imgs = Array.from(root.querySelectorAll("img"));
+  for (const img of imgs) {
+    try {
+      if (img.hidden) continue;
+      const src = img.getAttribute("src") || "";
+      if (!src) continue;
+      if (src.startsWith("data:")) continue;
+      // Skip blob URLs (already local)
+      if (src.startsWith("blob:")) continue;
+
+      const dataUrl = await fetchAsDataUrl(src);
+      img.setAttribute("src", dataUrl);
+    } catch {
+      // If it fails, keep the original src and let html2canvas attempt it.
+      // If the logo still can't be embedded, show initials so the PDF isn't blank.
+      if (img.id === "doc-logo") {
+        const fallback = root.querySelector("#doc-logo-initials");
+        if (fallback) {
+          try { img.hidden = true; } catch {}
+          fallback.hidden = false;
+        }
+      }
+    }
+  }
 }
 
 function buildPdfClone() {
@@ -856,6 +961,10 @@ async function exportPdfManual() {
     const clone = buildPdfClone();
     frame.appendChild(clone);
 
+    await waitForAssets(clone);
+
+    // Inline remote images (logos/signatures) to avoid missing assets in PDFs.
+    await inlineImagesForPdf(clone);
     await waitForAssets(clone);
 
     const scale = 2;
