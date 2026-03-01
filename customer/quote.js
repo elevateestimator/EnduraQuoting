@@ -234,16 +234,37 @@ function setLogoWithFallback(imgEl, fallbackEl, initials, url) {
 
 function pickLogoUrl(company = {}, data = {}) {
   // Back-compat across iterations / field names
-  return (
+  const url =
+    safeStr(company.logo_data_url) ||
+    safeStr(company.logoDataUrl) ||
     safeStr(company.logo_url) ||
     safeStr(company.logoUrl) ||
     safeStr(company.logo) ||
     safeStr(company.logo_public_url) ||
     safeStr(company.logoPublicUrl) ||
+    safeStr(data.company_logo_data_url) ||
     safeStr(data.company_logo_url) ||
+    safeStr(data.logo_data_url) ||
     safeStr(data.logo_url) ||
-    safeStr(data.logoUrl)
-  );
+    safeStr(data.logoUrl) ||
+    "";
+
+  // If the DB stored only a storage path (not a full URL), try to build a public URL.
+  if (
+    url &&
+    !url.startsWith("http") &&
+    !url.startsWith("data:") &&
+    !url.startsWith("blob:") &&
+    !url.startsWith("/")
+  ) {
+    const supa = safeStr(data._supabase_url || data.supabase_url);
+    const bucket = safeStr(data.logo_bucket) || "company-logos";
+    if (supa) {
+      return `${supa.replace(/\/$/, "")}/storage/v1/object/public/${bucket}/${url}`;
+    }
+  }
+
+  return url;
 }
 
 /* =========================================================
@@ -543,7 +564,6 @@ function fillQuote(quote) {
 
     const src = acceptance.signature_image_data_url || acceptance.signature_data_url || "";
     if (clientSigImg && src) {
-      clientSigImg.crossOrigin = "anonymous";
       clientSigImg.src = src;
       clientSigImg.hidden = false;
     }
@@ -694,14 +714,14 @@ async function submitSignature() {
       if (!_quoteData) _quoteData = {};
       _quoteData.acceptance = {
         accepted_at: new Date().toISOString(),
-        accepted_date_local: accepted_date,
+        accepted_date,
         signature_data_url: dataUrl,
         name:
           safeStr(_quoteData?.bill_to?.client_name) ||
           safeStr(_quoteRow?.customer_name) ||
           "Client",
       };
-      _quoteRow = { ..._quoteRow, status: "accepted", data: _quoteData };
+      _quoteRow = { ..._quoteRow, status: "signed", data: _quoteData };
       fillQuote(_quoteRow);
     } catch {}
 
@@ -786,97 +806,68 @@ function createPdfSandbox() {
 }
 
 function computeCutPositionsCss(clone, idealPageHeightCss) {
-  // Goal: avoid splitting "blocks" (cards, header, signatures) across pages.
-  // If a block would be cut by the page boundary AND it can fit on a fresh page,
-  // we cut BEFORE that block starts (push it to the next page).
-  // For long tables we allow splits, but prefer row boundaries.
+  // Cut only at bottoms of major blocks (cards/header/signatures) and table-row boundaries.
+  // This keeps sections intact (no mid-card splits) and mirrors the admin PDF behavior.
 
   const rootRect = clone.getBoundingClientRect();
+  const selectors = [
+    ".doc-header",
+    ".grid-2",
+    ".card",
+    ".signatures",
+    ".table-wrap",
+    ".items-table",
+    ".avoid-break",
+  ];
 
-  // Blocks we try NOT to split.
-  const blockSelectors = [".doc-header", ".grid-2", ".card", ".signatures"];
-  const blockEls = new Set();
-  blockSelectors.forEach((sel) => clone.querySelectorAll(sel).forEach((el) => blockEls.add(el)));
+  const bottoms = new Set([0]);
+  selectors.forEach((sel) => {
+    clone.querySelectorAll(sel).forEach((el) => {
+      const r = el.getBoundingClientRect();
+      const bottom = Math.round(r.bottom - rootRect.top);
+      if (bottom > 0) bottoms.add(bottom);
+    });
+  });
 
-  const blocks = [];
-  for (const el of blockEls) {
-    const r = el.getBoundingClientRect();
-    const top = Math.round(r.top - rootRect.top);
-    const bottom = Math.round(r.bottom - rootRect.top);
-    const height = Math.max(0, bottom - top);
-    if (height > 2) blocks.push({ top, bottom, height });
-  }
-  blocks.sort((a, b) => a.top - b.top);
-
-  // Safe cut boundaries (CSS px): bottoms of blocks + table row bottoms.
-  const safeBottoms = new Set([0]);
-  blocks.forEach((b) => safeBottoms.add(b.bottom));
+  // Prefer splitting big line-item tables by row.
   clone.querySelectorAll(".items-table tbody tr").forEach((tr) => {
     const r = tr.getBoundingClientRect();
     const bottom = Math.round(r.bottom - rootRect.top);
-    if (bottom > 0) safeBottoms.add(bottom);
+    if (bottom > 0) bottoms.add(bottom);
   });
 
-  const safeBottomsSorted = Array.from(safeBottoms).sort((a, b) => a - b);
-  const docHeight = Math.max(
-    safeBottomsSorted[safeBottomsSorted.length - 1] || 0,
-    Math.round(clone.scrollHeight || 0)
-  );
+  const sorted = Array.from(bottoms).sort((a, b) => a - b);
+  const docHeight = Math.max(sorted[sorted.length - 1] || 0, Math.round(clone.scrollHeight || 0));
 
   const cuts = [];
   let y = 0;
-  const minStep = 180; // allow tighter pagination while still avoiding micro-pages
-  const maxPages = 40;
+  const minStep = 140; // avoid tiny pages, but allow tight pagination
+  const maxPages = 80;
 
   while (y + 5 < docHeight && cuts.length < maxPages) {
-    const pageEnd = y + idealPageHeightCss;
-
-    // Last page
-    if (pageEnd >= docHeight) {
+    const target = y + idealPageHeightCss;
+    if (target >= docHeight) {
       cuts.push(docHeight);
       break;
     }
 
-    // 1) If a block crosses the page boundary, push it to the next page (cut at its TOP)
-    //    as long as the block can reasonably fit on a single page.
-    let cutAtTop = null;
-    for (const b of blocks) {
-      if (b.top <= y + 1) continue; // block starts before/at current page start
-      if (b.top >= pageEnd) break; // blocks are sorted, done
-
-      const crosses = b.top < pageEnd && b.bottom > pageEnd;
-      const fitsOnFreshPage = b.height <= idealPageHeightCss - 80;
-      const enoughRoomOnPrev = b.top - y >= minStep;
-
-      if (crosses && fitsOnFreshPage && enoughRoomOnPrev) {
-        if (cutAtTop === null || b.top > cutAtTop) cutAtTop = b.top;
-      }
-    }
-    if (cutAtTop !== null && cutAtTop > y) {
-      cuts.push(cutAtTop);
-      y = cutAtTop;
-      continue;
-    }
-
-    // 2) Otherwise, cut at the last safe bottom before pageEnd.
     let candidate = null;
-    for (let i = safeBottomsSorted.length - 1; i >= 0; i--) {
-      const b = safeBottomsSorted[i];
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      const b = sorted[i];
       if (b <= y + minStep) continue;
-      if (b <= pageEnd) {
+      if (b <= target) {
         candidate = b;
         break;
       }
     }
+    if (!candidate || candidate <= y) candidate = target;
 
-    if (!candidate || candidate <= y) candidate = pageEnd;
     cuts.push(candidate);
     y = candidate;
   }
 
-  // Ensure we always end exactly at docHeight.
-  if (cuts.length && cuts[cuts.length - 1] !== docHeight) cuts.push(docHeight);
   if (!cuts.length) cuts.push(docHeight);
+  if (cuts[cuts.length - 1] !== docHeight) cuts.push(docHeight);
 
   return cuts;
 }
@@ -969,22 +960,28 @@ async function exportPdfManual() {
 
     const scale = 2;
 
-    // Compute cut points in CSS pixels.
-    const cuts = computeCutPositionsCss(clone, PAGE_H_CSS);
-    const pages = [0, ...cuts];
-
+    // Use a real Letter PDF (pt units) to match the admin output and avoid cropping issues.
     const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({
-      orientation: "p",
-      unit: "px",
-      format: [PAGE_W_CSS, PAGE_H_CSS],
-    });
+    const pdf = new jsPDF({ orientation: "p", unit: "pt", format: "letter" });
+
+    const pdfW = pdf.internal.pageSize.getWidth();
+    const pdfH = pdf.internal.pageSize.getHeight();
+    const marginPt = 22;
+    const contentW = pdfW - marginPt * 2;
+    const contentH = pdfH - marginPt * 2;
+
+    // How tall (in CSS px) a page can be when we scale it to `contentW`.
+    const idealPageHeightCss = Math.floor(PAGE_W_CSS * (contentH / contentW));
+
+    // Compute cut points in CSS pixels.
+    const cuts = computeCutPositionsCss(clone, idealPageHeightCss);
+    const pages = [0, ...cuts];
 
     for (let i = 0; i < pages.length - 1; i++) {
       const y0 = pages[i];
       const y1 = pages[i + 1];
       const sliceH = y1 - y0;
-      if (sliceH < 10) continue;
+      if (sliceH < 18) continue;
 
       frame.style.height = `${sliceH}px`;
       clone.style.transform = `translateY(-${y0}px)`;
@@ -996,7 +993,7 @@ async function exportPdfManual() {
       const canvas = await window.html2canvas(frame, {
         scale,
         useCORS: true,
-        allowTaint: false,
+        allowTaint: true,
         backgroundColor: "#ffffff",
         windowWidth: PAGE_W_CSS,
         windowHeight: sliceH,
@@ -1005,9 +1002,10 @@ async function exportPdfManual() {
       });
 
       const imgData = canvas.toDataURL("image/jpeg", 0.92);
+      const imgHpt = (canvas.height / canvas.width) * contentW;
 
-      if (i > 0) pdf.addPage([PAGE_W_CSS, PAGE_H_CSS], "p");
-      pdf.addImage(imgData, "JPEG", 0, 0, PAGE_W_CSS, sliceH);
+      if (i > 0) pdf.addPage();
+      pdf.addImage(imgData, "JPEG", marginPt, marginPt, contentW, imgHpt);
     }
 
     // Cleanup

@@ -50,7 +50,28 @@ export default async function handler(req, res) {
           .maybeSingle();
 
         if (company) {
+          // Robust logo handling for public customer pages:
+          // - Many browsers block cross-origin images when `crossorigin` is set.
+          // - Storage buckets may be private.
+          // So we fetch the logo server-side (service role) and embed as a data URL.
+          try {
+            const path = `${company.id}/logo.png`;
+            const { data: logoBlob, error: logoErr } = await supabase
+              .storage
+              .from("company-logos")
+              .download(path);
+
+            if (!logoErr && logoBlob) {
+              const ab = await logoBlob.arrayBuffer();
+              const b64 = Buffer.from(ab).toString("base64");
+              company.logo_data_url = `data:image/png;base64,${b64}`;
+            }
+          } catch {}
+
           quote.data = quote.data || {};
+          // Helpful for older rows that stored only a storage path.
+          quote.data._supabase_url = SUPABASE_URL;
+          quote.data.logo_bucket = "company-logos";
           quote.data.company = { ...(company || {}), ...(quote.data.company || {}) };
         }
       }
