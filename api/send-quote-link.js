@@ -4,15 +4,11 @@ import { createClient } from "@supabase/supabase-js";
  * POST /api/send-quote-link
  * Body: { quote_id: string }
  *
- * Polished, customer-first email (Postmark):
- * - Centered layout on mobile + desktop
- * - Single strong CTA ("View quote & sign")
- * - NO pricing in the email
- * - Reply-To: jacob@endurametalroofing.ca
- * - Dark mode: swaps logo to /assets/blacklogo.png and blends logo background
- *
- * Note: Not all email clients fully support prefers-color-scheme.
- * Apple Mail and Outlook support it well; Gmail may ignore the swap.
+ * Multi-tenant branded email:
+ * - Uses the quote's company snapshot (and falls back to live company settings)
+ * - Uses company brand color for CTA + accents
+ * - Embeds the company logo as an INLINE Postmark attachment (CID) when possible
+ *   so it works even when email clients block external images.
  */
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -21,7 +17,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { quote_id } = req.body || {};
+    const body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
+    const quote_id = body?.quote_id;
     if (!quote_id) {
       res.status(400).json({ error: "Missing quote_id" });
       return;
@@ -37,32 +34,46 @@ export default async function handler(req, res) {
     const POSTMARK_SERVER_TOKEN = process.env.POSTMARK_SERVER_TOKEN;
     const POSTMARK_FROM_EMAIL = process.env.POSTMARK_FROM_EMAIL;
     const POSTMARK_MESSAGE_STREAM = process.env.POSTMARK_MESSAGE_STREAM || "outbound";
-    const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL || "jacob@endurametalroofing.ca";
+    // Fallback only (used only if we cannot determine any company/user notify address)
+    const ADMIN_NOTIFY_EMAIL = safeEmail(process.env.ADMIN_NOTIFY_EMAIL || "");
+
     if (!POSTMARK_SERVER_TOKEN || !POSTMARK_FROM_EMAIL) {
       res.status(500).json({ error: "Missing POSTMARK_SERVER_TOKEN or POSTMARK_FROM_EMAIL" });
       return;
     }
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false },
+    });
 
-    const { data: quote, error } = await supabase
+    // Load quote (use a column-safe fallback in case your schema is older)
+    let quoteRes = await supabase
       .from("quotes")
-      .select("id,status,customer_name,customer_email,quote_no,data")
+      .select("id,status,customer_name,customer_email,quote_no,company_id,created_by,data")
       .eq("id", quote_id)
       .single();
 
-    if (error || !quote) {
+    if (quoteRes.error) {
+      quoteRes = await supabase
+        .from("quotes")
+        .select("id,status,customer_name,customer_email,quote_no,data")
+        .eq("id", quote_id)
+        .single();
+    }
+
+    const quote = quoteRes.data;
+    if (quoteRes.error || !quote) {
       res.status(404).json({ error: "Quote not found" });
       return;
     }
 
-    const toEmail = quote.customer_email;
+    const toEmail = String(quote.customer_email || "").trim();
     if (!toEmail) {
       res.status(400).json({ error: "Quote has no customer email" });
       return;
     }
 
-    // Base URL for links/images in email
+    // Base URL for links in email
     const proto = (req.headers["x-forwarded-proto"] || "https").toString();
     const host = (req.headers["x-forwarded-host"] || req.headers.host || "").toString();
     const origin = (process.env.PUBLIC_BASE_URL || (host ? `${proto}://${host}` : "")).replace(/\/$/, "");
@@ -72,35 +83,89 @@ export default async function handler(req, res) {
     }
 
     const viewUrl = `${origin}/customer/quote.html?id=${encodeURIComponent(quote.id)}`;
-    const logoLightUrl = `${origin}/assets/logo.jpg`;
-    const logoDarkUrl = `${origin}/assets/blacklogo.png`; // you added this
 
-    const meta = quote.data?.meta || {};
+    const data = (quote.data && typeof quote.data === "object") ? quote.data : {};
+    const meta = (data.meta && typeof data.meta === "object") ? data.meta : {};
+    const snapCompany = (data.company && typeof data.company === "object") ? data.company : {};
+
+    // Quote code (what you display inside the app)
     const quoteCode =
-      quote.data?.quote_code ||
-      `ER-${String(meta?.quote_date || "").slice(0, 4) || "0000"}-${String(quote.quote_no || "").padStart(4, "0")}`;
+      safeStr(data.quote_code) ||
+      `Q-${String(meta.quote_date || "").slice(0, 4) || "0000"}-${String(quote.quote_no || "").padStart(4, "0")}`;
 
-    const expires = meta?.quote_expires || "";
-    const preparedBy = meta?.prepared_by || "Jacob Docherty";
+    const customerName = safeStr(quote.customer_name) || "there";
 
-    const customerName = quote.customer_name || "there";
-    const companyName = quote.data?.company?.name || "Endura Metal Roofing Ltd.";
+    // Pull live company settings if possible (guarantees latest logo/brand in emails)
+    const companyId = safeStr(quote.company_id) || safeStr(snapCompany.company_id);
+    let companyRow = null;
+    if (companyId) {
+      const cRes = await supabase.from("companies").select("*").eq("id", companyId).maybeSingle();
+      if (!cRes.error) companyRow = cRes.data;
+    }
 
-    // Subject makes it obvious you're seeing this new template
-    const subject = `Your Endura Quote is Ready — ${quoteCode}`;
+    const companyName =
+      safeStr(companyRow?.name) ||
+      safeStr(snapCompany?.name) ||
+      "Your Company";
 
-    const htmlBody = buildEmailHtml({
-      logoLightUrl,
-      logoDarkUrl,
+    const brand =
+      normalizeHexColor(companyRow?.brand_color) ||
+      normalizeHexColor(snapCompany?.brand_color) ||
+      "#000000";
+
+    const brandDark = darkenHex(brand, 0.22);
+
+    const phone = safeStr(companyRow?.phone) || safeStr(snapCompany?.phone) || "";
+
+    const companyEmail =
+      safeEmail(companyRow?.billing_email) ||
+      safeEmail(companyRow?.owner_email) ||
+      safeEmail(snapCompany?.email) ||
+      "";
+
+    const web = safeStr(companyRow?.website) || safeStr(snapCompany?.web) || "";
+
+    const expires = safeStr(meta.quote_expires) || "";
+    const preparedBy = safeStr(meta.prepared_by) || "";
+
+    // Determine who should receive an internal copy when a quote is sent
+    let createdByEmail = "";
+    try {
+      const createdBy = safeStr(quote.created_by);
+      if (createdBy && supabase.auth?.admin?.getUserById) {
+        const uRes = await supabase.auth.admin.getUserById(createdBy);
+        createdByEmail = safeEmail(uRes?.data?.user?.email) || "";
+      }
+    } catch {
+      // ignore
+    }
+
+    const notifyList = uniqueEmails([createdByEmail, companyEmail]);
+    if (!notifyList.length && ADMIN_NOTIFY_EMAIL) notifyList.push(ADMIN_NOTIFY_EMAIL);
+
+    const bcc = notifyList
+      .filter((e) => e && e.toLowerCase() !== toEmail.toLowerCase())
+      .join(", ");
+
+    // Logo: inline CID attachment if possible
+    const logoUrl = safeStr(companyRow?.logo_url) || safeStr(snapCompany?.logo_url) || "";
+    const { logoSrc, attachments } = buildInlineLogoAttachment(logoUrl);
+
+    const subject = `${companyName} — Quote ready — ${quoteCode}`;
+
+    const htmlBody = buildQuoteReadyHtml({
+      brand,
+      brandDark,
+      logoSrc,
       viewUrl,
       customerName,
       quoteCode,
       expires,
       preparedBy,
       companyName,
-      phone: quote.data?.company?.phone || "705-903-7663",
-      email: quote.data?.company?.email || "jacob@endurametalroofing.ca",
-      web: quote.data?.company?.web || "endurametalroofing.ca",
+      phone,
+      email: companyEmail,
+      web,
     });
 
     const textBody =
@@ -111,11 +176,23 @@ Your quote (${quoteCode}) is ready.
 View and accept/sign online:
 ${viewUrl}
 
-Expires: ${expires || "—"}
-Prepared by: ${preparedBy}
-
+${expires ? `Expires: ${expires}\n` : ""}${preparedBy ? `Prepared by: ${preparedBy}\n` : ""}
 Thank you,
 ${companyName}`;
+
+    const payload = {
+      From: formatFrom(companyName, POSTMARK_FROM_EMAIL),
+      To: toEmail,
+      Subject: subject,
+      HtmlBody: htmlBody,
+      TextBody: textBody,
+      MessageStream: POSTMARK_MESSAGE_STREAM,
+      // Keep replies going to the company/user (not your platform address)
+      ReplyTo: createdByEmail || companyEmail || undefined,
+      // Send internal copy to the right company/user (instead of a hard-coded email)
+      ...(bcc ? { Bcc: bcc } : {}),
+      ...(attachments.length ? { Attachments: attachments } : {}),
+    };
 
     const pmRes = await fetch("https://api.postmarkapp.com/email", {
       method: "POST",
@@ -124,16 +201,7 @@ ${companyName}`;
         "Content-Type": "application/json",
         Accept: "application/json",
       },
-      body: JSON.stringify({
-        From: POSTMARK_FROM_EMAIL,
-        To: toEmail,
-        Bcc: ADMIN_NOTIFY_EMAIL,
-        ReplyTo: "jacob@endurametalroofing.ca",
-        Subject: subject,
-        HtmlBody: htmlBody,
-        TextBody: textBody,
-        MessageStream: POSTMARK_MESSAGE_STREAM,
-      }),
+      body: JSON.stringify(payload),
     });
 
     if (!pmRes.ok) {
@@ -151,6 +219,34 @@ ${companyName}`;
   }
 }
 
+/* =========================
+   Helpers
+   ========================= */
+
+function safeStr(v) {
+  return String(v ?? "").trim();
+}
+
+function safeEmail(v) {
+  const s = safeStr(v).toLowerCase();
+  // Very light validation
+  if (!s || !s.includes("@") || s.includes(" ")) return "";
+  return s;
+}
+
+function uniqueEmails(list) {
+  const out = [];
+  const seen = new Set();
+  for (const v of list || []) {
+    const e = safeEmail(v);
+    if (!e) continue;
+    if (seen.has(e)) continue;
+    seen.add(e);
+    out.push(e);
+  }
+  return out;
+}
+
 function escapeHtml(s) {
   return String(s || "")
     .replaceAll("&", "&amp;")
@@ -160,9 +256,112 @@ function escapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
-function buildEmailHtml({
-  logoLightUrl,
-  logoDarkUrl,
+function normalizeHexColor(input) {
+  let v = safeStr(input);
+  if (!v) return "";
+  if (!v.startsWith("#")) v = `#${v}`;
+
+  // Expand #RGB -> #RRGGBB
+  if (/^#[0-9a-fA-F]{3}$/.test(v)) {
+    const h = v.slice(1);
+    v = "#" + h.split("").map((c) => c + c).join("");
+  }
+
+  if (!/^#[0-9a-fA-F]{6}$/.test(v)) return "";
+  return v.toUpperCase();
+}
+
+function hexToRgb(hex) {
+  const h = normalizeHexColor(hex);
+  if (!h) return null;
+  const n = parseInt(h.slice(1), 16);
+  return {
+    r: (n >> 16) & 255,
+    g: (n >> 8) & 255,
+    b: n & 255,
+  };
+}
+
+function rgbToHex({ r, g, b }) {
+  const clamp = (x) => Math.max(0, Math.min(255, Math.round(Number(x) || 0)));
+  const rr = clamp(r).toString(16).padStart(2, "0");
+  const gg = clamp(g).toString(16).padStart(2, "0");
+  const bb = clamp(b).toString(16).padStart(2, "0");
+  return `#${rr}${gg}${bb}`.toUpperCase();
+}
+
+function darkenHex(hex, amount = 0.2) {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return "#000000";
+  const factor = 1 - Math.max(0, Math.min(0.9, Number(amount) || 0));
+  return rgbToHex({
+    r: rgb.r * factor,
+    g: rgb.g * factor,
+    b: rgb.b * factor,
+  });
+}
+
+function extractEmail(fromField) {
+  const s = safeStr(fromField);
+  if (!s) return "";
+  const m = /<([^>]+)>/.exec(s);
+  if (m) return safeStr(m[1]);
+  if (s.includes("@")) return s;
+  return "";
+}
+
+function formatFrom(companyName, postmarkFrom) {
+  const email = extractEmail(postmarkFrom);
+  if (!email) return postmarkFrom;
+
+  const name = safeStr(companyName).replaceAll('"', "'");
+  if (!name) return email;
+
+  // Quote the name so punctuation is safe (Postmark recommends this)
+  return `"${name}" <${email}>`;
+}
+
+function parseDataUrl(dataUrl) {
+  const s = safeStr(dataUrl);
+  if (!s.startsWith("data:")) return null;
+  const m = /^data:([^;]+);base64,(.+)$/i.exec(s);
+  if (!m) return null;
+  const contentType = safeStr(m[1]) || "application/octet-stream";
+  const base64 = String(m[2] || "").trim();
+  if (!base64) return null;
+  return { contentType, base64 };
+}
+
+function buildInlineLogoAttachment(logoUrl) {
+  // Prefer CID inline attachments (reliable even when external images are blocked)
+  const parsed = parseDataUrl(logoUrl);
+  if (parsed && parsed.base64.length < 8_000_000) {
+    const cid = "cid:company-logo";
+    return {
+      logoSrc: cid,
+      attachments: [
+        {
+          Name: "company-logo",
+          Content: parsed.base64,
+          ContentType: parsed.contentType || "image/png",
+          ContentID: cid,
+        },
+      ],
+    };
+  }
+
+  // If it's already a remote URL, use it (some clients may still block until user loads images)
+  if (/^https?:\/\//i.test(safeStr(logoUrl))) {
+    return { logoSrc: safeStr(logoUrl), attachments: [] };
+  }
+
+  return { logoSrc: "", attachments: [] };
+}
+
+function buildQuoteReadyHtml({
+  brand,
+  brandDark,
+  logoSrc,
   viewUrl,
   customerName,
   quoteCode,
@@ -183,8 +382,10 @@ function buildEmailHtml({
   const safeWeb = escapeHtml(web || "");
   const safeViewUrl = escapeHtml(viewUrl);
 
-  const brand = "#0267b5";
-  const brandDark = "#014d89";
+  const logoBlock = logoSrc
+    ? `<img src="${escapeHtml(logoSrc)}" width="200" alt="${safeCompany}"
+         style="display:block;width:200px;max-width:200px;height:auto;margin:0 auto;border:0;outline:none;text-decoration:none;" />`
+    : `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-weight:950;font-size:18px;color:#0b0f14;">${safeCompany}</div>`;
 
   return `<!doctype html>
 <html lang="en">
@@ -192,16 +393,12 @@ function buildEmailHtml({
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="x-apple-disable-message-reformatting" />
-
     <meta name="color-scheme" content="light dark" />
     <meta name="supported-color-schemes" content="light dark" />
-
     <title>${safeCompany} — Quote</title>
 
     <style>
       :root { color-scheme: light dark; supported-color-schemes: light dark; }
-
-      /* Mobile */
       @media only screen and (max-width: 600px) {
         .container { width: 100% !important; }
         .px { padding-left: 18px !important; padding-right: 18px !important; }
@@ -210,68 +407,39 @@ function buildEmailHtml({
         .h1 { font-size: 22px !important; }
         .sub { font-size: 14px !important; }
       }
-
-      /* ===== Logo swapping =====
-         Default: show light logo.
-         Dark mode: show dark logo.
-      */
-      .logo-dark { display:none; max-height:0; overflow:hidden; mso-hide:all; }
-      .logo-light { display:block; }
       @media (prefers-color-scheme: dark) {
-        .logo-light { display:none !important; max-height:0 !important; overflow:hidden !important; }
-        .logo-dark  { display:block !important; max-height:none !important; overflow:visible !important; }
-
         body, .bg { background:#0b1020 !important; }
         .card { background:#0f172a !important; border-color: rgba(255,255,255,0.14) !important; }
         .txt { color:#e8eefc !important; }
         .muted { color: rgba(232,238,252,0.72) !important; }
         .detail { background: rgba(255,255,255,0.06) !important; border-color: rgba(255,255,255,0.14) !important; }
         .divider { border-color: rgba(255,255,255,0.14) !important; }
-        .link { color:#93c5fd !important; }
-
-        /* Make logo background BLEND with dark mode */
-        .logo-wrap { background:#000000 !important; }
-        .logo-shell { background:#000000 !important; border-color: rgba(255,255,255,0.18) !important; }
+        /* Keep logo container WHITE so any logo works */
+        .logo-wrap, .logo-shell { background:#ffffff !important; }
       }
-
-      /* Outlook (new) dark mode hooks */
       [data-ogsc] body, [data-ogsc] .bg { background:#0b1020 !important; }
       [data-ogsc] .card { background:#0f172a !important; border-color: rgba(255,255,255,0.14) !important; }
       [data-ogsc] .txt { color:#e8eefc !important; }
       [data-ogsc] .muted { color: rgba(232,238,252,0.72) !important; }
       [data-ogsc] .detail { background: rgba(255,255,255,0.06) !important; border-color: rgba(255,255,255,0.14) !important; }
       [data-ogsc] .divider { border-color: rgba(255,255,255,0.14) !important; }
-      [data-ogsc] .link { color:#93c5fd !important; }
-      [data-ogsc] .logo-wrap { background:#000000 !important; }
-      [data-ogsc] .logo-shell { background:#000000 !important; border-color: rgba(255,255,255,0.18) !important; }
-      [data-ogsc] .logo-light { display:none !important; }
-      [data-ogsc] .logo-dark  { display:block !important; max-height:none !important; }
+      [data-ogsc] .logo-wrap, [data-ogsc] .logo-shell { background:#ffffff !important; }
     </style>
-
-    <!--[if mso]>
-      <style>
-        body, table, td, a { font-family: Arial, sans-serif !important; }
-      </style>
-    <![endif]-->
   </head>
 
   <body class="bg" bgcolor="#f5f7fb" style="margin:0;padding:0;background:#f5f7fb;">
-    <!-- Preheader -->
     <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
       Your quote is ready — view on any device and sign online.
     </div>
 
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
-      class="bg" bgcolor="#f5f7fb" style="width:100%;background:#f5f7fb;padding:26px 12px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="bg" bgcolor="#f5f7fb"
+      style="width:100%;background:#f5f7fb;padding:26px 12px;">
       <tr>
         <td align="center" style="padding:0;margin:0;">
 
-          <table role="presentation" class="container" width="640" cellpadding="0" cellspacing="0"
-            style="width:640px;max-width:640px;">
-
+          <table role="presentation" class="container" width="640" cellpadding="0" cellspacing="0" style="width:640px;max-width:640px;">
             <tr>
-              <td class="card" bgcolor="#ffffff"
-                style="background:#ffffff;border:1px solid #e6e9f1;border-radius:22px;overflow:hidden;">
+              <td class="card" bgcolor="#ffffff" style="background:#ffffff;border:1px solid #e6e9f1;border-radius:22px;overflow:hidden;">
 
                 <!-- Accent bar -->
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
@@ -280,32 +448,22 @@ function buildEmailHtml({
                   </tr>
                 </table>
 
-                <!-- Logo header (BLENDS with logo background) -->
+                <!-- Logo header -->
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                   <tr>
-                    <td class="logo-wrap" align="center" bgcolor="#ffffff"
-                      style="background:#ffffff;padding:18px 22px 14px;text-align:center;">
+                    <td class="logo-wrap" align="center" bgcolor="#ffffff" style="background:#ffffff;padding:18px 22px 14px;text-align:center;">
                       <table role="presentation" align="center" cellpadding="0" cellspacing="0" class="logo-shell" bgcolor="#ffffff"
                         style="margin:0 auto;background:#ffffff;border:1px solid #e6e9f1;border-radius:18px;overflow:hidden;">
                         <tr>
                           <td align="center" style="padding:12px 14px;">
-                            <!-- Light logo -->
-                            <img class="logo-light" src="${logoLightUrl}" width="200" alt="${safeCompany}"
-                              style="display:block;width:200px;max-width:200px;height:auto;margin:0 auto;border:0;outline:none;text-decoration:none;" />
-                            <!-- Dark logo -->
-                            <img class="logo-dark" src="${logoDarkUrl}" width="200" alt="${safeCompany}"
-                              style="display:none;width:200px;max-width:200px;height:auto;margin:0 auto;border:0;outline:none;text-decoration:none;" />
+                            ${logoBlock}
                           </td>
                         </tr>
                       </table>
 
                       <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin-top:12px;">
-                        <div class="muted" style="font-size:12px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;color:#6b7280;">
-                          Quote
-                        </div>
-                        <div class="txt" style="margin-top:6px;font-size:14px;font-weight:950;letter-spacing:.10em;color:#0b0f14;word-break:break-word;">
-                          ${safeCode}
-                        </div>
+                        <div class="muted" style="font-size:12px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;color:#6b7280;">Quote</div>
+                        <div class="txt" style="margin-top:6px;font-size:14px;font-weight:950;letter-spacing:.10em;color:#0b0f14;word-break:break-word;">${safeCode}</div>
                       </div>
                     </td>
                   </tr>
@@ -316,9 +474,7 @@ function buildEmailHtml({
                   <tr>
                     <td class="px" align="center" style="padding:18px 26px 10px;text-align:center;">
                       <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;">
-                        <div class="txt h1" style="font-size:26px;font-weight:950;line-height:1.2;color:#0b0f14;">
-                          Review &amp; sign online
-                        </div>
+                        <div class="txt h1" style="font-size:26px;font-weight:950;line-height:1.2;color:#0b0f14;">Review &amp; sign online</div>
                         <div class="muted sub" style="margin-top:10px;font-size:14px;line-height:1.65;color:#4b5563;max-width:520px;">
                           Hi ${safeName}. Tap the button below to view your quote on mobile or desktop — then accept &amp; sign right on the page.
                         </div>
@@ -365,40 +521,27 @@ function buildEmailHtml({
                       <div class="muted" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:12px;line-height:1.6;color:#6b7280;">
                         If the button doesn’t work, copy &amp; paste this link:
                         <br />
-                        <span class="link" style="color:${brand};word-break:break-all;">${safeViewUrl}</span>
+                        <span style="color:${brand};word-break:break-all;">${safeViewUrl}</span>
                       </div>
                     </td>
                   </tr>
 
-                  <!-- Details (CENTERED, mobile-safe) -->
+                  <!-- Details -->
                   <tr>
                     <td class="px" align="center" style="padding:0 26px 22px;text-align:center;">
-                      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
-                        class="detail" bgcolor="#f8fafc"
+                      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="detail" bgcolor="#f8fafc"
                         style="background:#f8fafc;border:1px solid #e6e9f1;border-radius:18px;overflow:hidden;max-width:520px;">
                         <tr>
                           <td align="center" style="padding:14px 16px;text-align:center;">
-                            <div class="muted" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:11px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:#6b7280;">
-                              Expires
-                            </div>
-                            <div class="txt" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:15px;font-weight:950;color:#0b0f14;margin-top:6px;">
-                              ${safeExpires}
-                            </div>
+                            <div class="muted" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:11px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:#6b7280;">Expires</div>
+                            <div class="txt" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:15px;font-weight:950;color:#0b0f14;margin-top:6px;">${safeExpires}</div>
                           </td>
                         </tr>
-
-                        <tr>
-                          <td class="divider" style="border-top:1px solid #e6e9f1;"></td>
-                        </tr>
-
+                        <tr><td class="divider" style="border-top:1px solid #e6e9f1;"></td></tr>
                         <tr>
                           <td align="center" style="padding:14px 16px;text-align:center;">
-                            <div class="muted" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:11px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:#6b7280;">
-                              Prepared by
-                            </div>
-                            <div class="txt" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:15px;font-weight:950;color:#0b0f14;margin-top:6px;">
-                              ${safePrepared}
-                            </div>
+                            <div class="muted" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:11px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:#6b7280;">Prepared by</div>
+                            <div class="txt" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:15px;font-weight:950;color:#0b0f14;margin-top:6px;">${safePrepared}</div>
                           </td>
                         </tr>
                       </table>
@@ -406,16 +549,12 @@ function buildEmailHtml({
                   </tr>
 
                   <!-- Footer -->
-                  <tr>
-                    <td class="divider" style="border-top:1px solid #e6e9f1;"></td>
-                  </tr>
-
+                  <tr><td class="divider" style="border-top:1px solid #e6e9f1;"></td></tr>
                   <tr>
                     <td align="center" style="padding:14px 24px 18px;text-align:center;">
                       <div class="muted" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:12px;line-height:1.55;color:#6b7280;">
-                        Questions? Reply to this email or call <span class="txt" style="color:#0b0f14;font-weight:950;">${safePhone}</span>
-                        <br />
-                        <span style="color:#9ca3af;">${safeCompany} • ${safeEmail} • ${safeWeb}</span>
+                        ${safePhone ? `Questions? Reply to this email or call <span class="txt" style="color:#0b0f14;font-weight:950;">${safePhone}</span><br />` : ""}
+                        <span style="color:#9ca3af;">${safeCompany}${safeEmail ? ` • ${safeEmail}` : ""}${safeWeb ? ` • ${safeWeb}` : ""}</span>
                       </div>
                     </td>
                   </tr>
@@ -424,7 +563,6 @@ function buildEmailHtml({
               </td>
             </tr>
 
-            <!-- Small footer -->
             <tr>
               <td align="center" style="padding:14px 6px 0;">
                 <div class="muted" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:11px;line-height:1.5;color:#9ca3af;text-align:center;">

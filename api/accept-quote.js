@@ -3,13 +3,17 @@ import crypto from "crypto";
 
 /**
  * POST /api/accept-quote
- * Body: { quote_id: string, signature_data_url: string }
+ * Body: { quote_id: string, signature_data_url: string, accepted_date?: 'YYYY-MM-DD', client_context?: {...} }
  *
- * - Stores acceptance in quote.data.acceptance
+ * - Stores acceptance in quote.data.acceptance (includes an audit trail)
  * - Marks quote status as "Accepted"
  * - Sends:
- *    1) Notification to you (ADMIN_NOTIFY_EMAIL, default jacob@endurametalroofing.ca)
+ *    1) Notification email to the *quote creator/company* (not a hard-coded address)
  *    2) Acceptance confirmation email to the customer (if customer_email exists)
+ *
+ * Email branding:
+ * - Uses company logo + brand color from Settings (falls back to snapshot in quote.data.company)
+ * - Embeds logo as a Postmark inline attachment (CID) when possible
  */
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -18,7 +22,9 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { quote_id, signature_data_url } = req.body || {};
+    const body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
+    const { quote_id, signature_data_url } = body;
+
     if (!quote_id) {
       res.status(400).json({ error: "Missing quote_id" });
       return;
@@ -49,28 +55,35 @@ export default async function handler(req, res) {
     const POSTMARK_SERVER_TOKEN = process.env.POSTMARK_SERVER_TOKEN;
     const POSTMARK_FROM_EMAIL = process.env.POSTMARK_FROM_EMAIL;
     const POSTMARK_MESSAGE_STREAM = process.env.POSTMARK_MESSAGE_STREAM || "outbound";
-    const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL || "jacob@endurametalroofing.ca";
-
-    if (!POSTMARK_SERVER_TOKEN || !POSTMARK_FROM_EMAIL) {
-      // Acceptance should still succeed even if email isn't configured.
-      // We'll continue without email.
-      // (Still returns ok.)
-    }
+    // Fallback only (used only if we can't determine company/user notify address)
+    const ADMIN_NOTIFY_EMAIL = safeEmail(process.env.ADMIN_NOTIFY_EMAIL || "");
 
     // Base URL for links/images in emails
     const proto = (req.headers["x-forwarded-proto"] || "https").toString();
     const host = (req.headers["x-forwarded-host"] || req.headers.host || "").toString();
     const origin = (process.env.PUBLIC_BASE_URL || (host ? `${proto}://${host}` : "")).replace(/\/$/, "");
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false },
+    });
 
-    const { data: quote, error } = await supabase
+    // Load quote (column-safe fallback)
+    let quoteRes = await supabase
       .from("quotes")
-      .select("id,status,customer_name,customer_email,quote_no,total_cents,data")
+      .select("id,status,customer_name,customer_email,quote_no,total_cents,company_id,created_by,data")
       .eq("id", quote_id)
       .single();
 
-    if (error || !quote) {
+    if (quoteRes.error) {
+      quoteRes = await supabase
+        .from("quotes")
+        .select("id,status,customer_name,customer_email,quote_no,total_cents,data")
+        .eq("id", quote_id)
+        .single();
+    }
+
+    const quote = quoteRes.data;
+    if (quoteRes.error || !quote) {
       res.status(404).json({ error: "Quote not found" });
       return;
     }
@@ -84,7 +97,12 @@ export default async function handler(req, res) {
     const existingAcc = quote.data?.acceptance;
     if (existingAcc?.accepted_at) {
       // Don't spam emails if they refresh / double-tap
-      res.status(200).json({ ok: true, accepted_at: existingAcc.accepted_at, accepted_date: existingAcc.accepted_date || null, already_accepted: true });
+      res.status(200).json({
+        ok: true,
+        accepted_at: existingAcc.accepted_at,
+        accepted_date: existingAcc.accepted_date || null,
+        already_accepted: true,
+      });
       return;
     }
 
@@ -92,17 +110,19 @@ export default async function handler(req, res) {
 
     // Prefer a client-provided local date (prevents UTC rollover issues).
     // Expected format: YYYY-MM-DD
-    const bodyAcceptedDate = (req.body && req.body.accepted_date) ? String(req.body.accepted_date) : "";
-    const accepted_date = isYmd(bodyAcceptedDate) ? bodyAcceptedDate : formatYmdInTimeZone(new Date(), process.env.DEFAULT_TIMEZONE || "America/Toronto");
+    const bodyAcceptedDate = body?.accepted_date ? String(body.accepted_date) : "";
+    const accepted_date = isYmd(bodyAcceptedDate)
+      ? bodyAcceptedDate
+      : formatYmdInTimeZone(new Date(), process.env.DEFAULT_TIMEZONE || "America/Toronto");
 
     const data = quote.data || {};
     const billName = data?.bill_to?.client_name;
-    const signerName = (billName || quote.customer_name || "Client").trim();
+    const signerName = safeStr(billName || quote.customer_name || "Client").trim();
 
     // =========================================================
     // Acceptance audit trail (IP, UA, timestamp, document hash)
     // =========================================================
-    const client_context = sanitizeClientContext(req.body?.client_context);
+    const client_context = sanitizeClientContext(body?.client_context);
     const auditBase = buildAcceptanceAudit(req);
 
     // Snapshot the quote "document" at signing time so later edits don't destroy evidence.
@@ -139,10 +159,7 @@ export default async function handler(req, res) {
       document_snapshot,
     };
 
-    await supabase
-      .from("quotes")
-      .update({ status: "Accepted", data })
-      .eq("id", quote_id);
+    await supabase.from("quotes").update({ status: "Accepted", data }).eq("id", quote_id);
 
     // ===== Email notifications (best-effort) =====
     const emailResults = {
@@ -150,41 +167,92 @@ export default async function handler(req, res) {
       customer: { attempted: false, ok: false },
     };
 
-    if (POSTMARK_SERVER_TOKEN && POSTMARK_FROM_EMAIL && origin) {
+    const canEmail = Boolean(POSTMARK_SERVER_TOKEN && POSTMARK_FROM_EMAIL && origin);
+
+    if (canEmail) {
       const meta = data?.meta || {};
       const quoteCode =
-        data?.quote_code ||
-        `ER-${String(meta?.quote_date || "").slice(0, 4) || "0000"}-${String(quote.quote_no || "").padStart(4, "0")}`;
+        safeStr(data?.quote_code) ||
+        `Q-${String(meta?.quote_date || "").slice(0, 4) || "0000"}-${String(quote.quote_no || "").padStart(4, "0")}`;
 
       const viewUrl = `${origin}/customer/quote.html?id=${encodeURIComponent(quote.id)}`;
       const adminUrl = `${origin}/admin/quote.html?id=${encodeURIComponent(quote.id)}`;
 
-      const logoLightUrl = `${origin}/assets/logo.jpg`;
-      const logoDarkUrl = `${origin}/assets/blacklogo.png`;
+      // Pull live company settings (guarantees latest logo/brand in emails)
+      const snapCompany = (data.company && typeof data.company === "object") ? data.company : {};
+      const companyId = safeStr(quote.company_id) || safeStr(snapCompany.company_id);
+      let companyRow = null;
+      if (companyId) {
+        const cRes = await supabase.from("companies").select("*").eq("id", companyId).maybeSingle();
+        if (!cRes.error) companyRow = cRes.data;
+      }
 
-      const company = data?.company || {};
-      const companyName = company?.name || "Endura Metal Roofing Ltd.";
-      const phone = company?.phone || "705-903-7663";
-      const companyEmail = company?.email || "jacob@endurametalroofing.ca";
-      const web = company?.web || "endurametalroofing.ca";
+      const companyName =
+        safeStr(companyRow?.name) ||
+        safeStr(snapCompany?.name) ||
+        "Your Company";
+
+      const brand =
+        normalizeHexColor(companyRow?.brand_color) ||
+        normalizeHexColor(snapCompany?.brand_color) ||
+        "#000000";
+
+      const brandDark = darkenHex(brand, 0.22);
+
+      const phone = safeStr(companyRow?.phone) || safeStr(snapCompany?.phone) || "";
+      const companyEmail =
+        safeEmail(companyRow?.billing_email) ||
+        safeEmail(companyRow?.owner_email) ||
+        safeEmail(snapCompany?.email) ||
+        "";
+      const web = safeStr(companyRow?.website) || safeStr(snapCompany?.web) || "";
+
+      // Try to email the quote creator (user who sent/created the quote)
+      let createdByEmail = "";
+      try {
+        const createdBy = safeStr(quote.created_by);
+        if (createdBy && supabase.auth?.admin?.getUserById) {
+          const uRes = await supabase.auth.admin.getUserById(createdBy);
+          createdByEmail = safeEmail(uRes?.data?.user?.email) || "";
+        }
+      } catch {
+        // ignore
+      }
+
+      const notifyList = uniqueEmails([createdByEmail, companyEmail]);
+      if (!notifyList.length && ADMIN_NOTIFY_EMAIL) notifyList.push(ADMIN_NOTIFY_EMAIL);
+      const notifyTo = notifyList.join(", ");
+
+      const replyTo = createdByEmail || companyEmail || undefined;
+
+      // Logo: inline CID attachment if possible
+      const logoUrl = safeStr(companyRow?.logo_url) || safeStr(snapCompany?.logo_url) || "";
+      const { logoSrc, attachments } = buildInlineLogoAttachment(logoUrl);
 
       const acceptedDatePretty = formatYmdPretty(accepted_date);
 
-      // 1) Email YOU (admin) when signed
-      emailResults.admin.attempted = true;
-      const adminSubject = `SIGNED — ${quoteCode} — ${signerName}`;
-      const adminHtml = buildAdminSignedHtml({
-        logoLightUrl,
-        logoDarkUrl,
-        quoteCode,
-        signerName,
-        customerEmail: quote.customer_email || "",
-        acceptedDatePretty,
-        adminUrl,
-        viewUrl,
-        companyName,
-      });
-      const adminText =
+      // 1) Notify the user/company when signed
+      if (notifyTo) {
+        emailResults.admin.attempted = true;
+
+        const adminSubject = `SIGNED — ${quoteCode} — ${signerName}`;
+        const adminHtml = buildAdminSignedHtml({
+          brand,
+          brandDark,
+          logoSrc,
+          quoteCode,
+          signerName,
+          customerEmail: quote.customer_email || "",
+          acceptedDatePretty,
+          adminUrl,
+          viewUrl,
+          companyName,
+          phone,
+          companyEmail,
+          web,
+        });
+
+        const adminText =
 `SIGNED: ${quoteCode}
 
 Customer: ${signerName}
@@ -194,27 +262,33 @@ Signed: ${acceptedDatePretty}
 Admin: ${adminUrl}
 Customer link: ${viewUrl}`;
 
-      const adminSend = sendPostmark({
-        token: POSTMARK_SERVER_TOKEN,
-        payload: {
-          From: POSTMARK_FROM_EMAIL,
-          To: ADMIN_NOTIFY_EMAIL,
-          ReplyTo: "jacob@endurametalroofing.ca",
-          Subject: adminSubject,
-          HtmlBody: adminHtml,
-          TextBody: adminText,
-          MessageStream: POSTMARK_MESSAGE_STREAM,
-        },
-      });
+        const adminSend = sendPostmark({
+          token: POSTMARK_SERVER_TOKEN,
+          payload: {
+            From: formatFrom(companyName, POSTMARK_FROM_EMAIL),
+            To: notifyTo,
+            ReplyTo: replyTo,
+            Subject: adminSubject,
+            HtmlBody: adminHtml,
+            TextBody: adminText,
+            MessageStream: POSTMARK_MESSAGE_STREAM,
+            ...(attachments.length ? { Attachments: attachments } : {}),
+          },
+        });
+
+        const adminRes = await adminSend;
+        if (adminRes?.ok) emailResults.admin.ok = true;
+      }
 
       // 2) Email CUSTOMER confirmation
-      let customerSend = Promise.resolve({ ok: true, skipped: true });
       if (quote.customer_email) {
         emailResults.customer.attempted = true;
-        const custSubject = `Acceptance confirmed — ${quoteCode}`;
+
+        const custSubject = `${companyName} — Acceptance confirmed — ${quoteCode}`;
         const custHtml = buildCustomerAcceptedHtml({
-          logoLightUrl,
-          logoDarkUrl,
+          brand,
+          brandDark,
+          logoSrc,
           customerName: signerName,
           quoteCode,
           acceptedDatePretty,
@@ -224,6 +298,7 @@ Customer link: ${viewUrl}`;
           companyEmail,
           web,
         });
+
         const custText =
 `Hi ${signerName},
 
@@ -233,28 +308,27 @@ Signed: ${acceptedDatePretty}
 View your signed quote:
 ${viewUrl}
 
-Questions? Reply to this email or call ${phone}
+Questions? Reply to this email${phone ? ` or call ${phone}` : ""}
 
 ${companyName}`;
 
-        customerSend = sendPostmark({
+        const custSend = sendPostmark({
           token: POSTMARK_SERVER_TOKEN,
           payload: {
-            From: POSTMARK_FROM_EMAIL,
+            From: formatFrom(companyName, POSTMARK_FROM_EMAIL),
             To: quote.customer_email,
-            ReplyTo: "jacob@endurametalroofing.ca",
+            ReplyTo: replyTo,
             Subject: custSubject,
             HtmlBody: custHtml,
             TextBody: custText,
             MessageStream: POSTMARK_MESSAGE_STREAM,
+            ...(attachments.length ? { Attachments: attachments } : {}),
           },
         });
+
+        const custRes = await custSend;
+        if (custRes?.ok) emailResults.customer.ok = true;
       }
-
-      const [adminRes, custRes] = await Promise.allSettled([adminSend, customerSend]);
-
-      if (adminRes.status === "fulfilled" && adminRes.value?.ok) emailResults.admin.ok = true;
-      if (custRes.status === "fulfilled" && custRes.value?.ok) emailResults.customer.ok = true;
     }
 
     res.status(200).json({ ok: true, accepted_at, emails: emailResults });
@@ -280,9 +354,6 @@ async function sendPostmark({ token, payload }) {
   }
   return { ok: true };
 }
-
-
-
 
 /* =========================================================
    Acceptance audit helpers (server-side)
@@ -389,13 +460,23 @@ function buildDocumentSnapshot(data) {
   const snap = deepCloneJson(data || {});
 
   // Remove acceptance (we store it separately)
-  try { delete snap.acceptance; } catch {}
+  try {
+    delete snap.acceptance;
+  } catch {}
 
   // Remove render/runtime-only fields (non-contract evidence)
-  try { delete snap._supabase_url; } catch {}
-  try { delete snap.supabase_url; } catch {}
-  try { delete snap.logo_bucket; } catch {}
-  try { delete snap.logoBucket; } catch {}
+  try {
+    delete snap._supabase_url;
+  } catch {}
+  try {
+    delete snap.supabase_url;
+  } catch {}
+  try {
+    delete snap.logo_bucket;
+  } catch {}
+  try {
+    delete snap.logoBucket;
+  } catch {}
 
   // Remove embedded logo payloads to keep snapshot lean
   if (snap.company && typeof snap.company === "object") {
@@ -479,6 +560,43 @@ function sha256Hex(input) {
     return "";
   }
 }
+
+/* =========================================================
+   Shared helpers
+   ========================================================= */
+
+function safeStr(v) {
+  return String(v ?? "").trim();
+}
+
+function safeEmail(v) {
+  const s = safeStr(v).toLowerCase();
+  if (!s || !s.includes("@") || s.includes(" ")) return "";
+  return s;
+}
+
+function uniqueEmails(list) {
+  const out = [];
+  const seen = new Set();
+  for (const v of list || []) {
+    const e = safeEmail(v);
+    if (!e) continue;
+    if (seen.has(e)) continue;
+    seen.add(e);
+    out.push(e);
+  }
+  return out;
+}
+
+function escapeHtml(s) {
+  return String(s || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 function isYmd(s) {
   return /^\d{4}-\d{2}-\d{2}$/.test(String(s || ""));
 }
@@ -499,19 +617,8 @@ function formatYmdInTimeZone(dateObj, timeZone) {
     const d = map.day || "01";
     return `${y}-${m}-${d}`;
   } catch {
-    // Fallback: UTC date (still better than throwing)
     return new Date(dateObj).toISOString().slice(0, 10);
   }
-}
-
-
-function escapeHtml(s) {
-  return String(s || "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
 }
 
 function formatYmdPretty(ymd) {
@@ -527,22 +634,101 @@ function formatYmdPretty(ymd) {
   }
 }
 
-function formatDateTimePretty(iso) {
-  try {
-    const d = new Date(iso);
-    return d.toLocaleString("en-CA", {
-      year: "numeric",
-      month: "short",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso;
+function normalizeHexColor(input) {
+  let v = safeStr(input);
+  if (!v) return "";
+  if (!v.startsWith("#")) v = `#${v}`;
+
+  // Expand #RGB -> #RRGGBB
+  if (/^#[0-9a-fA-F]{3}$/.test(v)) {
+    const h = v.slice(1);
+    v = "#" + h.split("").map((c) => c + c).join("");
   }
+
+  if (!/^#[0-9a-fA-F]{6}$/.test(v)) return "";
+  return v.toUpperCase();
 }
 
-/* ===== Branded templates ===== */
+function hexToRgb(hex) {
+  const h = normalizeHexColor(hex);
+  if (!h) return null;
+  const n = parseInt(h.slice(1), 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+
+function rgbToHex({ r, g, b }) {
+  const clamp = (x) => Math.max(0, Math.min(255, Math.round(Number(x) || 0)));
+  const rr = clamp(r).toString(16).padStart(2, "0");
+  const gg = clamp(g).toString(16).padStart(2, "0");
+  const bb = clamp(b).toString(16).padStart(2, "0");
+  return `#${rr}${gg}${bb}`.toUpperCase();
+}
+
+function darkenHex(hex, amount = 0.2) {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return "#000000";
+  const factor = 1 - Math.max(0, Math.min(0.9, Number(amount) || 0));
+  return rgbToHex({ r: rgb.r * factor, g: rgb.g * factor, b: rgb.b * factor });
+}
+
+function extractEmail(fromField) {
+  const s = safeStr(fromField);
+  if (!s) return "";
+  const m = /<([^>]+)>/.exec(s);
+  if (m) return safeStr(m[1]);
+  if (s.includes("@")) return s;
+  return "";
+}
+
+function formatFrom(companyName, postmarkFrom) {
+  const email = extractEmail(postmarkFrom);
+  if (!email) return postmarkFrom;
+
+  const name = safeStr(companyName).replaceAll('"', "'");
+  if (!name) return email;
+
+  // Quote the name so punctuation is safe
+  return `"${name}" <${email}>`;
+}
+
+function parseDataUrl(dataUrl) {
+  const s = safeStr(dataUrl);
+  if (!s.startsWith("data:")) return null;
+  const m = /^data:([^;]+);base64,(.+)$/i.exec(s);
+  if (!m) return null;
+  const contentType = safeStr(m[1]) || "application/octet-stream";
+  const base64 = String(m[2] || "").trim();
+  if (!base64) return null;
+  return { contentType, base64 };
+}
+
+function buildInlineLogoAttachment(logoUrl) {
+  const parsed = parseDataUrl(logoUrl);
+  if (parsed && parsed.base64.length < 8_000_000) {
+    const cid = "cid:company-logo";
+    return {
+      logoSrc: cid,
+      attachments: [
+        {
+          Name: "company-logo",
+          Content: parsed.base64,
+          ContentType: parsed.contentType || "image/png",
+          ContentID: cid,
+        },
+      ],
+    };
+  }
+
+  if (/^https?:\/\//i.test(safeStr(logoUrl))) {
+    return { logoSrc: safeStr(logoUrl), attachments: [] };
+  }
+
+  return { logoSrc: "", attachments: [] };
+}
+
+/* =========================================================
+   Branded templates
+   ========================================================= */
 
 function baseStyles() {
   return `
@@ -555,40 +741,39 @@ function baseStyles() {
       .h1 { font-size: 22px !important; }
       .sub { font-size: 14px !important; }
     }
-    /* Logo swap */
-    .logo-dark { display:none; max-height:0; overflow:hidden; mso-hide:all; }
-    .logo-light { display:block; }
     @media (prefers-color-scheme: dark) {
-      .logo-light { display:none !important; max-height:0 !important; overflow:hidden !important; }
-      .logo-dark  { display:block !important; max-height:none !important; overflow:visible !important; }
       body, .bg { background:#0b1020 !important; }
       .card { background:#0f172a !important; border-color: rgba(255,255,255,0.14) !important; }
       .txt { color:#e8eefc !important; }
       .muted { color: rgba(232,238,252,0.72) !important; }
       .detail { background: rgba(255,255,255,0.06) !important; border-color: rgba(255,255,255,0.14) !important; }
       .divider { border-color: rgba(255,255,255,0.14) !important; }
-      .link { color:#93c5fd !important; }
-      .logo-wrap { background:#000000 !important; }
-      .logo-shell { background:#000000 !important; border-color: rgba(255,255,255,0.18) !important; }
+      /* Keep logo container WHITE so any logo works */
+      .logo-wrap, .logo-shell { background:#ffffff !important; }
     }
-    /* Outlook dark mode hooks */
     [data-ogsc] body, [data-ogsc] .bg { background:#0b1020 !important; }
     [data-ogsc] .card { background:#0f172a !important; border-color: rgba(255,255,255,0.14) !important; }
     [data-ogsc] .txt { color:#e8eefc !important; }
     [data-ogsc] .muted { color: rgba(232,238,252,0.72) !important; }
     [data-ogsc] .detail { background: rgba(255,255,255,0.06) !important; border-color: rgba(255,255,255,0.14) !important; }
     [data-ogsc] .divider { border-color: rgba(255,255,255,0.14) !important; }
-    [data-ogsc] .link { color:#93c5fd !important; }
-    [data-ogsc] .logo-wrap { background:#000000 !important; }
-    [data-ogsc] .logo-shell { background:#000000 !important; border-color: rgba(255,255,255,0.18) !important; }
-    [data-ogsc] .logo-light { display:none !important; }
-    [data-ogsc] .logo-dark  { display:block !important; max-height:none !important; }
+    [data-ogsc] .logo-wrap, [data-ogsc] .logo-shell { background:#ffffff !important; }
   `;
 }
 
+function logoBlockHtml({ logoSrc, companyName }) {
+  const safeCompany = escapeHtml(companyName);
+  if (logoSrc) {
+    return `<img src="${escapeHtml(logoSrc)}" width="200" alt="${safeCompany}"
+      style="display:block;width:200px;max-width:200px;height:auto;margin:0 auto;border:0;outline:none;text-decoration:none;" />`;
+  }
+  return `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-weight:950;font-size:18px;color:#0b0f14;">${safeCompany}</div>`;
+}
+
 function buildCustomerAcceptedHtml({
-  logoLightUrl,
-  logoDarkUrl,
+  brand,
+  brandDark,
+  logoSrc,
   customerName,
   quoteCode,
   acceptedDatePretty,
@@ -602,13 +787,11 @@ function buildCustomerAcceptedHtml({
   const safeCode = escapeHtml(quoteCode);
   const safeDate = escapeHtml(acceptedDatePretty);
   const safeCompany = escapeHtml(companyName);
-  const safePhone = escapeHtml(phone);
-  const safeEmail = escapeHtml(companyEmail);
-  const safeWeb = escapeHtml(web);
+  const safePhone = escapeHtml(phone || "");
+  const safeEmail = escapeHtml(companyEmail || "");
+  const safeWeb = escapeHtml(web || "");
   const safeViewUrl = escapeHtml(viewUrl);
 
-  const brand = "#0267b5";
-  const brandDark = "#014d89";
   const success = "#16a34a";
 
   return `<!doctype html>
@@ -623,9 +806,7 @@ function buildCustomerAcceptedHtml({
   <style>${baseStyles()}</style>
 </head>
 <body class="bg" bgcolor="#f5f7fb" style="margin:0;padding:0;background:#f5f7fb;">
-  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
-    Acceptance confirmed for ${safeCode}.
-  </div>
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">Acceptance confirmed for ${safeCode}.</div>
 
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="bg" bgcolor="#f5f7fb"
     style="width:100%;background:#f5f7fb;padding:26px 12px;">
@@ -649,10 +830,7 @@ function buildCustomerAcceptedHtml({
                       style="margin:0 auto;background:#ffffff;border:1px solid #e6e9f1;border-radius:18px;overflow:hidden;">
                       <tr>
                         <td align="center" style="padding:12px 14px;">
-                          <img class="logo-light" src="${escapeHtml(logoLightUrl)}" width="200" alt="${safeCompany}"
-                            style="display:block;width:200px;max-width:200px;height:auto;margin:0 auto;border:0;outline:none;text-decoration:none;" />
-                          <img class="logo-dark" src="${escapeHtml(logoDarkUrl)}" width="200" alt="${safeCompany}"
-                            style="display:none;width:200px;max-width:200px;height:auto;margin:0 auto;border:0;outline:none;text-decoration:none;" />
+                          ${logoBlockHtml({ logoSrc, companyName })}
                         </td>
                       </tr>
                     </table>
@@ -669,7 +847,6 @@ function buildCustomerAcceptedHtml({
                     </div>
                     <div class="muted sub" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin-top:10px;font-size:14px;line-height:1.65;color:#4b5563;max-width:520px;">
                       Thanks ${safeName}. We received your signature for quote <b style="color:#0b0f14;">${safeCode}</b>.
-                      We'll reach out to confirm scheduling and next steps.
                     </div>
                   </td>
                 </tr>
@@ -701,7 +878,7 @@ function buildCustomerAcceptedHtml({
                     <!--[if !mso]><!-- -->
                     <table role="presentation" cellpadding="0" cellspacing="0" class="cta" style="margin:0 auto;width:420px;max-width:100%;">
                       <tr>
-                        <td align="center" bgcolor="${brand}" style="border-radius:16px;background-color:${brand};background:${brand};">
+                        <td align="center" bgcolor="${brand}" style="border-radius:16px;background-color:${brand};background:${brand};background-image:linear-gradient(90deg,${brand},${brandDark});">
                           <a href="${safeViewUrl}"
                             style="display:block;padding:18px 18px;border-radius:16px;text-align:center;
                                    font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
@@ -714,6 +891,21 @@ function buildCustomerAcceptedHtml({
                     </table>
                     <!--<![endif]-->
                   </td>
+                </tr>
+
+                <tr><td class="divider" style="border-top:1px solid #e6e9f1;"></td></tr>
+
+                <tr>
+                  <td align="center" style="padding:14px 24px 18px;text-align:center;">
+                    <div class="muted" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:12px;line-height:1.55;color:#6b7280;">
+                      ${safePhone ? `Questions? Reply to this email or call <span class="txt" style="color:#0b0f14;font-weight:950;">${safePhone}</span><br />` : ""}
+                      <span style="color:#9ca3af;">${safeCompany}${safeEmail ? ` • ${safeEmail}` : ""}${safeWeb ? ` • ${safeWeb}` : ""}</span>
+                    </div>
+                  </td>
+                </tr>
+
+              </table>
+            </td>
           </tr>
 
           <tr>
@@ -733,8 +925,9 @@ function buildCustomerAcceptedHtml({
 }
 
 function buildAdminSignedHtml({
-  logoLightUrl,
-  logoDarkUrl,
+  brand,
+  brandDark,
+  logoSrc,
   quoteCode,
   signerName,
   customerEmail,
@@ -742,6 +935,9 @@ function buildAdminSignedHtml({
   adminUrl,
   viewUrl,
   companyName,
+  phone,
+  companyEmail,
+  web,
 }) {
   const safeCompany = escapeHtml(companyName);
   const safeCode = escapeHtml(quoteCode);
@@ -750,9 +946,10 @@ function buildAdminSignedHtml({
   const safeDate = escapeHtml(acceptedDatePretty);
   const safeAdminUrl = escapeHtml(adminUrl);
   const safeViewUrl = escapeHtml(viewUrl);
+  const safePhone = escapeHtml(phone || "");
+  const safeCompanyEmail = escapeHtml(companyEmail || "");
+  const safeWeb = escapeHtml(web || "");
 
-  const brand = "#0267b5";
-  const brandDark = "#014d89";
   const success = "#16a34a";
 
   return `<!doctype html>
@@ -767,9 +964,7 @@ function buildAdminSignedHtml({
   <style>${baseStyles()}</style>
 </head>
 <body class="bg" bgcolor="#f5f7fb" style="margin:0;padding:0;background:#f5f7fb;">
-  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
-    ${safeCode} was signed.
-  </div>
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${safeCode} was signed.</div>
 
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="bg" bgcolor="#f5f7fb"
     style="width:100%;background:#f5f7fb;padding:22px 12px;">
@@ -785,6 +980,7 @@ function buildAdminSignedHtml({
                 </tr>
               </table>
 
+              <!-- Logo -->
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                 <tr>
                   <td class="logo-wrap" align="center" bgcolor="#ffffff" style="background:#ffffff;padding:16px 22px 10px;text-align:center;">
@@ -792,10 +988,7 @@ function buildAdminSignedHtml({
                       style="margin:0 auto;background:#ffffff;border:1px solid #e6e9f1;border-radius:18px;overflow:hidden;">
                       <tr>
                         <td align="center" style="padding:10px 12px;">
-                          <img class="logo-light" src="${escapeHtml(logoLightUrl)}" width="180" alt="${safeCompany}"
-                            style="display:block;width:180px;max-width:180px;height:auto;margin:0 auto;border:0;outline:none;text-decoration:none;" />
-                          <img class="logo-dark" src="${escapeHtml(logoDarkUrl)}" width="180" alt="${safeCompany}"
-                            style="display:none;width:180px;max-width:180px;height:auto;margin:0 auto;border:0;outline:none;text-decoration:none;" />
+                          ${logoBlockHtml({ logoSrc, companyName })}
                         </td>
                       </tr>
                     </table>
@@ -803,6 +996,7 @@ function buildAdminSignedHtml({
                 </tr>
               </table>
 
+              <!-- Copy -->
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                 <tr>
                   <td class="px" align="center" style="padding:8px 26px 6px;text-align:center;">
@@ -842,6 +1036,7 @@ function buildAdminSignedHtml({
                   </td>
                 </tr>
 
+                <!-- CTA row (Admin) -->
                 <tr>
                   <td align="center" style="padding:12px 26px 8px;">
                     <!--[if mso]>
@@ -858,7 +1053,7 @@ function buildAdminSignedHtml({
                     <!--[if !mso]><!-- -->
                     <table role="presentation" cellpadding="0" cellspacing="0" class="cta" style="margin:0 auto;width:420px;max-width:100%;">
                       <tr>
-                        <td align="center" bgcolor="${brand}" style="border-radius:16px;background-color:${brand};background:${brand};">
+                        <td align="center" bgcolor="${brand}" style="border-radius:16px;background-color:${brand};background:${brand};background-image:linear-gradient(90deg,${brand},${brandDark});">
                           <a href="${safeAdminUrl}"
                             style="display:block;padding:18px 18px;border-radius:16px;text-align:center;
                                    font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
@@ -871,7 +1066,39 @@ function buildAdminSignedHtml({
                     </table>
                     <!--<![endif]-->
                   </td>
+                </tr>
+
+                <tr>
+                  <td align="center" style="padding:0 26px 14px;text-align:center;">
+                    <div class="muted" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:12px;line-height:1.6;color:#6b7280;">
+                      Customer link: <span style="color:${brand};word-break:break-all;">${safeViewUrl}</span>
+                    </div>
+                  </td>
+                </tr>
+
+                <tr><td class="divider" style="border-top:1px solid #e6e9f1;"></td></tr>
+
+                <tr>
+                  <td align="center" style="padding:14px 24px 18px;text-align:center;">
+                    <div class="muted" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:12px;line-height:1.55;color:#6b7280;">
+                      ${safePhone ? `Questions? Reply to this email or call <span class="txt" style="color:#0b0f14;font-weight:950;">${safePhone}</span><br />` : ""}
+                      <span style="color:#9ca3af;">${safeCompany}${safeCompanyEmail ? ` • ${safeCompanyEmail}` : ""}${safeWeb ? ` • ${safeWeb}` : ""}</span>
+                    </div>
+                  </td>
+                </tr>
+
+              </table>
+            </td>
           </tr>
+
+          <tr>
+            <td align="center" style="padding:14px 6px 0;">
+              <div class="muted" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:11px;line-height:1.5;color:#9ca3af;text-align:center;">
+                © ${new Date().getFullYear()} ${safeCompany}
+              </div>
+            </td>
+          </tr>
+
         </table>
       </td>
     </tr>
