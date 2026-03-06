@@ -23,6 +23,10 @@
   --shadow-2: 0 20px 50px rgba(15, 23, 42, 0.06);
 
   --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+  /* Layout container (keeps pages centered and readable on wide screens) */
+  --content-max: 1280px;
+  --content-pad: 26px;
 }
 
 *{ box-sizing:border-box; }
@@ -194,7 +198,10 @@ a{ color: inherit; }
   align-items:flex-end;
   gap: 16px;
 
-  padding: 22px 26px 14px;
+  padding: 22px var(--content-pad) 14px;
+  /* Keep the header content aligned with the main content width on large screens */
+  padding-left: max(var(--content-pad), calc((100% - var(--content-max)) / 2 + var(--content-pad)));
+  padding-right: max(var(--content-pad), calc((100% - var(--content-max)) / 2 + var(--content-pad)));
   border-bottom: 1px solid rgba(15, 23, 42, 0.10);
   background: rgba(246, 247, 250, 0.92);
   backdrop-filter: blur(8px);
@@ -281,9 +288,10 @@ a{ color: inherit; }
 }
 
 .content{
-  padding: 22px 26px 46px;
-  max-width: 1280px;
+  padding: 22px var(--content-pad) 46px;
+  max-width: var(--content-max);
   width:100%;
+  margin: 0 auto;
 }
 
 .alert{
@@ -804,6 +812,7 @@ input:focus{
 
 /* Responsive */
 @media (max-width: 1040px){
+  :root{ --content-pad: 14px; }
   .app{ grid-template-columns: 1fr; }
   .sidebar{
     position: sticky;
@@ -840,7 +849,7 @@ input:focus{
   .workspace{ display:none; }
   .userline{ padding: 8px 10px; }
   .topbar{ position: static; backdrop-filter:none; }
-  .content{ padding: 18px 14px 40px; }
+  .content{ padding: 18px var(--content-pad) 40px; }
   .canvas-top{ grid-template-columns: 1fr; }
   .rail{ grid-template-columns: repeat(2, 1fr); }
   .below{ grid-template-columns: 1fr; }
@@ -1120,15 +1129,25 @@ textarea:focus{
 .settings-grid{
   margin-top: 6px;
   display:grid;
-  grid-template-columns: 1.15fr 0.85fr;
-  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 22px;
   align-items:start;
 }
 
 .settings-col{
   display:flex;
   flex-direction:column;
-  gap: 18px;
+  gap: 22px;
+}
+
+/* Settings panels: a touch more breathing room than dashboards/lists */
+.settings-grid .panel{
+  padding: 18px;
+}
+
+/* Settings forms: slightly larger gaps so it doesn't feel "crammed" */
+.settings-grid .form-grid{
+  gap: 12px;
 }
 
 /* Logo row */
