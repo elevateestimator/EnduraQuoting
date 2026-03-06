@@ -96,6 +96,15 @@ let state = {
   isAdmin: false,
 };
 
+let autosave = {
+  company: null,
+  quoteDefaults: null,
+  billing: null,
+  profile: null,
+  wired: false,
+};
+
+
 function toast(msg) {
   if (!toastEl) return;
   toastEl.textContent = msg;
@@ -775,27 +784,364 @@ function wirePaymentSchedule() {
     paymentScheduleExampleBtn.addEventListener("click", usePaymentScheduleExample);
 }
 
-async function saveCompany() {
-  if (!state.isAdmin) {
-    toast("Only owners/admins can edit company settings.");
-    return;
+
+/* =========================================================
+   Auto-save (Settings)
+   ---------------------------------------------------------
+   Goal: Nobody should lose changes because they forgot to click Save.
+   - Debounced auto-save on input/change
+   - Flush on blur / page hide
+   - Subtle status text beside each Save button
+   - Safe handling for "invalid while typing" fields (brand color, payment schedule)
+   ========================================================= */
+
+function ensureAutosaveStatusEl(saveBtn, id) {
+  if (!saveBtn) return null;
+  const parent = saveBtn.parentElement;
+  if (!parent) return null;
+
+  let el = parent.querySelector(`#${id}`);
+  if (el) return el;
+
+  el = document.createElement("span");
+  el.id = id;
+  el.className = "muted small";
+  el.style.marginRight = "10px";
+  el.style.fontWeight = "850";
+  el.style.whiteSpace = "nowrap";
+  el.style.userSelect = "none";
+  el.setAttribute("aria-live", "polite");
+
+  parent.insertBefore(el, saveBtn);
+  return el;
+}
+
+function setAutosaveStatus(el, text, kind = "idle") {
+  if (!el) return;
+  el.textContent = text || "";
+  el.dataset.kind = kind;
+
+  // Tiny visual hint without needing CSS changes.
+  if (kind === "error") {
+    el.style.color = "#b91c1c";
+  } else {
+    el.style.color = "rgba(90, 101, 114, 0.95)";
+  }
+}
+
+function createAutoSaver({
+  name,
+  delay = 900,
+  isEnabled,
+  getSnapshot,
+  onSave,
+  statusEl,
+  idleText = "Auto-save on",
+  readOnlyText = "Read-only",
+}) {
+  let lastSaved = null;
+  let timer = null;
+  let inFlight = false;
+  let queued = false;
+  let idleTimer = null;
+
+  function setIdle() {
+    if (!statusEl) return;
+    if (!isEnabled()) {
+      setAutosaveStatus(statusEl, readOnlyText, "idle");
+      return;
+    }
+    setAutosaveStatus(statusEl, idleText, "idle");
   }
 
+  function markClean() {
+    try {
+      lastSaved = getSnapshot();
+    } catch {
+      lastSaved = null;
+    }
+    setIdle();
+  }
+
+  async function run() {
+    if (!isEnabled()) return;
+
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+
+    const snap = getSnapshot();
+    if (lastSaved != null && snap === lastSaved) {
+      setIdle();
+      return;
+    }
+
+    if (inFlight) {
+      queued = true;
+      return;
+    }
+
+    inFlight = true;
+    if (idleTimer) {
+      clearTimeout(idleTimer);
+      idleTimer = null;
+    }
+
+    setAutosaveStatus(statusEl, "Saving…", "saving");
+
+    let ok = false;
+    try {
+      ok = await onSave();
+    } catch (e) {
+      console.warn(`[autosave:${name}]`, e);
+      ok = false;
+    }
+
+    inFlight = false;
+
+    if (ok) {
+      lastSaved = getSnapshot();
+      setAutosaveStatus(statusEl, "Saved", "saved");
+      idleTimer = setTimeout(setIdle, 1400);
+    } else {
+      setAutosaveStatus(statusEl, "Save failed", "error");
+    }
+
+    if (queued) {
+      queued = false;
+      setTimeout(run, 80);
+    }
+  }
+
+  function schedule() {
+    if (!isEnabled()) return;
+    clearTimeout(timer);
+    timer = setTimeout(run, delay);
+  }
+
+  function flush() {
+    if (!isEnabled()) return;
+    run();
+  }
+
+  function cancel() {
+    clearTimeout(timer);
+    timer = null;
+  }
+
+  return { schedule, flush, cancel, markClean, setIdle };
+}
+
+function companySnapshotForSave() {
+  // Brand color: if user is mid-typing an invalid hex, don't treat it as a change yet.
+  const brandTyped = normalizeHexColor(companyBrandColorEl?.value);
+  const brandFallback = normalizeHexColor(state.company?.brand_color) || "#000000";
+  const brand = brandTyped || brandFallback;
+
+  return JSON.stringify({
+    name: sanitizeString(companyNameEl?.value) || sanitizeString(state.company?.name) || "",
+    phone: normalizeOptional(companyPhoneEl?.value),
+    website: normalizeOptional(companyWebsiteEl?.value),
+    address: normalizeOptional(companyAddressEl?.value),
+    default_currency: sanitizeString(companyCurrencyEl?.value) || "CAD",
+    brand_color: brand,
+  });
+}
+
+function quoteDefaultsSnapshotForSave() {
+  const terms = normalizeOptional(companyPaymentTermsEl?.value);
+  const tax_name = normalizeOptional(companyTaxNameEl?.value);
+  const tax_rate = normalizeNumber(companyTaxRateEl?.value, { min: 0, max: 100 });
+
+  // Payment schedule: while invalid, keep snapshot pinned to last-saved schedule
+  // so we don't spam saves while the user is adjusting percents.
+  let scheduleForSnap = normalizePaymentSchedule(state.company?.payment_schedule) || null;
+
+  if (paymentScheduleBodyEl) {
+    const schedule = readPaymentScheduleFromUI();
+    const v = validatePaymentSchedule(schedule);
+    if (v.ok) scheduleForSnap = schedule;
+  }
+
+  return JSON.stringify({
+    payment_terms: terms,
+    tax_name,
+    tax_rate,
+    payment_schedule: scheduleForSnap,
+  });
+}
+
+function billingSnapshotForSave() {
+  return JSON.stringify({
+    billing_email: normalizeOptional(billingEmailEl?.value),
+  });
+}
+
+function profileSnapshotForSave() {
+  return JSON.stringify({
+    first_name: normalizeOptional(profileFirstEl?.value),
+    last_name: normalizeOptional(profileLastEl?.value),
+    phone: normalizeOptional(profilePhoneEl?.value),
+  });
+}
+
+function wireAutosaveField(el, saver) {
+  if (!el || !saver) return;
+
+  el.addEventListener("input", () => saver.schedule());
+  el.addEventListener("change", () => saver.schedule());
+  el.addEventListener("blur", () => saver.flush());
+}
+
+function flushAllAutosaves() {
+  try { autosave.company?.flush(); } catch {}
+  try { autosave.quoteDefaults?.flush(); } catch {}
+  try { autosave.billing?.flush(); } catch {}
+  try { autosave.profile?.flush(); } catch {}
+}
+
+function setupAutoSave() {
+  if (autosave.wired) return;
+  if (!state.session || !state.company) return;
+
+  autosave.wired = true;
+
+  // Status text beside Save buttons
+  const companyStatusEl = ensureAutosaveStatusEl(saveCompanyBtn, "autosave-company");
+  const quoteStatusEl = ensureAutosaveStatusEl(saveQuoteDefaultsBtn, "autosave-quote-defaults");
+  const billingStatusEl = ensureAutosaveStatusEl(saveBillingBtn, "autosave-billing");
+  const profileStatusEl = ensureAutosaveStatusEl(saveProfileBtn, "autosave-profile");
+
+  autosave.company = createAutoSaver({
+    name: "company",
+    delay: 900,
+    isEnabled: () => Boolean(state.isAdmin && state.company),
+    getSnapshot: companySnapshotForSave,
+    onSave: () => saveCompany({ mode: "auto" }),
+    statusEl: companyStatusEl,
+    idleText: "Auto-save on",
+    readOnlyText: "Read-only",
+  });
+
+  autosave.quoteDefaults = createAutoSaver({
+    name: "quote-defaults",
+    delay: 950,
+    isEnabled: () => Boolean(state.isAdmin && state.company),
+    getSnapshot: quoteDefaultsSnapshotForSave,
+    onSave: () => saveQuoteDefaults({ mode: "auto" }),
+    statusEl: quoteStatusEl,
+    idleText: "Auto-save on",
+    readOnlyText: "Read-only",
+  });
+
+  autosave.billing = createAutoSaver({
+    name: "billing",
+    delay: 900,
+    isEnabled: () => Boolean(state.isAdmin && state.company),
+    getSnapshot: billingSnapshotForSave,
+    onSave: () => saveBilling({ mode: "auto" }),
+    statusEl: billingStatusEl,
+    idleText: "Auto-save on",
+    readOnlyText: "Read-only",
+  });
+
+  // Profile is always editable by the current user
+  autosave.profile = createAutoSaver({
+    name: "profile",
+    delay: 1100,
+    isEnabled: () => Boolean(state.session),
+    getSnapshot: profileSnapshotForSave,
+    onSave: () => saveProfile({ mode: "auto" }),
+    statusEl: profileStatusEl,
+    idleText: "Auto-save on",
+    readOnlyText: "—",
+  });
+
+  // Initial baseline (prevents immediate save on load)
+  autosave.company.markClean();
+  autosave.quoteDefaults.markClean();
+  autosave.billing.markClean();
+  autosave.profile.markClean();
+
+  // Company fields
+  for (const el of [
+    companyNameEl,
+    companyPhoneEl,
+    companyWebsiteEl,
+    companyCurrencyEl,
+    companyAddressEl,
+    companyBrandColorEl,
+    companyBrandColorPickerEl,
+  ]) {
+    wireAutosaveField(el, autosave.company);
+  }
+
+  // Quote defaults fields
+  for (const el of [companyPaymentTermsEl, companyTaxNameEl, companyTaxRateEl]) {
+    wireAutosaveField(el, autosave.quoteDefaults);
+  }
+
+  // Payment schedule inputs (event delegation)
+  if (paymentScheduleBodyEl) {
+    const scheduleHandler = () => autosave.quoteDefaults?.schedule();
+    paymentScheduleBodyEl.addEventListener("input", scheduleHandler);
+    paymentScheduleBodyEl.addEventListener("change", scheduleHandler);
+    paymentScheduleBodyEl.addEventListener("click", (e) => {
+      const t = e.target;
+      if (t && t.closest && t.closest("button")) scheduleHandler();
+    });
+  }
+  if (addPaymentStepBtn) addPaymentStepBtn.addEventListener("click", () => autosave.quoteDefaults?.schedule());
+  if (paymentScheduleExampleBtn)
+    paymentScheduleExampleBtn.addEventListener("click", () => autosave.quoteDefaults?.schedule());
+
+  // Billing
+  wireAutosaveField(billingEmailEl, autosave.billing);
+
+  // Profile
+  for (const el of [profileFirstEl, profileLastEl, profilePhoneEl]) {
+    wireAutosaveField(el, autosave.profile);
+  }
+
+  // Flush pending saves if the tab is closed / navigated away.
+  window.addEventListener("pagehide", flushAllAutosaves);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushAllAutosaves();
+  });
+}
+
+
+async function saveCompany({ mode = "manual" } = {}) {
+  const isAuto = mode === "auto";
+
+  if (!state.isAdmin) {
+    if (!isAuto) toast("Only owners/admins can edit company settings.");
+    return false;
+  }
+  if (!state.company?.id) return false;
+
   setError("");
-  saveCompanyBtn.disabled = true;
-  saveCompanyBtn.textContent = "Saving…";
+
+  // Only show button loading state for manual saves.
+  if (!isAuto && saveCompanyBtn) {
+    saveCompanyBtn.disabled = true;
+    saveCompanyBtn.textContent = "Saving…";
+  }
 
   try {
-    const brand = normalizeHexColor(companyBrandColorEl?.value) || "#000000";
+    const brandTyped = normalizeHexColor(companyBrandColorEl?.value);
 
     const updates = {
-      name: sanitizeString(companyNameEl.value) || state.company.name,
-      phone: normalizeOptional(companyPhoneEl.value),
-      website: normalizeOptional(companyWebsiteEl.value),
-      address: normalizeOptional(companyAddressEl.value),
-      default_currency: sanitizeString(companyCurrencyEl.value) || "CAD",
-      brand_color: brand,
+      name: sanitizeString(companyNameEl?.value) || state.company.name,
+      phone: normalizeOptional(companyPhoneEl?.value),
+      website: normalizeOptional(companyWebsiteEl?.value),
+      address: normalizeOptional(companyAddressEl?.value),
+      default_currency: sanitizeString(companyCurrencyEl?.value) || "CAD",
     };
+
+    // Only update brand_color when it's valid (prevents clobbering while user types).
+    if (brandTyped) updates.brand_color = brandTyped;
 
     const { data, error } = await supabase
       .from("companies")
@@ -807,44 +1153,75 @@ async function saveCompany() {
     if (error) throw error;
 
     state.company = data;
-    fillCompanyForm(data);
-    toast("Company saved.");
+
+    // Keep workspace label in sync if the company name changes.
+    if (workspaceNameEl) workspaceNameEl.textContent = data?.name || "Workspace";
+
+    if (!isAuto) toast("Company saved.");
+
+    // Manual saves should reset the autosave baseline too.
+    if (!isAuto) {
+      try {
+        autosave.company?.markClean();
+      } catch {}
+    }
+
+    return true;
   } catch (e) {
     setError(e?.message || "Failed to save company.");
+    return false;
   } finally {
-    saveCompanyBtn.disabled = false;
-    saveCompanyBtn.textContent = "Save";
+    if (!isAuto && saveCompanyBtn) {
+      saveCompanyBtn.disabled = false;
+      saveCompanyBtn.textContent = "Save";
+    }
   }
 }
 
-async function saveQuoteDefaults() {
+async function saveQuoteDefaults({ mode = "manual" } = {}) {
+  const isAuto = mode === "auto";
+
   if (!state.isAdmin) {
-    toast("Only owners/admins can edit quote defaults.");
-    return;
+    if (!isAuto) toast("Only owners/admins can edit quote defaults.");
+    return false;
   }
+  if (!state.company?.id) return false;
 
   setError("");
-  if (!saveQuoteDefaultsBtn) return;
 
-  saveQuoteDefaultsBtn.disabled = true;
-  const oldText = saveQuoteDefaultsBtn.textContent;
-  saveQuoteDefaultsBtn.textContent = "Saving…";
+  let oldText = "";
+  if (!isAuto && saveQuoteDefaultsBtn) {
+    saveQuoteDefaultsBtn.disabled = true;
+    oldText = saveQuoteDefaultsBtn.textContent;
+    saveQuoteDefaultsBtn.textContent = "Saving…";
+  }
 
   try {
-    // Payment schedule must be valid before saving
-    const schedule = readPaymentScheduleFromUI();
-    const v = validatePaymentSchedule(schedule);
-    if (!v.ok) {
-      setError(v.message || "Payment schedule must total 100%.");
-      return;
+    // Payment schedule: only persist when valid. While editing (invalid totals),
+    // autosave will still persist terms/tax, but will *not* overwrite the saved schedule.
+    let schedule = null;
+    let scheduleOk = true;
+
+    if (paymentScheduleBodyEl) {
+      schedule = readPaymentScheduleFromUI();
+      const v = validatePaymentSchedule(schedule);
+      scheduleOk = v.ok;
+
+      if (!scheduleOk && !isAuto) {
+        setError(v.message || "Payment schedule must total 100%.");
+        return false;
+      }
     }
 
     const updates = {
       payment_terms: normalizeOptional(companyPaymentTermsEl?.value),
       tax_name: normalizeOptional(companyTaxNameEl?.value),
       tax_rate: normalizeNumber(companyTaxRateEl?.value, { min: 0, max: 100 }),
-      payment_schedule: schedule,
     };
+
+    if (paymentScheduleBodyEl && scheduleOk) {
+      updates.payment_schedule = schedule;
+    }
 
     const { data, error } = await supabase
       .from("companies")
@@ -856,42 +1233,54 @@ async function saveQuoteDefaults() {
     if (error) throw error;
 
     state.company = data;
-    if (companyPaymentTermsEl) companyPaymentTermsEl.value = data?.payment_terms || "";
-    if (companyTaxNameEl) companyTaxNameEl.value = data?.tax_name || "Tax";
-    if (companyTaxRateEl) companyTaxRateEl.value = data?.tax_rate ?? "";
 
-    if (paymentScheduleBodyEl) renderPaymentSchedule(data?.payment_schedule);
+    if (!isAuto) toast("Quote defaults saved.");
 
-    toast("Quote defaults saved.");
+    // Manual saves should reset the autosave baseline too.
+    if (!isAuto) {
+      try {
+        autosave.quoteDefaults?.markClean();
+      } catch {}
+    }
+
+    return true;
   } catch (e) {
     // If the column hasn't been added yet, Supabase will error here.
     setError(
       e?.message ||
         "Failed to save quote defaults. Make sure you added companies.payment_terms, companies.tax_name, companies.tax_rate, and companies.payment_schedule (jsonb) in Supabase."
     );
+    return false;
   } finally {
-    saveQuoteDefaultsBtn.textContent = oldText || "Save";
+    if (!isAuto && saveQuoteDefaultsBtn) {
+      saveQuoteDefaultsBtn.textContent = oldText || "Save";
+    }
 
     // Re-apply validation gating (admin + schedule must total 100%)
     if (paymentScheduleBodyEl) syncPaymentScheduleUI();
-    else saveQuoteDefaultsBtn.disabled = !state.isAdmin;
+    else if (saveQuoteDefaultsBtn) saveQuoteDefaultsBtn.disabled = !state.isAdmin;
   }
 }
 
+async function saveBilling({ mode = "manual" } = {}) {
+  const isAuto = mode === "auto";
 
-async function saveBilling() {
   if (!state.isAdmin) {
-    toast("Only owners/admins can edit billing settings.");
-    return;
+    if (!isAuto) toast("Only owners/admins can edit billing settings.");
+    return false;
   }
+  if (!state.company?.id) return false;
 
   setError("");
-  saveBillingBtn.disabled = true;
-  saveBillingBtn.textContent = "Saving…";
+
+  if (!isAuto && saveBillingBtn) {
+    saveBillingBtn.disabled = true;
+    saveBillingBtn.textContent = "Saving…";
+  }
 
   try {
     const updates = {
-      billing_email: normalizeOptional(billingEmailEl.value),
+      billing_email: normalizeOptional(billingEmailEl?.value),
     };
 
     const { data, error } = await supabase
@@ -904,26 +1293,49 @@ async function saveBilling() {
     if (error) throw error;
 
     state.company = data;
-    toast("Billing saved.");
+
+    if (!isAuto) toast("Billing saved.");
+
+    // Manual saves should reset the autosave baseline too.
+    if (!isAuto) {
+      try {
+        autosave.billing?.markClean();
+      } catch {}
+    }
+
+    return true;
   } catch (e) {
     setError(e?.message || "Failed to save billing settings.");
+    return false;
   } finally {
-    saveBillingBtn.disabled = false;
-    saveBillingBtn.textContent = "Save";
+    if (!isAuto && saveBillingBtn) {
+      saveBillingBtn.disabled = false;
+      saveBillingBtn.textContent = "Save";
+    }
   }
 }
 
-async function saveProfile() {
-  setProfileMsg("");
-  setError("");
+async function saveProfile({ mode = "manual" } = {}) {
+  const isAuto = mode === "auto";
 
-  saveProfileBtn.disabled = true;
-  saveProfileBtn.textContent = "Saving…";
+  // For manual saves, keep the original UX (button loading state + toasts).
+  if (!isAuto) {
+    setProfileMsg("");
+    setError("");
+
+    if (saveProfileBtn) {
+      saveProfileBtn.disabled = true;
+      saveProfileBtn.textContent = "Saving…";
+    }
+  } else {
+    // Auto-save: stay quiet (status text near Save button handles feedback).
+    setError("");
+  }
 
   try {
-    const first_name = normalizeOptional(profileFirstEl.value);
-    const last_name = normalizeOptional(profileLastEl.value);
-    const phone = normalizeOptional(profilePhoneEl.value);
+    const first_name = normalizeOptional(profileFirstEl?.value);
+    const last_name = normalizeOptional(profileLastEl?.value);
+    const phone = normalizeOptional(profilePhoneEl?.value);
 
     // Update profiles table if exists
     const { error: pe } = await supabase
@@ -942,13 +1354,26 @@ async function saveProfile() {
 
     if (ue) console.warn("updateUser metadata error", ue);
 
-    setProfileMsg("Saved.");
-    toast("Profile saved.");
+    if (!isAuto) {
+      setProfileMsg("Saved.");
+      toast("Profile saved.");
+
+      // Manual saves should reset the autosave baseline too.
+      try {
+        autosave.profile?.markClean();
+      } catch {}
+    }
+
+    return true;
   } catch (e) {
-    setProfileMsg(e?.message || "Failed to save profile.");
+    if (!isAuto) setProfileMsg(e?.message || "Failed to save profile.");
+    else setError(e?.message || "Failed to save profile.");
+    return false;
   } finally {
-    saveProfileBtn.disabled = false;
-    saveProfileBtn.textContent = "Save";
+    if (!isAuto && saveProfileBtn) {
+      saveProfileBtn.disabled = false;
+      saveProfileBtn.textContent = "Save";
+    }
   }
 }
 
@@ -1081,6 +1506,14 @@ function wireLogoPicker() {
     const url = URL.createObjectURL(file);
     companyLogoImg.src = url;
     uploadLogoBtn.disabled = false;
+
+    // Auto-upload so people don't forget to click "Upload"
+    if (state.isAdmin) {
+      // Let the preview paint first
+      setTimeout(() => {
+        if (logoFileEl.files?.[0]) uploadLogo();
+      }, 80);
+    }
   });
 
   uploadLogoBtn.addEventListener("click", uploadLogo);
@@ -1273,6 +1706,9 @@ async function init() {
     // Seats derived from rows in team table (members count)
     const seatCount = membersBody?.children?.length || 0;
     fillBilling(company, seatCount);
+
+    // Turn on auto-save (so users don't lose changes)
+    setupAutoSave();
   } catch (e) {
     setError(e?.message || "Failed to load settings.");
     applyPermissions();
