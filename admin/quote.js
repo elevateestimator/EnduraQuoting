@@ -584,19 +584,23 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
-function syncBreakdownToggleUI(row) {
+function syncCustomerViewUI(row) {
   if (!row) return;
-  const btn = row.querySelector('[data-action="toggle-breakdown"]');
-  if (!btn) return;
 
   const show = row.dataset.showQtyUnitPrice !== "0";
 
-  btn.textContent = show ? "Breakdown" : "Total only";
-  btn.dataset.state = show ? "on" : "off";
-  btn.setAttribute("aria-pressed", show ? "true" : "false");
-  btn.title = show
-    ? "Customer will see Qty, Unit, and Unit Price for this line item."
-    : "Customer will only see the Line Total for this line item.";
+  const detailsBtn = row.querySelector('[data-action="custview-details"]');
+  const totalBtn = row.querySelector('[data-action="custview-total"]');
+
+  if (detailsBtn) {
+    detailsBtn.classList.toggle("active", show);
+    detailsBtn.setAttribute("aria-pressed", show ? "true" : "false");
+  }
+
+  if (totalBtn) {
+    totalBtn.classList.toggle("active", !show);
+    totalBtn.setAttribute("aria-pressed", !show ? "true" : "false");
+  }
 }
 
 function buildItemRow(item = {}) {
@@ -625,8 +629,16 @@ function buildItemRow(item = {}) {
     <td>
       <div class="i-head">
         <input type="text" class="i-name" placeholder="Item name" value="${escapeHtml(name)}" />
-        <button type="button" class="i-toggle no-print" data-action="toggle-breakdown"></button>
       </div>
+
+      <div class="i-view no-print" title="Controls what the customer sees on the quote link + PDF.">
+        <span class="i-view-label">Customer sees</span>
+        <div class="i-view-seg" role="group" aria-label="Customer sees">
+          <button type="button" class="i-view-btn" data-action="custview-details">Qty &amp; Unit Price</button>
+          <button type="button" class="i-view-btn" data-action="custview-total">Total only</button>
+        </div>
+      </div>
+
       <textarea rows="2" class="i-desc" placeholder="Description">${escapeHtml(description)}</textarea>
     </td>
     <td class="num"><input type="text" class="i-qty" inputmode="decimal" value="${qty || 0}" /></td>
@@ -641,16 +653,25 @@ function buildItemRow(item = {}) {
     el.addEventListener("input", () => recalcTotals());
     el.addEventListener("change", () => recalcTotals());
   });
-  // Per-line customer visibility (Breakdown vs Total only)
-  const toggleBtn = tr.querySelector('[data-action="toggle-breakdown"]');
-  if (toggleBtn) {
-    toggleBtn.addEventListener("click", () => {
-      const cur = tr.dataset.showQtyUnitPrice !== "0";
-      tr.dataset.showQtyUnitPrice = cur ? "0" : "1";
-      syncBreakdownToggleUI(tr);
+  // Per-line customer visibility (controls what the customer sees)
+  const detailsBtn = tr.querySelector('[data-action="custview-details"]');
+  const totalBtn = tr.querySelector('[data-action="custview-total"]');
+
+  if (detailsBtn) {
+    detailsBtn.addEventListener("click", () => {
+      tr.dataset.showQtyUnitPrice = "1";
+      syncCustomerViewUI(tr);
     });
-    syncBreakdownToggleUI(tr);
   }
+
+  if (totalBtn) {
+    totalBtn.addEventListener("click", () => {
+      tr.dataset.showQtyUnitPrice = "0";
+      syncCustomerViewUI(tr);
+    });
+  }
+
+  syncCustomerViewUI(tr);
 
   // Auto-grow description (so it expands instead of scrolling)
   const descEl = tr.querySelector(".i-desc");
@@ -809,7 +830,10 @@ function renderProductsList(products, currency) {
     const modeTag = document.createElement("span");
     modeTag.className = "tag";
     const breakdown = p.show_qty_unit_price !== false;
-    modeTag.textContent = breakdown ? "Breakdown" : "Total only";
+    modeTag.textContent = breakdown ? "Qty & Unit Price" : "Total only";
+    modeTag.title = breakdown
+      ? "Customer sees Qty and Unit Price on the quote."
+      : "Customer only sees the line total on the quote.";
 
     meta.appendChild(priceTag);
     meta.appendChild(unitTag);

@@ -486,34 +486,64 @@ textarea.autogrow{
   width: auto;
 }
 
-.items-table .i-toggle{
-  border: 1px solid var(--border);
-  background: #ffffff;
-  color: #111827;
-  padding: 6px 10px;
-  border-radius: 999px;
+/* Per-line customer visibility (screen only)
+   - Removes the ambiguous "Breakdown" wording.
+   - Makes it obvious this controls what the customer sees.
+*/
+.items-table .i-view{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+  padding: 0 10px 8px;
+  flex-wrap: wrap;
+}
+
+.items-table .i-view-label{
   font-size: 11px;
   font-weight: 950;
   letter-spacing: .06em;
   text-transform: uppercase;
-  cursor: pointer;
+  color: #6b7280;
   white-space: nowrap;
+}
+
+.items-table .i-view-seg{
+  display:inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+  background: #f8fafc;
   box-shadow: 0 4px 14px rgba(15,23,42,0.06);
 }
 
-.items-table .i-toggle[data-state="on"]{
-  border-color: rgba(var(--brand-rgb), 0.45);
-  background: rgba(var(--brand-rgb), 0.08);
+.items-table .i-view-btn{
+  border: 0;
+  background: transparent;
+  color: #111827;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: .02em;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.items-table .i-view-btn:hover{
+  background: rgba(15,23,42,0.04);
+}
+
+.items-table .i-view-btn.active{
+  background: rgba(var(--brand-rgb), 0.10);
   color: #0b0f14;
 }
 
-.items-table .i-toggle[data-state="off"]{
-  opacity: 0.72;
-  background: #f8fafc;
+.items-table .i-view-btn.active:hover{
+  background: rgba(var(--brand-rgb), 0.14);
 }
 
-.items-table .i-toggle:hover{
-  border-color: rgba(15,23,42,0.22);
+.items-table .i-view-btn:focus-visible{
+  outline: 2px solid rgba(var(--brand-rgb), 0.55);
+  outline-offset: 2px;
 }
 
 .items-table .i-name{
