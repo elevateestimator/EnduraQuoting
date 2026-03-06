@@ -24,6 +24,8 @@ const docQuoteCodeEl = $("#doc-quote-code");
 
 // Company + rep
 const companyLogoEl = $("#company-logo");
+// Top-left app bar logo (should match company branding)
+const appLogoEl = $("#app-logo") || $(".topbar .logo");
 const repSignatureEl = $("#rep-signature");
 const repPrintedNameEl = $("#rep-printed-name");
 
@@ -362,11 +364,19 @@ function applyCompanyToDom(company) {
     if (el && !safeStr(el.textContent)) el.remove();
   });
 
-  if (companyLogoEl) {
-    const src = company.logo_url || companyLogoEl.getAttribute("src");
-    if (src) companyLogoEl.src = src;
-    companyLogoEl.alt = company.name ? `${company.name} logo` : "Company logo";
-  }
+  // Keep BOTH the document letterhead logo and the app topbar logo in sync.
+  // The topbar logo was previously hard-coded in quote.html, which is why you kept seeing the old Endura logo.
+  const logoSrc =
+    safeStr(company.logo_url) ||
+    safeStr(companyLogoEl?.getAttribute("src")) ||
+    safeStr(appLogoEl?.getAttribute("src"));
+
+  if (companyLogoEl && logoSrc) companyLogoEl.src = logoSrc;
+  if (appLogoEl && logoSrc) appLogoEl.src = logoSrc;
+
+  const alt = company.name ? `${company.name} logo` : "Company logo";
+  if (companyLogoEl) companyLogoEl.alt = alt;
+  if (appLogoEl) appLogoEl.alt = alt;
 }
 
 function ensurePreparedBy(data, ctx) {
