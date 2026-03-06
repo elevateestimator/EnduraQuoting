@@ -290,12 +290,52 @@
     </div>
   </div>
 
-  <label class="field">
+  <div class="divider"></div>
+
+  <!-- Payment schedule (milestone payments) -->
+  <div class="schedule-head">
+    <div>
+      <div class="schedule-title">Payment schedule</div>
+      <div class="muted small" style="margin-top: 4px">
+        Make it obvious <strong>when</strong> your customer pays and <strong>how much</strong>.
+        Add steps &mdash; the total must equal <strong>100%</strong>.
+      </div>
+    </div>
+
+    <div class="schedule-actions">
+      <button id="btn-payment-schedule-example" class="btn btn-secondary" type="button">
+        Use example
+      </button>
+      <button id="btn-add-payment-step" class="btn btn-quiet" type="button">
+        + Add step
+      </button>
+    </div>
+  </div>
+
+  <div class="schedule-wrap" style="margin-top: 10px">
+    <table class="schedule-table" aria-label="Payment schedule">
+      <thead>
+        <tr>
+          <th>Step (what triggers payment)</th>
+          <th style="width: 150px">% of total</th>
+          <th style="width: 56px"></th>
+        </tr>
+      </thead>
+      <tbody id="payment-schedule-body"></tbody>
+    </table>
+  </div>
+
+  <div class="schedule-foot">
+    <div id="payment-schedule-msg" class="schedule-msg muted small"></div>
+    <div class="schedule-total">Total: <span id="payment-schedule-total">0</span>%</div>
+  </div>
+
+  <label class="field" style="margin-top: 14px">
     <span>Payment &amp; Terms</span>
     <textarea
       id="company_payment_terms"
       rows="7"
-      placeholder="Example: 40% deposit due upon acceptance. Remaining balance due upon completion. Payment methods…"
+      placeholder="Example: Work begins after deposit is received. Payment methods accepted: e-transfer, cheque. Warranty details…"
     ></textarea>
   </label>
 
@@ -322,7 +362,7 @@
 
 
   <div class="notice muted small" style="margin-top: 10px" id="quote-defaults-note">
-    These terms are copied into new quotes. You can still edit terms per quote when needed.
+    These defaults are copied into new quotes (schedule, terms, and tax). You can still edit them per quote when needed.
   </div>
 
   <div class="notice muted small" style="margin-top: 12px" id="quote-defaults-perms-note" hidden>

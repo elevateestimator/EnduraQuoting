@@ -39,6 +39,13 @@ const companyTaxRateEl = document.getElementById("company_tax_rate");
 const saveQuoteDefaultsBtn = document.getElementById("btn-save-quote-defaults");
 const quoteDefaultsPermsNote = document.getElementById("quote-defaults-perms-note");
 
+// Quote defaults: Payment schedule (milestone payments)
+const paymentScheduleBodyEl = document.getElementById("payment-schedule-body");
+const paymentScheduleTotalEl = document.getElementById("payment-schedule-total");
+const paymentScheduleMsgEl = document.getElementById("payment-schedule-msg");
+const addPaymentStepBtn = document.getElementById("btn-add-payment-step");
+const paymentScheduleExampleBtn = document.getElementById("btn-payment-schedule-example");
+
 
 // Logo
 const companyLogoImg = document.getElementById("company-logo");
@@ -222,6 +229,11 @@ function fillCompanyForm(company) {
   if (companyTaxNameEl) companyTaxNameEl.value = company?.tax_name || "Tax";
   if (companyTaxRateEl) companyTaxRateEl.value = company?.tax_rate ?? "";
 
+  // Payment schedule (milestone payments)
+  if (paymentScheduleBodyEl) {
+    renderPaymentSchedule(company?.payment_schedule);
+  }
+
   // Logo (public url stored)
   if (company?.logo_url) {
     companyLogoImg.src = company.logo_url;
@@ -262,15 +274,30 @@ function applyPermissions() {
   }
   saveCompanyBtn.disabled = companyDisabled;
   pickLogoBtn.disabled = companyDisabled;
-  // Keep “Upload” disabled until a file is selected (avoids confusion).
-  uploadLogoBtn.disabled = companyDisabled || !(logoFileEl?.files && logoFileEl.files.length);
+  uploadLogoBtn.disabled = companyDisabled;
 
   if (companyPermsNote) companyPermsNote.hidden = isAdmin;
 
   // Quote defaults
   if (companyPaymentTermsEl) companyPaymentTermsEl.disabled = !isAdmin;
+  if (companyTaxNameEl) companyTaxNameEl.disabled = !isAdmin;
+  if (companyTaxRateEl) companyTaxRateEl.disabled = !isAdmin;
+
+  if (addPaymentStepBtn) addPaymentStepBtn.disabled = !isAdmin;
+  if (paymentScheduleExampleBtn) paymentScheduleExampleBtn.disabled = !isAdmin;
+
+  if (paymentScheduleBodyEl) {
+    for (const el of paymentScheduleBodyEl.querySelectorAll("input, button")) {
+      el.disabled = !isAdmin;
+    }
+  }
+
+  // Save gating is handled by payment schedule validation (and admin role)
   if (saveQuoteDefaultsBtn) saveQuoteDefaultsBtn.disabled = !isAdmin;
   if (quoteDefaultsPermsNote) quoteDefaultsPermsNote.hidden = isAdmin;
+
+  // Ensure the save button is disabled unless the schedule is valid
+  syncPaymentScheduleUI();
 
   // Billing
   saveBillingBtn.disabled = !isAdmin;
@@ -470,6 +497,284 @@ function syncBrandColorInputs(value) {
   if (companyBrandColorPickerEl && companyBrandColorPickerEl.value !== hex) companyBrandColorPickerEl.value = hex;
 }
 
+/* =========================================================
+   Payment schedule (Quote defaults)
+   ========================================================= */
+
+function defaultPaymentSchedule() {
+  return [
+    { title: "Deposit", percent: 40 },
+    { title: "On material delivery", percent: 40 },
+    { title: "On completion", percent: 20 },
+  ];
+}
+
+function coercePaymentSchedule(value) {
+  if (!value) return null;
+  if (Array.isArray(value)) return value;
+
+  // In case a JSON string was stored accidentally
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+function clampNumber(n, min, max) {
+  if (!Number.isFinite(n)) return min;
+  return Math.min(Math.max(n, min), max);
+}
+
+function percentToHundredths(percent) {
+  const n = Number(percent);
+  if (!Number.isFinite(n)) return 0;
+  const clamped = clampNumber(n, 0, 100);
+  return Math.round(clamped * 100);
+}
+
+function formatPercentDisplay(percent) {
+  const n = Number(percent);
+  if (!Number.isFinite(n)) return "0";
+  const fixed = n.toFixed(2);
+  if (fixed.endsWith(".00")) return String(Math.round(n));
+  return fixed.replace(/0$/, "");
+}
+
+function normalizePaymentSchedule(raw) {
+  const arr = coercePaymentSchedule(raw);
+  if (!arr || !arr.length) return null;
+
+  const out = [];
+  for (const step of arr) {
+    const title = sanitizeString(step?.title || step?.name || step?.label || "");
+    const percent = Number(step?.percent ?? step?.percentage ?? step?.pct ?? 0);
+    out.push({ title, percent: clampNumber(percent, 0, 100) });
+  }
+
+  return out;
+}
+
+function getPaymentScheduleRows() {
+  if (!paymentScheduleBodyEl) return [];
+  return Array.from(paymentScheduleBodyEl.querySelectorAll("tr.ps-row"));
+}
+
+function readPaymentScheduleFromUI() {
+  const rows = getPaymentScheduleRows();
+  const steps = [];
+
+  for (const row of rows) {
+    const titleEl = row.querySelector(".ps-title");
+    const percentEl = row.querySelector(".ps-percent");
+
+    const title = sanitizeString(titleEl?.value);
+    const p = normalizeNumber(percentEl?.value, { min: 0, max: 100 });
+    const percent = p == null ? 0 : p;
+
+    steps.push({ title, percent });
+  }
+
+  return steps;
+}
+
+function validatePaymentSchedule(steps) {
+  const schedule = Array.isArray(steps) ? steps : [];
+  if (!schedule.length) {
+    return {
+      ok: false,
+      totalHundredths: 0,
+      message: "Add at least 1 payment step.",
+    };
+  }
+
+  // Validate row-by-row
+  for (const s of schedule) {
+    if (!sanitizeString(s?.title)) {
+      return {
+        ok: false,
+        totalHundredths: schedule.reduce((sum, x) => sum + percentToHundredths(x?.percent), 0),
+        message: "Each payment step needs a name (example: Deposit).",
+      };
+    }
+
+    const p = Number(s?.percent);
+    if (!Number.isFinite(p) || p <= 0) {
+      return {
+        ok: false,
+        totalHundredths: schedule.reduce((sum, x) => sum + percentToHundredths(x?.percent), 0),
+        message: "Each payment step needs a percent greater than 0%.",
+      };
+    }
+  }
+
+  const totalHundredths = schedule.reduce((sum, s) => sum + percentToHundredths(s?.percent), 0);
+  const ok = totalHundredths === 10000;
+  const total = totalHundredths / 100;
+
+  return {
+    ok,
+    totalHundredths,
+    message: ok
+      ? "Total is 100%. This will show on new quotes as your payment plan."
+      : `Total must equal 100% (currently ${formatPercentDisplay(total)}%).`,
+  };
+}
+
+function syncPaymentScheduleRemoveButtons() {
+  const rows = getPaymentScheduleRows();
+  const onlyOne = rows.length <= 1;
+  for (const row of rows) {
+    const btn = row.querySelector(".ps-remove");
+    if (!btn) continue;
+
+    // Non-admin: everything disabled anyway
+    if (!state.isAdmin) {
+      btn.disabled = true;
+      continue;
+    }
+
+    btn.disabled = onlyOne;
+  }
+}
+
+function syncPaymentScheduleUI() {
+  if (!paymentScheduleBodyEl || !paymentScheduleTotalEl || !paymentScheduleMsgEl) return;
+
+  const steps = readPaymentScheduleFromUI();
+  const v = validatePaymentSchedule(steps);
+
+  // Total display
+  const total = v.totalHundredths / 100;
+  paymentScheduleTotalEl.textContent = formatPercentDisplay(total);
+
+  // Message styling
+  paymentScheduleMsgEl.textContent = v.message || "";
+  paymentScheduleMsgEl.classList.toggle("error", !v.ok);
+  paymentScheduleMsgEl.classList.toggle("ok", v.ok);
+
+  // Save button gating (must be admin AND schedule valid)
+  if (saveQuoteDefaultsBtn) {
+    saveQuoteDefaultsBtn.disabled = !state.isAdmin || !v.ok;
+  }
+
+  // Remove buttons
+  syncPaymentScheduleRemoveButtons();
+}
+
+function addPaymentScheduleRow(step = {}) {
+  if (!paymentScheduleBodyEl) return null;
+
+  const tr = document.createElement("tr");
+  tr.className = "ps-row";
+
+  const tdTitle = document.createElement("td");
+  const titleInput = document.createElement("input");
+  titleInput.type = "text";
+  titleInput.className = "ps-title";
+  titleInput.placeholder = "Deposit (upon acceptance)";
+  titleInput.value = sanitizeString(step?.title || "");
+  titleInput.disabled = !state.isAdmin;
+  tdTitle.appendChild(titleInput);
+
+  const tdPct = document.createElement("td");
+  const pctInput = document.createElement("input");
+  pctInput.type = "number";
+  pctInput.inputMode = "decimal";
+  pctInput.step = "0.01";
+  pctInput.min = "0";
+  pctInput.max = "100";
+  pctInput.className = "ps-percent";
+  pctInput.placeholder = "40";
+
+  const pct = Number(step?.percent);
+  pctInput.value = Number.isFinite(pct) && pct > 0 ? String(pct) : "";
+  pctInput.disabled = !state.isAdmin;
+  tdPct.appendChild(pctInput);
+
+  const tdAct = document.createElement("td");
+  const rmBtn = document.createElement("button");
+  rmBtn.type = "button";
+  rmBtn.className = "ps-remove";
+  rmBtn.textContent = "✕";
+  rmBtn.setAttribute("aria-label", "Remove payment step");
+  rmBtn.disabled = !state.isAdmin;
+  tdAct.appendChild(rmBtn);
+
+  rmBtn.addEventListener("click", () => {
+    // Keep at least 1 row
+    const rows = getPaymentScheduleRows();
+    if (rows.length <= 1) return;
+
+    tr.remove();
+    syncPaymentScheduleUI();
+  });
+
+  // Live validation
+  for (const el of [titleInput, pctInput]) {
+    el.addEventListener("input", syncPaymentScheduleUI);
+    el.addEventListener("change", syncPaymentScheduleUI);
+  }
+
+  tr.appendChild(tdTitle);
+  tr.appendChild(tdPct);
+  tr.appendChild(tdAct);
+  paymentScheduleBodyEl.appendChild(tr);
+
+  return { tr, titleInput, pctInput };
+}
+
+function renderPaymentSchedule(schedule) {
+  if (!paymentScheduleBodyEl) return;
+  paymentScheduleBodyEl.innerHTML = "";
+
+  const normalized = normalizePaymentSchedule(schedule) || defaultPaymentSchedule();
+  for (const step of normalized) addPaymentScheduleRow(step);
+
+  syncPaymentScheduleUI();
+}
+
+function addPaymentScheduleStep() {
+  if (!state.isAdmin) {
+    toast("Only owners/admins can edit quote defaults.");
+    return;
+  }
+  if (!paymentScheduleBodyEl) return;
+
+  const current = readPaymentScheduleFromUI();
+  const totalHundredths = current.reduce((sum, s) => sum + percentToHundredths(s?.percent), 0);
+  const remaining = Math.max(0, 10000 - totalHundredths) / 100;
+
+  const added = addPaymentScheduleRow({ title: "", percent: remaining > 0 ? remaining : "" });
+  syncPaymentScheduleUI();
+
+  // Focus the new title field
+  try {
+    added?.titleInput?.focus();
+  } catch {}
+}
+
+function usePaymentScheduleExample() {
+  if (!state.isAdmin) {
+    toast("Only owners/admins can edit quote defaults.");
+    return;
+  }
+
+  renderPaymentSchedule(defaultPaymentSchedule());
+  toast("Example payment schedule added.");
+}
+
+function wirePaymentSchedule() {
+  if (addPaymentStepBtn) addPaymentStepBtn.addEventListener("click", addPaymentScheduleStep);
+  if (paymentScheduleExampleBtn)
+    paymentScheduleExampleBtn.addEventListener("click", usePaymentScheduleExample);
+}
+
 async function saveCompany() {
   if (!state.isAdmin) {
     toast("Only owners/admins can edit company settings.");
@@ -492,31 +797,6 @@ async function saveCompany() {
       brand_color: brand,
     };
 
-
-    // If a new logo file is selected, persist it when the user clicks “Save”.
-    // Otherwise the preview is only local and will revert on refresh.
-    const pendingLogoFile = logoFileEl?.files?.[0] || null;
-    if (pendingLogoFile) {
-      if (pendingLogoFile.type !== "image/png") {
-        throw new Error("Please upload a PNG file for the company logo.");
-      }
-
-      const embeddedDataUrl = await fileToEmbeddedLogoDataUrl(pendingLogoFile);
-      updates.logo_url = embeddedDataUrl;
-
-      // Optional: also upload to Storage as a backup (non-blocking).
-      try {
-        const path = `${state.company.id}/logo.png`;
-        const { error: upErr } = await supabase.storage
-          .from("company-logos")
-          .upload(path, pendingLogoFile, { upsert: true, contentType: "image/png" });
-
-        if (upErr) console.warn("Logo Storage upload error:", upErr);
-      } catch (e) {
-        console.warn("Logo Storage upload exception:", e);
-      }
-    }
-
     const { data, error } = await supabase
       .from("companies")
       .update(updates)
@@ -528,14 +808,6 @@ async function saveCompany() {
 
     state.company = data;
     fillCompanyForm(data);
-
-    if (pendingLogoFile) {
-      // Clear pending logo selection now that it's saved.
-      logoFileEl.value = "";
-      uploadLogoBtn.disabled = true;
-      setLogoMsg("Logo saved.");
-    }
-
     toast("Company saved.");
   } catch (e) {
     setError(e?.message || "Failed to save company.");
@@ -559,10 +831,19 @@ async function saveQuoteDefaults() {
   saveQuoteDefaultsBtn.textContent = "Saving…";
 
   try {
+    // Payment schedule must be valid before saving
+    const schedule = readPaymentScheduleFromUI();
+    const v = validatePaymentSchedule(schedule);
+    if (!v.ok) {
+      setError(v.message || "Payment schedule must total 100%.");
+      return;
+    }
+
     const updates = {
       payment_terms: normalizeOptional(companyPaymentTermsEl?.value),
       tax_name: normalizeOptional(companyTaxNameEl?.value),
       tax_rate: normalizeNumber(companyTaxRateEl?.value, { min: 0, max: 100 }),
+      payment_schedule: schedule,
     };
 
     const { data, error } = await supabase
@@ -578,16 +859,22 @@ async function saveQuoteDefaults() {
     if (companyPaymentTermsEl) companyPaymentTermsEl.value = data?.payment_terms || "";
     if (companyTaxNameEl) companyTaxNameEl.value = data?.tax_name || "Tax";
     if (companyTaxRateEl) companyTaxRateEl.value = data?.tax_rate ?? "";
+
+    if (paymentScheduleBodyEl) renderPaymentSchedule(data?.payment_schedule);
+
     toast("Quote defaults saved.");
   } catch (e) {
     // If the column hasn't been added yet, Supabase will error here.
     setError(
       e?.message ||
-        "Failed to save quote defaults. Make sure you added companies.payment_terms, companies.tax_name, and companies.tax_rate in Supabase."
+        "Failed to save quote defaults. Make sure you added companies.payment_terms, companies.tax_name, companies.tax_rate, and companies.payment_schedule (jsonb) in Supabase."
     );
   } finally {
-    saveQuoteDefaultsBtn.disabled = !state.isAdmin;
     saveQuoteDefaultsBtn.textContent = oldText || "Save";
+
+    // Re-apply validation gating (admin + schedule must total 100%)
+    if (paymentScheduleBodyEl) syncPaymentScheduleUI();
+    else saveQuoteDefaultsBtn.disabled = !state.isAdmin;
   }
 }
 
@@ -769,28 +1056,14 @@ async function fileToEmbeddedLogoDataUrl(file) {
 function wireLogoPicker() {
   if (!pickLogoBtn || !logoFileEl) return;
 
-  // People naturally click the logo itself — make that open the picker too.
-  const logoWrap = document.querySelector(".logo-preview-wrap");
-
-  const openPicker = () => {
+  pickLogoBtn.addEventListener("click", () => {
     if (!state.isAdmin) {
       toast("Only owners/admins can upload a company logo.");
       return;
     }
     setLogoMsg("");
     logoFileEl.click();
-  };
-
-  if (companyLogoImg) {
-    companyLogoImg.style.cursor = "pointer";
-    companyLogoImg.addEventListener("click", openPicker);
-  }
-  if (logoWrap) {
-    logoWrap.style.cursor = "pointer";
-    logoWrap.addEventListener("click", openPicker);
-  }
-
-  pickLogoBtn.addEventListener("click", openPicker);
+  });
 
   logoFileEl.addEventListener("change", () => {
     setLogoMsg("");
@@ -804,12 +1077,10 @@ function wireLogoPicker() {
       return;
     }
 
-    // Preview (local) — the actual save happens when you click “Save” or “Upload”.
+    // Preview
     const url = URL.createObjectURL(file);
     companyLogoImg.src = url;
-
     uploadLogoBtn.disabled = false;
-    setLogoMsg("Selected. Click Save to persist this logo (or click Upload).");
   });
 
   uploadLogoBtn.addEventListener("click", uploadLogo);
@@ -969,6 +1240,7 @@ async function init() {
   }
 
   wireLogoPicker();
+  wirePaymentSchedule();
   wireInvite();
 
   // Session
