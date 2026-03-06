@@ -584,6 +584,21 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
+function syncBreakdownToggleUI(row) {
+  if (!row) return;
+  const btn = row.querySelector('[data-action="toggle-breakdown"]');
+  if (!btn) return;
+
+  const show = row.dataset.showQtyUnitPrice !== "0";
+
+  btn.textContent = show ? "Breakdown" : "Total only";
+  btn.dataset.state = show ? "on" : "off";
+  btn.setAttribute("aria-pressed", show ? "true" : "false");
+  btn.title = show
+    ? "Customer will see Qty, Unit, and Unit Price for this line item."
+    : "Customer will only see the Line Total for this line item.";
+}
+
 function buildItemRow(item = {}) {
   const tr = document.createElement("tr");
   tr.className = "item-row avoid-break";
@@ -608,7 +623,10 @@ function buildItemRow(item = {}) {
 
   tr.innerHTML = `
     <td>
-      <input type="text" class="i-name" placeholder="Item name" value="${escapeHtml(name)}" />
+      <div class="i-head">
+        <input type="text" class="i-name" placeholder="Item name" value="${escapeHtml(name)}" />
+        <button type="button" class="i-toggle no-print" data-action="toggle-breakdown"></button>
+      </div>
       <textarea rows="2" class="i-desc" placeholder="Description">${escapeHtml(description)}</textarea>
     </td>
     <td class="num"><input type="text" class="i-qty" inputmode="decimal" value="${qty || 0}" /></td>
@@ -623,6 +641,26 @@ function buildItemRow(item = {}) {
     el.addEventListener("input", () => recalcTotals());
     el.addEventListener("change", () => recalcTotals());
   });
+  // Per-line customer visibility (Breakdown vs Total only)
+  const toggleBtn = tr.querySelector('[data-action="toggle-breakdown"]');
+  if (toggleBtn) {
+    toggleBtn.addEventListener("click", () => {
+      const cur = tr.dataset.showQtyUnitPrice !== "0";
+      tr.dataset.showQtyUnitPrice = cur ? "0" : "1";
+      syncBreakdownToggleUI(tr);
+    });
+    syncBreakdownToggleUI(tr);
+  }
+
+  // Auto-grow description (so it expands instead of scrolling)
+  const descEl = tr.querySelector(".i-desc");
+  if (descEl) {
+    const run = () => autosizeTextarea(descEl);
+    descEl.addEventListener("input", run);
+    run();
+    requestAnimationFrame(run);
+  }
+
 
   // Money tidy-up (keeps PDFs clean too)
   const priceInput = tr.querySelector(".i-price");
@@ -699,16 +737,40 @@ function formatCurrency(cents, currency = "CAD") {
   }
 }
 
+function getProductTitle(p) {
+  return (
+    safeStr(p?.name) ||
+    safeStr(p?.title) ||
+    safeStr(p?.product_name) ||
+    safeStr(p?.service_name) ||
+    "Unnamed"
+  );
+}
+
+function getProductDescription(p) {
+  return safeStr(p?.description) || safeStr(p?.desc) || "";
+}
+
+function getProductUnitType(p) {
+  return safeStr(p?.unit_type) || safeStr(p?.unit) || "Each";
+}
+
+function getProductPriceCents(p) {
+  const v = p?.price_per_unit_cents ?? p?.unit_price_cents ?? p?.price_cents ?? p?.price ?? 0;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
 function productToItem(product) {
   return {
     product_id: product.id,
-    name: product.name || "",
-    description: product.description || "",
-    unit_type: product.unit_type || "Each",
+    name: getProductTitle(product),
+    description: getProductDescription(product),
+    unit_type: getProductUnitType(product),
     // Default to showing breakdown unless explicitly turned off
     show_qty_unit_price: product.show_qty_unit_price !== false,
     qty: 1,
-    unit_price_cents: Number(product.price_per_unit_cents || 0),
+    unit_price_cents: getProductPriceCents(product),
     taxable: true,
   };
 }
@@ -726,11 +788,11 @@ function renderProductsList(products, currency) {
 
     const name = document.createElement("div");
     name.className = "product-name";
-    name.textContent = p.name || "Unnamed";
+    name.textContent = getProductTitle(p);
 
     const desc = document.createElement("div");
     desc.className = "product-desc";
-    desc.textContent = p.description || "";
+    desc.textContent = getProductDescription(p);
     if (!safeStr(desc.textContent)) desc.style.display = "none";
 
     const meta = document.createElement("div");
@@ -738,11 +800,11 @@ function renderProductsList(products, currency) {
 
     const priceTag = document.createElement("span");
     priceTag.className = "tag";
-    priceTag.textContent = formatCurrency(p.price_per_unit_cents || 0, currency);
+    priceTag.textContent = formatCurrency(getProductPriceCents(p), currency);
 
     const unitTag = document.createElement("span");
     unitTag.className = "tag";
-    unitTag.textContent = p.unit_type || "Each";
+    unitTag.textContent = getProductUnitType(p);
 
     const modeTag = document.createElement("span");
     modeTag.className = "tag";
