@@ -24,8 +24,6 @@ const docQuoteCodeEl = $("#doc-quote-code");
 
 // Company + rep
 const companyLogoEl = $("#company-logo");
-// Top-left app bar logo (should match company branding)
-const appLogoEl = $("#app-logo") || $(".topbar .logo");
 const repSignatureEl = $("#rep-signature");
 const repPrintedNameEl = $("#rep-printed-name");
 
@@ -47,7 +45,13 @@ const grandTotalEl = $("#grand-total");
 
 const taxRateEl = $("#tax-rate");
 const feesEl = $("#fees");
-const depositDueEl = $("#deposit-due");
+
+// Payment schedule (per-quote override)
+const paymentScheduleBodyEl = $("#payment-schedule-body");
+const paymentScheduleTotalEl = $("#payment-schedule-total");
+const paymentScheduleMsgEl = $("#payment-schedule-msg");
+const addPaymentStepBtn = $("#btn-add-payment-step");
+const useDefaultScheduleBtn = $("#btn-use-default-schedule");
 
 const repDateEl = $("#rep-date");
 
@@ -171,8 +175,308 @@ function parseNum(value) {
   const n = Number.parseFloat(cleaned);
   return Number.isFinite(n) ? n : 0;
 }
-function getDepositMode() {
-  return $$('input[name="deposit_mode"]').find((r) => r.checked)?.value || "auto";
+
+/* ===== Payment schedule (per quote) ===== */
+
+function defaultPaymentSchedule(ctx) {
+  // Company default schedule comes from Settings; fallback to a common 40/40/20.
+  const fromCompany = normalizePaymentSchedule(ctx?.company?.payment_schedule);
+  if (fromCompany && fromCompany.length) return fromCompany;
+
+  return [
+    { title: "Deposit", percent: 40 },
+    { title: "On material delivery", percent: 40 },
+    { title: "On completion", percent: 20 },
+  ];
+}
+
+function coercePaymentSchedule(value) {
+  if (!value) return null;
+  if (Array.isArray(value)) return value;
+
+  // In case a JSON string was stored accidentally
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+function clampNumber(n, min, max) {
+  if (!Number.isFinite(n)) return min;
+  return Math.min(Math.max(n, min), max);
+}
+
+function percentToHundredths(percent) {
+  const n = Number(percent);
+  if (!Number.isFinite(n)) return 0;
+  const clamped = clampNumber(n, 0, 100);
+  return Math.round(clamped * 100);
+}
+
+function formatPercentDisplay(percent) {
+  const n = Number(percent);
+  if (!Number.isFinite(n)) return "0";
+  const fixed = n.toFixed(2);
+  if (fixed.endsWith(".00")) return String(Math.round(n));
+  return fixed.replace(/0$/, "");
+}
+
+function normalizePaymentSchedule(raw) {
+  const arr = coercePaymentSchedule(raw);
+  if (!arr || !arr.length) return null;
+
+  const out = [];
+  for (const step of arr) {
+    const title = safeStr(step?.title || step?.name || step?.label || "");
+    const percent = Number(step?.percent ?? step?.percentage ?? step?.pct ?? 0);
+    out.push({ title, percent: clampNumber(percent, 0, 100) });
+  }
+
+  return out;
+}
+
+function ensurePaymentSchedule(data, ctx) {
+  if (!data) return;
+  const existing = normalizePaymentSchedule(data.payment_schedule);
+  if (existing && existing.length) {
+    data.payment_schedule = existing;
+    return;
+  }
+  data.payment_schedule = defaultPaymentSchedule(ctx);
+}
+
+function getPaymentScheduleRows() {
+  if (!paymentScheduleBodyEl) return [];
+  return Array.from(paymentScheduleBodyEl.querySelectorAll("tr.ps-row"));
+}
+
+function readPaymentScheduleFromUI() {
+  const rows = getPaymentScheduleRows();
+  const steps = [];
+
+  for (const row of rows) {
+    const titleEl = row.querySelector(".ps-title");
+    const percentEl = row.querySelector(".ps-percent");
+
+    const title = safeStr(titleEl?.value);
+    const p = Number(percentEl?.value);
+    steps.push({ title, percent: Number.isFinite(p) ? p : 0 });
+  }
+
+  return steps;
+}
+
+function validatePaymentSchedule(steps) {
+  const schedule = Array.isArray(steps) ? steps : [];
+  if (!schedule.length) {
+    return { ok: false, totalHundredths: 0, message: "Add at least 1 payment step." };
+  }
+
+  for (const s of schedule) {
+    if (!safeStr(s?.title)) {
+      return {
+        ok: false,
+        totalHundredths: schedule.reduce((sum, x) => sum + percentToHundredths(x?.percent), 0),
+        message: "Each payment step needs a name (example: Deposit).",
+      };
+    }
+
+    const p = Number(s?.percent);
+    if (!Number.isFinite(p) || p <= 0) {
+      return {
+        ok: false,
+        totalHundredths: schedule.reduce((sum, x) => sum + percentToHundredths(x?.percent), 0),
+        message: "Each payment step needs a percent greater than 0%.",
+      };
+    }
+  }
+
+  const totalHundredths = schedule.reduce((sum, s) => sum + percentToHundredths(s?.percent), 0);
+  const ok = totalHundredths === 10000;
+  const total = totalHundredths / 100;
+
+  return {
+    ok,
+    totalHundredths,
+    message: ok ? "Total is 100%." : `Total must equal 100% (currently ${formatPercentDisplay(total)}%).`,
+  };
+}
+
+function allocateCentsByPercent(totalCents, schedule) {
+  const total = Math.max(0, Number(totalCents) || 0);
+  const steps = Array.isArray(schedule) ? schedule : [];
+  const pHund = steps.map((s) => percentToHundredths(s?.percent));
+  const base = pHund.map((p) => Math.floor((total * p) / 10000));
+  let used = base.reduce((a, b) => a + b, 0);
+
+  // Distribute remaining cents to keep totals exact when schedule sums to 100%.
+  let remainder = total - used;
+  let i = 0;
+  while (remainder > 0 && base.length) {
+    base[i % base.length] += 1;
+    remainder -= 1;
+    i += 1;
+  }
+
+  return base;
+}
+
+function syncPaymentScheduleRemoveButtons() {
+  const rows = getPaymentScheduleRows();
+  const onlyOne = rows.length <= 1;
+  for (const row of rows) {
+    const btn = row.querySelector(".ps-remove");
+    if (!btn) continue;
+    btn.disabled = onlyOne;
+  }
+}
+
+function syncPaymentScheduleUI(totalCents) {
+  if (!paymentScheduleBodyEl || !paymentScheduleTotalEl || !paymentScheduleMsgEl) return;
+
+  const schedule = readPaymentScheduleFromUI();
+  const v = validatePaymentSchedule(schedule);
+
+  // Total display
+  const total = v.totalHundredths / 100;
+  paymentScheduleTotalEl.textContent = formatPercentDisplay(total);
+
+  // Message styling
+  paymentScheduleMsgEl.textContent = v.message || "";
+  paymentScheduleMsgEl.classList.toggle("error", !v.ok);
+  paymentScheduleMsgEl.classList.toggle("ok", v.ok);
+
+  // Amounts
+  const currency = _companySnapshot?.currency || "CAD";
+  const rows = getPaymentScheduleRows();
+
+  if (rows.length) {
+    let amounts = [];
+
+    if (v.ok) {
+      amounts = allocateCentsByPercent(totalCents, schedule);
+    } else {
+      // Still show helpful amounts while editing (based on each % of total)
+      amounts = schedule.map((s) => Math.round((Math.max(0, Number(totalCents) || 0) * percentToHundredths(s?.percent)) / 10000));
+    }
+
+    for (let i = 0; i < rows.length; i++) {
+      const amtEl = rows[i].querySelector(".ps-amount");
+      if (!amtEl) continue;
+      const cents = amounts[i] ?? 0;
+      amtEl.textContent = formatCurrency(cents, currency);
+    }
+  }
+
+  syncPaymentScheduleRemoveButtons();
+
+  return v;
+}
+
+function addPaymentScheduleRow(step = {}) {
+  if (!paymentScheduleBodyEl) return null;
+
+  const tr = document.createElement("tr");
+  tr.className = "ps-row";
+
+  const tdTitle = document.createElement("td");
+  const titleInput = document.createElement("input");
+  titleInput.type = "text";
+  titleInput.className = "ps-title";
+  titleInput.placeholder = "Deposit (upon acceptance)";
+  titleInput.value = safeStr(step?.title || "");
+  tdTitle.appendChild(titleInput);
+
+  const tdPct = document.createElement("td");
+  tdPct.className = "num";
+
+  const pctWrap = document.createElement("div");
+  pctWrap.className = "ps-percent-wrap";
+
+  const pctInput = document.createElement("input");
+  pctInput.type = "number";
+  pctInput.inputMode = "decimal";
+  pctInput.step = "0.01";
+  pctInput.min = "0";
+  pctInput.max = "100";
+  pctInput.className = "ps-percent";
+  pctInput.placeholder = "40";
+  const pct = Number(step?.percent);
+  pctInput.value = Number.isFinite(pct) && pct > 0 ? String(pct) : "";
+
+  const pctSuf = document.createElement("span");
+  pctSuf.className = "ps-suf";
+  pctSuf.textContent = "%";
+
+  pctWrap.appendChild(pctInput);
+  pctWrap.appendChild(pctSuf);
+  tdPct.appendChild(pctWrap);
+
+  const tdAmt = document.createElement("td");
+  tdAmt.className = "num";
+  const amt = document.createElement("div");
+  amt.className = "ps-amount";
+  amt.textContent = "—";
+  tdAmt.appendChild(amt);
+
+  const tdAct = document.createElement("td");
+  tdAct.className = "no-print slim";
+  const rmBtn = document.createElement("button");
+  rmBtn.type = "button";
+  rmBtn.className = "btn small ps-remove";
+  rmBtn.textContent = "✕";
+  rmBtn.setAttribute("aria-label", "Remove payment step");
+  tdAct.appendChild(rmBtn);
+
+  rmBtn.addEventListener("click", () => {
+    const rows = getPaymentScheduleRows();
+    if (rows.length <= 1) return;
+    tr.remove();
+    syncPaymentScheduleUI(_lastTotals?.total_cents ?? 0);
+  });
+
+  for (const el of [titleInput, pctInput]) {
+    el.addEventListener("input", () => syncPaymentScheduleUI(_lastTotals?.total_cents ?? 0));
+    el.addEventListener("change", () => syncPaymentScheduleUI(_lastTotals?.total_cents ?? 0));
+  }
+
+  tr.appendChild(tdTitle);
+  tr.appendChild(tdPct);
+  tr.appendChild(tdAmt);
+  tr.appendChild(tdAct);
+
+  paymentScheduleBodyEl.appendChild(tr);
+  return { tr, titleInput, pctInput };
+}
+
+function renderPaymentSchedule(schedule) {
+  if (!paymentScheduleBodyEl) return;
+
+  paymentScheduleBodyEl.innerHTML = "";
+  const normalized = normalizePaymentSchedule(schedule) || defaultPaymentSchedule(_ctx);
+
+  for (const step of normalized) addPaymentScheduleRow(step);
+
+  syncPaymentScheduleUI(_lastTotals?.total_cents ?? 0);
+}
+
+function addPaymentScheduleStep() {
+  if (!paymentScheduleBodyEl) return;
+
+  const current = readPaymentScheduleFromUI();
+  const totalHundredths = current.reduce((sum, s) => sum + percentToHundredths(s?.percent), 0);
+  const remaining = Math.max(0, 10000 - totalHundredths) / 100;
+
+  const added = addPaymentScheduleRow({ title: "", percent: remaining > 0 ? remaining : "" });
+  syncPaymentScheduleUI(_lastTotals?.total_cents ?? 0);
+
+  try { added?.titleInput?.focus(); } catch {}
 }
 
 /* ===== Autosize textareas ===== */
@@ -197,6 +501,7 @@ function autosizeAll() {
 /* ===== Tenant context (company + user) ===== */
 let _ctx = null;
 let _companySnapshot = null;
+let _lastTotals = { subtotal_cents: 0, tax_cents: 0, fees_cents: 0, total_cents: 0 };
 
 function safeStr(v) {
   return String(v ?? "").trim();
@@ -364,19 +669,11 @@ function applyCompanyToDom(company) {
     if (el && !safeStr(el.textContent)) el.remove();
   });
 
-  // Keep BOTH the document letterhead logo and the app topbar logo in sync.
-  // The topbar logo was previously hard-coded in quote.html, which is why you kept seeing the old Endura logo.
-  const logoSrc =
-    safeStr(company.logo_url) ||
-    safeStr(companyLogoEl?.getAttribute("src")) ||
-    safeStr(appLogoEl?.getAttribute("src"));
-
-  if (companyLogoEl && logoSrc) companyLogoEl.src = logoSrc;
-  if (appLogoEl && logoSrc) appLogoEl.src = logoSrc;
-
-  const alt = company.name ? `${company.name} logo` : "Company logo";
-  if (companyLogoEl) companyLogoEl.alt = alt;
-  if (appLogoEl) appLogoEl.alt = alt;
+  if (companyLogoEl) {
+    const src = company.logo_url || companyLogoEl.getAttribute("src");
+    if (src) companyLogoEl.src = src;
+    companyLogoEl.alt = company.name ? `${company.name} logo` : "Company logo";
+  }
 }
 
 function ensurePreparedBy(data, ctx) {
@@ -584,25 +881,6 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
-function syncCustomerViewUI(row) {
-  if (!row) return;
-
-  const show = row.dataset.showQtyUnitPrice !== "0";
-
-  const detailsBtn = row.querySelector('[data-action="custview-details"]');
-  const totalBtn = row.querySelector('[data-action="custview-total"]');
-
-  if (detailsBtn) {
-    detailsBtn.classList.toggle("active", show);
-    detailsBtn.setAttribute("aria-pressed", show ? "true" : "false");
-  }
-
-  if (totalBtn) {
-    totalBtn.classList.toggle("active", !show);
-    totalBtn.setAttribute("aria-pressed", !show ? "true" : "false");
-  }
-}
-
 function buildItemRow(item = {}) {
   const tr = document.createElement("tr");
   tr.className = "item-row avoid-break";
@@ -627,18 +905,7 @@ function buildItemRow(item = {}) {
 
   tr.innerHTML = `
     <td>
-      <div class="i-head">
-        <input type="text" class="i-name" placeholder="Item name" value="${escapeHtml(name)}" />
-      </div>
-
-      <div class="i-view no-print" title="Controls what the customer sees on the quote link + PDF.">
-        <span class="i-view-label">Customer sees</span>
-        <div class="i-view-seg" role="group" aria-label="Customer sees">
-          <button type="button" class="i-view-btn" data-action="custview-details">Qty &amp; Unit Price</button>
-          <button type="button" class="i-view-btn" data-action="custview-total">Total only</button>
-        </div>
-      </div>
-
+      <input type="text" class="i-name" placeholder="Item name" value="${escapeHtml(name)}" />
       <textarea rows="2" class="i-desc" placeholder="Description">${escapeHtml(description)}</textarea>
     </td>
     <td class="num"><input type="text" class="i-qty" inputmode="decimal" value="${qty || 0}" /></td>
@@ -653,35 +920,6 @@ function buildItemRow(item = {}) {
     el.addEventListener("input", () => recalcTotals());
     el.addEventListener("change", () => recalcTotals());
   });
-  // Per-line customer visibility (controls what the customer sees)
-  const detailsBtn = tr.querySelector('[data-action="custview-details"]');
-  const totalBtn = tr.querySelector('[data-action="custview-total"]');
-
-  if (detailsBtn) {
-    detailsBtn.addEventListener("click", () => {
-      tr.dataset.showQtyUnitPrice = "1";
-      syncCustomerViewUI(tr);
-    });
-  }
-
-  if (totalBtn) {
-    totalBtn.addEventListener("click", () => {
-      tr.dataset.showQtyUnitPrice = "0";
-      syncCustomerViewUI(tr);
-    });
-  }
-
-  syncCustomerViewUI(tr);
-
-  // Auto-grow description (so it expands instead of scrolling)
-  const descEl = tr.querySelector(".i-desc");
-  if (descEl) {
-    const run = () => autosizeTextarea(descEl);
-    descEl.addEventListener("input", run);
-    run();
-    requestAnimationFrame(run);
-  }
-
 
   // Money tidy-up (keeps PDFs clean too)
   const priceInput = tr.querySelector(".i-price");
@@ -758,40 +996,16 @@ function formatCurrency(cents, currency = "CAD") {
   }
 }
 
-function getProductTitle(p) {
-  return (
-    safeStr(p?.name) ||
-    safeStr(p?.title) ||
-    safeStr(p?.product_name) ||
-    safeStr(p?.service_name) ||
-    "Unnamed"
-  );
-}
-
-function getProductDescription(p) {
-  return safeStr(p?.description) || safeStr(p?.desc) || "";
-}
-
-function getProductUnitType(p) {
-  return safeStr(p?.unit_type) || safeStr(p?.unit) || "Each";
-}
-
-function getProductPriceCents(p) {
-  const v = p?.price_per_unit_cents ?? p?.unit_price_cents ?? p?.price_cents ?? p?.price ?? 0;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
-}
-
 function productToItem(product) {
   return {
     product_id: product.id,
-    name: getProductTitle(product),
-    description: getProductDescription(product),
-    unit_type: getProductUnitType(product),
+    name: product.name || "",
+    description: product.description || "",
+    unit_type: product.unit_type || "Each",
     // Default to showing breakdown unless explicitly turned off
     show_qty_unit_price: product.show_qty_unit_price !== false,
     qty: 1,
-    unit_price_cents: getProductPriceCents(product),
+    unit_price_cents: Number(product.price_per_unit_cents || 0),
     taxable: true,
   };
 }
@@ -809,11 +1023,11 @@ function renderProductsList(products, currency) {
 
     const name = document.createElement("div");
     name.className = "product-name";
-    name.textContent = getProductTitle(p);
+    name.textContent = p.name || "Unnamed";
 
     const desc = document.createElement("div");
     desc.className = "product-desc";
-    desc.textContent = getProductDescription(p);
+    desc.textContent = p.description || "";
     if (!safeStr(desc.textContent)) desc.style.display = "none";
 
     const meta = document.createElement("div");
@@ -821,19 +1035,16 @@ function renderProductsList(products, currency) {
 
     const priceTag = document.createElement("span");
     priceTag.className = "tag";
-    priceTag.textContent = formatCurrency(getProductPriceCents(p), currency);
+    priceTag.textContent = formatCurrency(p.price_per_unit_cents || 0, currency);
 
     const unitTag = document.createElement("span");
     unitTag.className = "tag";
-    unitTag.textContent = getProductUnitType(p);
+    unitTag.textContent = p.unit_type || "Each";
 
     const modeTag = document.createElement("span");
     modeTag.className = "tag";
     const breakdown = p.show_qty_unit_price !== false;
-    modeTag.textContent = breakdown ? "Qty & Unit Price" : "Total only";
-    modeTag.title = breakdown
-      ? "Customer sees Qty and Unit Price on the quote."
-      : "Customer only sees the line total on the quote.";
+    modeTag.textContent = breakdown ? "Breakdown" : "Total only";
 
     meta.appendChild(priceTag);
     meta.appendChild(unitTag);
@@ -918,17 +1129,14 @@ function recalcTotals() {
   taxAmountEl.textContent = centsToMoney(tax);
   grandTotalEl.textContent = centsToMoney(grand);
 
-  const mode = getDepositMode();
-  if (mode === "auto") {
-    const dep = Math.round(grand * 0.4);
-    depositDueEl.value = `$${centsToMoney(dep)}`;
-    depositDueEl.setAttribute("readonly", "readonly");
-  } else {
-    depositDueEl.removeAttribute("readonly");
-  }
+  _lastTotals = { subtotal_cents: subtotal, tax_cents: tax, fees_cents: fees, total_cents: grand };
 
-  return { subtotal_cents: subtotal, tax_cents: tax, fees_cents: fees, total_cents: grand };
+  // Keep payment schedule amounts in sync with the current quote total
+  syncPaymentScheduleUI(grand);
+
+  return _lastTotals;
 }
+
 
 /* ===== Merge defaults ===== */
 function mergeDefaults(existing, fallback) {
@@ -1008,12 +1216,9 @@ function fillUIFromData(qRow, data, ctx) {
   taxRateEl.value = String(data.tax_rate ?? 13);
   feesEl.value = centsToMoney(data.fees_cents ?? 0);
 
-  const mode = data.deposit_mode || "auto";
-  $$('input[name="deposit_mode"]').forEach((r) => (r.checked = r.value === mode));
-  if (mode === "custom") {
-    depositDueEl.value = `$${centsToMoney(data.deposit_cents ?? 0)}`;
-    depositDueEl.removeAttribute("readonly");
-  }
+  // Payment schedule (per-quote override). If missing, seed from Company Settings.
+  ensurePaymentSchedule(data, ctx);
+  renderPaymentSchedule(data.payment_schedule);
 
   itemRowsEl.innerHTML = "";
   const items = Array.isArray(data.items) && data.items.length
@@ -1054,9 +1259,8 @@ function collectDataFromUI(qRow, existingAcceptance = null) {
     (it) => safeStr(it?.name) || safeStr(it?.description) || (it?.unit_price_cents || 0) > 0
   );
 
-  const mode = getDepositMode();
-  let deposit_cents = 0;
-  if (mode === "custom") deposit_cents = parseMoneyToCents(depositDueEl.value);
+    const payment_schedule = readPaymentScheduleFromUI();
+
 
   return {
     // Keep the customer linkage in json so customer pages can query reliably
@@ -1068,8 +1272,7 @@ function collectDataFromUI(qRow, existingAcceptance = null) {
     items: itemsForSave,
     tax_rate: parseNum(taxRateEl.value) || 13,
     fees_cents: totals.fees_cents,
-    deposit_mode: mode,
-    deposit_cents,
+    payment_schedule,
     terms: getBoundValue("terms"),
     notes: getBoundValue("notes"),
     acceptance: existingAcceptance || undefined,
@@ -1589,7 +1792,14 @@ if (!safeStr(data.terms) && safeStr(ctx?.company?.payment_terms)) {
 
   taxRateEl.addEventListener("input", recalcTotals);
   feesEl.addEventListener("input", recalcTotals);
-  $$('input[name="deposit_mode"]').forEach((r) => r.addEventListener("change", recalcTotals));
+
+  // Payment schedule controls
+  addPaymentStepBtn?.addEventListener("click", addPaymentScheduleStep);
+  useDefaultScheduleBtn?.addEventListener("click", () => {
+    renderPaymentSchedule(defaultPaymentSchedule(ctx));
+    showMsg("Payment schedule reset to your company default.");
+    syncPaymentScheduleUI(_lastTotals?.total_cents ?? 0);
+  });
 
   quoteDateInput?.addEventListener("change", () => {
     syncRepDateFromQuoteDate();
@@ -1604,6 +1814,13 @@ if (!safeStr(data.terms) && safeStr(ctx?.company?.payment_terms)) {
     } catch {}
 
     const payload = collectDataFromUI(qRow, existingAcceptance);
+
+    // Payment schedule must be valid before saving/sending
+    const schedV = validatePaymentSchedule(payload.payment_schedule);
+    if (!schedV.ok) {
+      showMsg(schedV.message || "Payment schedule must total 100%.");
+      return null;
+    }
 
     // Ensure acceptance (if present) is visible in the UI (so PDF includes it too)
     renderClientAcceptance(payload, qRow);

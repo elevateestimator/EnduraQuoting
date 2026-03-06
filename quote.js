@@ -9,11 +9,6 @@ const bannerEl = $("#banner");
 const quotePageEl = $("#quote-page");
 const acceptSectionEl = $("#accept-section");
 
-// Payment schedule
-const paymentScheduleCardEl = $("#payment-schedule-card");
-const paymentScheduleBodyEl = $("#v-payment-schedule-body");
-const paymentScheduleTotalEl = $("#v-payment-schedule-total");
-
 const downloadBtn = $("#download-btn");
 const acceptJumpBtn = $("#accept-jump-btn");
 const signNowBtn = $("#sign-now-btn");
@@ -75,6 +70,24 @@ function ymdTodayLocal() {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
+}
+
+function buildClientContext() {
+  const ctx = {};
+  try { ctx.page_url = String(window.location.href || ""); } catch {}
+  try { ctx.referrer = String(document.referrer || ""); } catch {}
+  try { ctx.timezone = String(Intl.DateTimeFormat().resolvedOptions().timeZone || ""); } catch {}
+  try { ctx.tz_offset_min = new Date().getTimezoneOffset(); } catch {}
+  try { ctx.locale = String(navigator.language || ""); } catch {}
+  try { ctx.platform = String(navigator.platform || ""); } catch {}
+  try {
+    ctx.screen = {
+      w: Number(window.screen?.width || 0) || null,
+      h: Number(window.screen?.height || 0) || null,
+      dpr: Number(window.devicePixelRatio || 1) || 1,
+    };
+  } catch {}
+  return ctx;
 }
 
 function fmtDate(isoYmd) {
@@ -340,160 +353,6 @@ function computeTotals(items, taxRate, feesCents) {
   return { subtotal, tax, fees, total };
 }
 
-/* =========================================================
-   Payment schedule
-   ========================================================= */
-function clampNumber(n, min, max) {
-  if (!Number.isFinite(n)) return min;
-  return Math.min(Math.max(n, min), max);
-}
-
-function percentToHundredths(percent) {
-  const n = Number(percent);
-  if (!Number.isFinite(n)) return 0;
-  const clamped = clampNumber(n, 0, 100);
-  return Math.round(clamped * 100);
-}
-
-function formatPercentDisplay(percent) {
-  const n = Number(percent);
-  if (!Number.isFinite(n)) return "0";
-  const fixed = n.toFixed(2);
-  if (fixed.endsWith(".00")) return String(Math.round(n));
-  return fixed.replace(/0$/, "");
-}
-
-function normalizePaymentSchedule(raw) {
-  if (!raw) return null;
-
-  let arr = null;
-  if (Array.isArray(raw)) arr = raw;
-
-  // In case a JSON string was stored accidentally
-  if (!arr && typeof raw === "string") {
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) arr = parsed;
-    } catch {
-      arr = null;
-    }
-  }
-
-  if (!arr || !arr.length) return null;
-
-  const out = [];
-  for (const step of arr) {
-    const title = safeStr(step?.title || step?.name || step?.label || "");
-    const percent = Number(step?.percent ?? step?.percentage ?? step?.pct ?? 0);
-    out.push({ title, percent: clampNumber(percent, 0, 100) });
-  }
-
-  return out;
-}
-
-function validatePaymentSchedule(steps) {
-  const schedule = Array.isArray(steps) ? steps : [];
-  if (!schedule.length) return { ok: false, totalHundredths: 0 };
-
-  for (const s of schedule) {
-    if (!safeStr(s?.title)) return { ok: false, totalHundredths: 0 };
-    const p = Number(s?.percent);
-    if (!Number.isFinite(p) || p <= 0) return { ok: false, totalHundredths: 0 };
-  }
-
-  const totalHundredths = schedule.reduce((sum, s) => sum + percentToHundredths(s?.percent), 0);
-  return { ok: totalHundredths === 10000, totalHundredths };
-}
-
-function allocateCentsByPercent(totalCents, schedule) {
-  const total = Math.max(0, Number(totalCents) || 0);
-  const steps = Array.isArray(schedule) ? schedule : [];
-  const pHund = steps.map((s) => percentToHundredths(s?.percent));
-  const base = pHund.map((p) => Math.floor((total * p) / 10000));
-  let used = base.reduce((a, b) => a + b, 0);
-
-  let remainder = total - used;
-  let i = 0;
-  while (remainder > 0 && base.length) {
-    base[i % base.length] += 1;
-    remainder -= 1;
-    i += 1;
-  }
-
-  return base;
-}
-
-function deriveLegacyPaymentSchedule(data, totals) {
-  const total = Math.max(0, Number(totals?.total || 0));
-  if (total <= 0) {
-    return [
-      { title: "Deposit", percent: 40 },
-      { title: "Balance", percent: 60 },
-    ];
-  }
-
-  // If the quote was built before payment schedules existed, fall back to the old deposit fields.
-  if (safeStr(data?.deposit_mode) === "custom") {
-    const dep = Math.max(0, Number(data?.deposit_cents || 0));
-    const depHund = clampNumber(Math.round((dep * 10000) / total), 0, 10000);
-    const depPct = depHund / 100;
-    const balPct = Math.max(0, 100 - depPct);
-
-    if (depPct > 0 && balPct > 0) {
-      return [
-        { title: "Deposit", percent: depPct },
-        { title: "Balance", percent: balPct },
-      ];
-    }
-  }
-
-  return [
-    { title: "Deposit", percent: 40 },
-    { title: "Balance", percent: 60 },
-  ];
-}
-
-function renderPaymentSchedule(schedule, totalCents, currency) {
-  if (!paymentScheduleBodyEl) return;
-
-  const steps = Array.isArray(schedule) ? schedule : [];
-  paymentScheduleBodyEl.innerHTML = "";
-
-  if (paymentScheduleCardEl) paymentScheduleCardEl.hidden = !steps.length;
-
-  const v = validatePaymentSchedule(steps);
-  const amounts = v.ok
-    ? allocateCentsByPercent(totalCents, steps)
-    : steps.map((s) => Math.round((Math.max(0, Number(totalCents) || 0) * percentToHundredths(s?.percent)) / 10000));
-
-  for (let i = 0; i < steps.length; i++) {
-    const s = steps[i];
-    const tr = document.createElement("tr");
-
-    const tdTitle = document.createElement("td");
-    tdTitle.textContent = safeStr(s?.title) || "—";
-
-    const tdPct = document.createElement("td");
-    tdPct.className = "num";
-    tdPct.textContent = `${formatPercentDisplay(s?.percent)}%`;
-
-    const tdAmt = document.createElement("td");
-    tdAmt.className = "num";
-    tdAmt.textContent = formatMoney(amounts[i] ?? 0, currency);
-
-    tr.appendChild(tdTitle);
-    tr.appendChild(tdPct);
-    tr.appendChild(tdAmt);
-
-    paymentScheduleBodyEl.appendChild(tr);
-  }
-
-  if (paymentScheduleTotalEl) {
-    const totalPct = (v.totalHundredths || steps.reduce((sum, s) => sum + percentToHundredths(s?.percent), 0)) / 100;
-    paymentScheduleTotalEl.textContent = formatPercentDisplay(totalPct);
-  }
-}
-
 function buildItemsTable(items, currency) {
   itemsColgroupEl.innerHTML = "";
   itemsHeadRowEl.innerHTML = "";
@@ -659,52 +518,42 @@ function fillQuote(quote) {
   applyBrandColor(company.brand_color || company.brandColour || company.brand || "#000000");
 
   // Logo
-const logoUrl = pickLogoUrl(company, data);
+  const logoUrl = pickLogoUrl(company, data);
 
-// Same-origin proxy (works for public pages + PDFs and avoids CORS/canvas issues)
-const proxyLogoUrl = quote?.id
-  ? `/api/company-logo?quote_id=${encodeURIComponent(quote.id)}&v=${Date.now()}`
-  : "";
+  // Optional same-origin proxy. Use ONLY as a fallback if the direct URL fails.
+  // When the logo is stored as a data: URL from Settings, the proxy is never needed.
+  const proxyLogoUrl = quote?.id
+    ? `/api/company-logo?quote_id=${encodeURIComponent(quote.id)}&v=${Date.now()}`
+    : "";
 
-// Always show a mark (logo or initials).
-// Load order matters:
-// 1) Use the logo URL/data we already have (shows the real company logo immediately when available).
-// 2) Fall back to the same-origin proxy (works even when the logo URL is private or lacks CORS headers).
-// 3) Fall back to initials.
-const initials = initialsFromName(companyName || "Company");
+  const initials = initialsFromName(companyName || "Company");
 
-let primaryLogo = "";
-let fallbackLogo = "";
-
-if (logoUrl) {
-  primaryLogo = logoUrl;
-  fallbackLogo = proxyLogoUrl || "";
-} else {
-  primaryLogo = proxyLogoUrl || "";
-  fallbackLogo = "";
-}
-
-// Avoid pointless double-tries.
-if (primaryLogo && fallbackLogo && primaryLogo === fallbackLogo) fallbackLogo = "";
-
-setLogoWithFallback(siteLogoEl, siteLogoFallbackEl, initials, primaryLogo, fallbackLogo);
-setLogoWithFallback(docLogoEl, docLogoInitialsEl, initials, primaryLogo, fallbackLogo);
-
+  // Try the direct logo first (data URL / public URL). If it fails, fall back to the proxy, then initials.
+  setLogoWithFallback(siteLogoEl, siteLogoFallbackEl, initials, logoUrl, proxyLogoUrl);
+  setLogoWithFallback(docLogoEl, docLogoInitialsEl, initials, logoUrl, proxyLogoUrl);
 
   // Contact
   const addr1 = safeStr(company.addr1 || company.address1 || company.address || "");
   const addr2 = safeStr(company.addr2 || company.address2 || "");
 
-  $("#v-company-addr1").textContent = addr1;
-  $("#v-company-addr2").textContent = addr2;
-  $("#v-company-phone").textContent = safeStr(company.phone);
-  $("#v-company-email").textContent = safeStr(company.email);
-  $("#v-company-web").textContent = safeStr(company.web);
+  const phone = safeStr(company.phone);
+  const email = safeStr(company.email || company.owner_email || "");
+  const web = safeStr(company.web || company.website || "");
 
-  // Remove empty contact spans (avoids stray bullets)
-  $$("#v-company-contact span").forEach((el) => {
-    if (!safeStr(el.textContent)) el.remove();
-  });
+  // IMPORTANT:
+  // We rebuild the contact line each render instead of removing individual spans.
+  // The old approach removed empty spans from the DOM, which caused crashes on re-render
+  // (e.g. after signing) when we tried to update a span that no longer existed.
+  const contactWrap = $("#v-company-contact");
+  if (contactWrap) {
+    contactWrap.innerHTML = "";
+    const parts = [addr1, addr2, phone, email, web].filter((p) => safeStr(p));
+    for (const part of parts) {
+      const sp = document.createElement("span");
+      sp.textContent = part;
+      contactWrap.appendChild(sp);
+    }
+  }
 
   // Meta
   $("#v-meta-quote").textContent = quoteCode;
@@ -762,12 +611,12 @@ setLogoWithFallback(docLogoEl, docLogoInitialsEl, initials, primaryLogo, fallbac
   const rateLabel = Number.isFinite(taxRate) && taxRate > 0 ? `${taxName} (${taxRate}%)` : taxName;
   $("#v-tax-label").textContent = rateLabel;
 
-  // Payment schedule (prefer per-quote schedule; fallback for older quotes)
-  let schedule = normalizePaymentSchedule(data.payment_schedule);
-  if (!schedule || !schedule.length) {
-    schedule = deriveLegacyPaymentSchedule(data, totals);
-  }
-  renderPaymentSchedule(schedule, totals.total, _currency);
+  // Deposit
+  let depositCents = 0;
+  if (data.deposit_mode === "custom") depositCents = Number(data.deposit_cents || 0);
+  else depositCents = Math.round(totals.total * 0.4);
+
+  $("#v-deposit").textContent = formatMoney(depositCents, _currency);
 
   // Terms / Notes
   const terms = safeStr(data.terms);
@@ -935,6 +784,7 @@ async function submitSignature() {
       quote_id: _quoteRow.id,
       signature_data_url: dataUrl,
       accepted_date,
+      client_context: buildClientContext(),
     });
 
     // Optimistic UI (instant feedback) — we'll re-fetch right after.

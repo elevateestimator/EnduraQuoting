@@ -179,37 +179,12 @@
           </div>
         </section>
 
-        <!-- Payment schedule -->
-        <section class="card avoid-break" id="payment-schedule-card">
-          <h3>Payment schedule</h3>
-          <p class="helper">
-            This is how payments are split for this job.
-          </p>
-
-          <div class="table-wrap">
-            <table class="ps-table" aria-label="Payment schedule">
-              <colgroup>
-                <col />
-                <col style="width: 18%" />
-                <col style="width: 22%" />
-              </colgroup>
-
-              <thead>
-                <tr>
-                  <th>Step</th>
-                  <th class="num">Percent</th>
-                  <th class="num">Amount</th>
-                </tr>
-              </thead>
-
-              <tbody id="v-payment-schedule-body"></tbody>
-            </table>
-          </div>
-
-          <div class="ps-footer">
-            <div class="ps-total">
-              Total: <strong><span id="v-payment-schedule-total">0</span>%</strong>
-            </div>
+        <!-- Deposit -->
+        <section class="card avoid-break">
+          <h3>Deposit</h3>
+          <div class="deposit-row">
+            <div class="deposit-label">Deposit Due</div>
+            <div class="deposit-value" id="v-deposit">$0.00</div>
           </div>
         </section>
 

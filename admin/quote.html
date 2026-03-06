@@ -231,30 +231,53 @@
           </div>
         </section>
 
-        <!-- Deposit -->
-        <section class="card avoid-break">
-          <h3>Deposit</h3>
-          <div class="stack-10">
-            <div class="inline-controls no-print">
-              <label class="radio"
-                ><input type="radio" name="deposit_mode" value="auto" checked />
-                Auto (40%)</label
-              >
-              <label class="radio"
-                ><input type="radio" name="deposit_mode" value="custom" />
-                Custom</label
-              >
-            </div>
+        <!-- Payment schedule -->
+        <section class="card avoid-break" id="payment-schedule-card">
+          <div class="row-between">
+            <h3>Payment schedule</h3>
 
-            <label class="inline">
-              <span class="label-mini">Deposit Due</span>
-              <input
-                id="deposit-due"
-                type="text"
-                inputmode="decimal"
-                placeholder="$0.00"
-              />
-            </label>
+            <div class="row-actions no-print">
+              <button id="btn-use-default-schedule" class="btn secondary small" type="button">
+                Use company default
+              </button>
+              <button id="btn-add-payment-step" class="btn brand small" type="button">
+                + Add step
+              </button>
+            </div>
+          </div>
+
+          <p class="helper">
+            Tell the customer how payments are split. Percentages must add up to
+            <strong>100%</strong>. Amounts update automatically based on the quote total.
+          </p>
+
+          <div class="table-wrap">
+            <table class="ps-table" aria-label="Payment schedule">
+              <colgroup>
+                <col />
+                <col style="width: 18%" />
+                <col style="width: 22%" />
+                <col class="no-print slim" style="width: 4%" />
+              </colgroup>
+
+              <thead>
+                <tr>
+                  <th>Step</th>
+                  <th class="num">Percent</th>
+                  <th class="num">Amount</th>
+                  <th class="no-print slim"></th>
+                </tr>
+              </thead>
+
+              <tbody id="payment-schedule-body"></tbody>
+            </table>
+          </div>
+
+          <div class="ps-footer">
+            <div class="ps-total">
+              Total: <strong><span id="payment-schedule-total">0</span>%</strong>
+            </div>
+            <div id="payment-schedule-msg" class="ps-msg"></div>
           </div>
         </section>
 
