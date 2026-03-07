@@ -33,6 +33,16 @@
         <!-- Shown only if auto-save fails (fallback) -->
         <button id="save-btn" class="btn primary" type="button" hidden>Retry Save</button>
 
+        <!-- Manual status override (for customers who approve without signing online) -->
+        <button
+          id="mark-accepted-btn"
+          class="btn accept"
+          type="button"
+          title="Use when the customer approves without signing online (eg. deposit received)."
+        >
+          ✓ Mark as Accepted
+        </button>
+
         <button id="pdf-btn" class="btn" type="button">Download PDF</button>
         <button id="send-btn" class="btn brand" type="button">Send to Customer</button>
       </div>

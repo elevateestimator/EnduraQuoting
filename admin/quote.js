@@ -16,6 +16,7 @@ const backBtn = $("#back-btn");
 const saveBtn = $("#save-btn");
 const pdfBtn  = $("#pdf-btn");
 const sendBtn = $("#send-btn");
+const markAcceptedBtn = $("#mark-accepted-btn");
 
 const saveStateEl = $("#save-state");
 const saveStateTextEl = $("#save-state-text");
@@ -76,6 +77,37 @@ function showMsg(text) {
   }
   msgEl.hidden = false;
   msgEl.textContent = text;
+}
+
+/* ===== Status helpers ===== */
+function normalizeStatus(value) {
+  return String(value ?? "").trim().toLowerCase();
+}
+function isAcceptedStatus(value) {
+  return normalizeStatus(value) === "accepted";
+}
+function isCancelledStatus(value) {
+  const s = normalizeStatus(value);
+  return s === "cancelled" || s === "canceled";
+}
+
+function syncMarkAcceptedButton(status) {
+  if (!markAcceptedBtn) return;
+
+  if (isCancelledStatus(status)) {
+    markAcceptedBtn.disabled = true;
+    markAcceptedBtn.textContent = "Cancelled";
+    return;
+  }
+
+  if (isAcceptedStatus(status)) {
+    markAcceptedBtn.disabled = true;
+    markAcceptedBtn.textContent = "✓ Accepted";
+    return;
+  }
+
+  markAcceptedBtn.disabled = false;
+  markAcceptedBtn.textContent = "✓ Mark as Accepted";
 }
 
 /* ===== Save state (auto-save UX) ===== */
@@ -1870,6 +1902,9 @@ if (!safeStr(data.terms) && safeStr(ctx?.company?.payment_terms)) {
 
   fillUIFromData(qRow, data, ctx);
 
+  // Keep the manual "Mark as Accepted" button in sync with the current quote status.
+  syncMarkAcceptedButton(qRow.status);
+
   backBtn.addEventListener("click", () => {
     window.location.href = "./dashboard.html";
   });
@@ -2116,6 +2151,7 @@ wireAutoSaveListeners();
 
     qRow = updated;
     quoteStatusEl.textContent = qRow.status || "Draft";
+    syncMarkAcceptedButton(qRow.status);
 
     quoteCodeEl.textContent = payload.quote_code;
     if (docQuoteCodeEl) docQuoteCodeEl.textContent = payload.quote_code;
@@ -2173,7 +2209,10 @@ wireAutoSaveListeners();
       });
 
       // Update UI if API returns status
-      if (result?.status) quoteStatusEl.textContent = result.status;
+      if (result?.status) {
+        quoteStatusEl.textContent = result.status;
+        syncMarkAcceptedButton(result.status);
+      }
 
       // Copy link (nice touch)
       if (result?.view_url && navigator.clipboard?.writeText) {
@@ -2186,6 +2225,53 @@ wireAutoSaveListeners();
       showMsg(e?.message || "Send failed.");
     } finally {
       sendBtn.disabled = false;
+    }
+  });
+
+  // Manual: Mark quote as Accepted (without a customer signature)
+  markAcceptedBtn?.addEventListener("click", async () => {
+    try {
+      if (isCancelledStatus(qRow?.status)) {
+        showMsg("This quote is cancelled.");
+        return;
+      }
+      if (isAcceptedStatus(qRow?.status)) return;
+
+      const ok = window.confirm(
+        "Mark this quote as Accepted?\n\nUse this when a customer approves without signing online (eg. deposit received).\nThis does NOT add a customer signature."
+      );
+      if (!ok) return;
+
+      markAcceptedBtn.disabled = true;
+
+      await flushAutoSave();
+      const saved = await saveNow();
+      if (!saved) return;
+
+      const { payload } = saved;
+
+      // Record internal audit info (customer can still sign later)
+      const nowIso = new Date().toISOString();
+      const data = (payload && typeof payload === "object") ? { ...payload } : {};
+      data.meta = (data.meta && typeof data.meta === "object") ? { ...data.meta } : {};
+      data.meta.manual_accepted_at = nowIso;
+      data.meta.manual_accepted_by = String(ctx?.userName || ctx?.user?.email || "").trim();
+
+      // Status drives dashboards + filtering. We intentionally do NOT create data.acceptance here.
+      const updated = await updateQuote(quoteId, { status: "Accepted", data });
+      qRow = updated;
+
+      quoteStatusEl.textContent = qRow.status || "Accepted";
+      syncMarkAcceptedButton(qRow.status);
+
+      showMsg("Marked as accepted.");
+      setTimeout(() => showMsg(""), 1200);
+    } catch (e) {
+      console.error(e);
+      showMsg(e?.message || "Failed to mark as accepted.");
+      setTimeout(() => showMsg(""), 2200);
+    } finally {
+      syncMarkAcceptedButton(qRow?.status);
     }
   });
 
