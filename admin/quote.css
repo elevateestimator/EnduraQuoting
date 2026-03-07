@@ -78,7 +78,7 @@ body{
 .brand-sub{ font-size:12px; color:var(--muted); }
 .dot{ margin: 0 6px; opacity:.7; }
 
-.actions{ display:flex; gap:10px; align-items:center; }
+.actions{ display:flex; gap:10px; align-items:center; flex-wrap: wrap; justify-content: flex-end; }
 .btn{
   border:1px solid var(--border-ui);
   background: rgba(255,255,255,0.92);
@@ -106,6 +106,19 @@ body{
 }
 .btn.brand:hover{ filter: brightness(0.96); }
 
+/* Visually disable a button without using the native `disabled` attribute
+   (auto-save treats disabled buttons as "busy") */
+.btn.is-disabled,
+.btn[aria-disabled="true"]{
+  opacity: 0.60;
+  cursor: not-allowed;
+}
+.btn.is-disabled:hover,
+.btn[aria-disabled="true"]:hover{
+  filter: none;
+}
+
+
 /* "Mark as Accepted" (manual status override) */
 .btn.accept{
   border: 1px solid rgba(34,197,94,0.34);
@@ -122,6 +135,24 @@ body{
   cursor: default;
   box-shadow: none;
 }
+
+/* "Cancel Quote" (mark status as Cancelled) */
+.btn.danger{
+  border: 1px solid rgba(239,68,68,0.34);
+  background: rgba(239,68,68,0.10);
+  color: #7f1d1d;
+  box-shadow: 0 10px 22px rgba(239,68,68,0.10);
+}
+.btn.danger:hover{
+  border-color: rgba(239,68,68,0.50);
+  background: rgba(239,68,68,0.14);
+}
+.btn.danger[disabled]{
+  opacity: 0.65;
+  cursor: default;
+  box-shadow: none;
+}
+
 
 .btn.ghost{ background: transparent; }
 .btn.small{ padding:8px 10px; font-size:12px; }

@@ -17,6 +17,7 @@ const saveBtn = $("#save-btn");
 const pdfBtn  = $("#pdf-btn");
 const sendBtn = $("#send-btn");
 const markAcceptedBtn = $("#mark-accepted-btn");
+const cancelQuoteBtn = $("#cancel-quote-btn");
 
 const saveStateEl = $("#save-state");
 const saveStateTextEl = $("#save-state-text");
@@ -91,6 +92,17 @@ function isCancelledStatus(value) {
   return s === "cancelled" || s === "canceled";
 }
 
+function prettyStatus(value) {
+  const s = normalizeStatus(value);
+  if (s === "accepted") return "Accepted";
+  if (s === "sent") return "Sent";
+  if (s === "viewed") return "Viewed";
+  if (s === "cancelled" || s === "canceled") return "Cancelled";
+  if (!s || s === "draft") return "Draft";
+  // Fallback: Title-case the first letter
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 function syncMarkAcceptedButton(status) {
   if (!markAcceptedBtn) return;
 
@@ -108,6 +120,43 @@ function syncMarkAcceptedButton(status) {
 
   markAcceptedBtn.disabled = false;
   markAcceptedBtn.textContent = "✓ Mark as Accepted";
+}
+
+function syncCancelButton(status) {
+  if (!cancelQuoteBtn) return;
+
+  const cancelled = isCancelledStatus(status);
+  const accepted = isAcceptedStatus(status);
+
+  // Cancel button itself
+  if (cancelled) {
+    cancelQuoteBtn.disabled = true;
+    cancelQuoteBtn.textContent = "✕ Cancelled";
+    cancelQuoteBtn.title = "This quote is cancelled.";
+  } else if (accepted) {
+    cancelQuoteBtn.disabled = true;
+    cancelQuoteBtn.textContent = "Cancel Quote";
+    cancelQuoteBtn.title = "Accepted quotes can't be cancelled.";
+  } else {
+    cancelQuoteBtn.disabled = false;
+    cancelQuoteBtn.textContent = "✕ Cancel Quote";
+    cancelQuoteBtn.title = "Mark this quote as cancelled (use when the job doesn't move forward).";
+  }
+
+  // Sending a cancelled quote should be blocked, but we do NOT use the native
+  // `disabled` attribute here because the auto-save system treats disabled
+  // buttons as "busy" and stops auto-saving.
+  if (sendBtn) {
+    if (cancelled) {
+      sendBtn.classList.add("is-disabled");
+      sendBtn.setAttribute("aria-disabled", "true");
+      sendBtn.title = "This quote is cancelled and can't be sent.";
+    } else {
+      sendBtn.classList.remove("is-disabled");
+      sendBtn.removeAttribute("aria-disabled");
+      if (sendBtn.title === "This quote is cancelled and can't be sent.") sendBtn.title = "";
+    }
+  }
 }
 
 /* ===== Save state (auto-save UX) ===== */
@@ -1325,7 +1374,7 @@ function fillUIFromData(qRow, data, ctx) {
   quoteCodeEl.textContent = quoteCode;
   if (docQuoteCodeEl) docQuoteCodeEl.textContent = quoteCode;
 
-  quoteStatusEl.textContent = qRow.status || "Draft";
+  quoteStatusEl.textContent = prettyStatus(qRow.status);
 
   setBoundValue("quote_no", quoteCode);
   setBoundValue("quote_date", data.meta.quote_date);
@@ -1903,7 +1952,8 @@ if (!safeStr(data.terms) && safeStr(ctx?.company?.payment_terms)) {
   fillUIFromData(qRow, data, ctx);
 
   // Keep the manual "Mark as Accepted" button in sync with the current quote status.
-  syncMarkAcceptedButton(qRow.status);
+    syncMarkAcceptedButton(qRow.status);
+    syncCancelButton(qRow.status);
 
   backBtn.addEventListener("click", () => {
     window.location.href = "./dashboard.html";
@@ -2150,8 +2200,9 @@ wireAutoSaveListeners();
     });
 
     qRow = updated;
-    quoteStatusEl.textContent = qRow.status || "Draft";
+    quoteStatusEl.textContent = prettyStatus(qRow.status);
     syncMarkAcceptedButton(qRow.status);
+    syncCancelButton(qRow.status);
 
     quoteCodeEl.textContent = payload.quote_code;
     if (docQuoteCodeEl) docQuoteCodeEl.textContent = payload.quote_code;
@@ -2188,6 +2239,11 @@ wireAutoSaveListeners();
   });
   sendBtn?.addEventListener("click", async () => {
     try {
+      if (isCancelledStatus(qRow?.status)) {
+        showMsg("This quote is cancelled and can't be sent.");
+        return;
+      }
+
       sendBtn.disabled = true;
 
       await flushAutoSave();
@@ -2210,8 +2266,9 @@ wireAutoSaveListeners();
 
       // Update UI if API returns status
       if (result?.status) {
-        quoteStatusEl.textContent = result.status;
+        quoteStatusEl.textContent = prettyStatus(result.status);
         syncMarkAcceptedButton(result.status);
+        syncCancelButton(result.status);
       }
 
       // Copy link (nice touch)
@@ -2225,6 +2282,57 @@ wireAutoSaveListeners();
       showMsg(e?.message || "Send failed.");
     } finally {
       sendBtn.disabled = false;
+    }
+  });
+
+  // Manual: Cancel quote (for jobs that don't move forward)
+  cancelQuoteBtn?.addEventListener("click", async () => {
+    try {
+      if (isCancelledStatus(qRow?.status)) {
+        showMsg("This quote is already cancelled.");
+        return;
+      }
+
+      if (isAcceptedStatus(qRow?.status)) {
+        showMsg("This quote is already accepted.");
+        return;
+      }
+
+      const ok = window.confirm(
+        "Cancel this quote?\n\nThis will mark it as Cancelled in your dashboard and disable sending.\nYou can still download the PDF for records."
+      );
+      if (!ok) return;
+
+      cancelQuoteBtn.disabled = true;
+
+      await flushAutoSave();
+      const saved = await saveNow();
+      if (!saved) return;
+
+      const { payload } = saved;
+
+      const nowIso = new Date().toISOString();
+      const data = (payload && typeof payload === "object") ? { ...payload } : {};
+      data.meta = (data.meta && typeof data.meta === "object") ? { ...data.meta } : {};
+      data.meta.manual_cancelled_at = nowIso;
+      data.meta.manual_cancelled_by = String(ctx?.userName || ctx?.user?.email || "").trim();
+
+      const updated = await updateQuote(quoteId, { status: "cancelled", data });
+      qRow = updated;
+
+      quoteStatusEl.textContent = prettyStatus(qRow.status);
+      syncMarkAcceptedButton(qRow.status);
+      syncCancelButton(qRow.status);
+
+      showMsg("Quote cancelled.");
+      setTimeout(() => showMsg(""), 1200);
+    } catch (e) {
+      console.error(e);
+      showMsg(e?.message || "Failed to cancel quote.");
+      setTimeout(() => showMsg(""), 2400);
+    } finally {
+      syncCancelButton(qRow?.status);
+      syncMarkAcceptedButton(qRow?.status);
     }
   });
 
@@ -2258,11 +2366,12 @@ wireAutoSaveListeners();
       data.meta.manual_accepted_by = String(ctx?.userName || ctx?.user?.email || "").trim();
 
       // Status drives dashboards + filtering. We intentionally do NOT create data.acceptance here.
-      const updated = await updateQuote(quoteId, { status: "Accepted", data });
+      const updated = await updateQuote(quoteId, { status: "accepted", data });
       qRow = updated;
 
-      quoteStatusEl.textContent = qRow.status || "Accepted";
+      quoteStatusEl.textContent = prettyStatus(qRow.status);
       syncMarkAcceptedButton(qRow.status);
+      syncCancelButton(qRow.status);
 
       showMsg("Marked as accepted.");
       setTimeout(() => showMsg(""), 1200);
