@@ -133,14 +133,14 @@ function syncCancelButton(status) {
     cancelQuoteBtn.disabled = true;
     cancelQuoteBtn.textContent = "✕ Cancelled";
     cancelQuoteBtn.title = "This quote is cancelled.";
-  } else if (accepted) {
-    cancelQuoteBtn.disabled = true;
-    cancelQuoteBtn.textContent = "Cancel Quote";
-    cancelQuoteBtn.title = "Accepted quotes can't be cancelled.";
   } else {
+    // IMPORTANT: Quotes can be cancelled even after acceptance
+    // (jobs can still fall through after approval/deposit).
     cancelQuoteBtn.disabled = false;
     cancelQuoteBtn.textContent = "✕ Cancel Quote";
-    cancelQuoteBtn.title = "Mark this quote as cancelled (use when the job doesn't move forward).";
+    cancelQuoteBtn.title = accepted
+      ? "Cancel this accepted quote (use when the job falls through after approval/deposit)."
+      : "Mark this quote as cancelled (use when the job doesn't move forward).";
   }
 
   // Sending a cancelled quote should be blocked, but we do NOT use the native
@@ -2293,13 +2293,11 @@ wireAutoSaveListeners();
         return;
       }
 
-      if (isAcceptedStatus(qRow?.status)) {
-        showMsg("This quote is already accepted.");
-        return;
-      }
-
+      const wasAccepted = isAcceptedStatus(qRow?.status);
       const ok = window.confirm(
-        "Cancel this quote?\n\nThis will mark it as Cancelled in your dashboard and disable sending.\nYou can still download the PDF for records."
+        wasAccepted
+          ? "Cancel this accepted quote?\n\nUse this when a job falls through after approval/deposit.\n\n• Status will change to Cancelled\n• The customer link can no longer be accepted/signed\n• Any existing signature stays saved for your records\n\nYou can still download the PDF."
+          : "Cancel this quote?\n\nThis will mark it as Cancelled in your dashboard and disable sending.\nYou can still download the PDF for records."
       );
       if (!ok) return;
 
@@ -2316,6 +2314,8 @@ wireAutoSaveListeners();
       data.meta = (data.meta && typeof data.meta === "object") ? { ...data.meta } : {};
       data.meta.manual_cancelled_at = nowIso;
       data.meta.manual_cancelled_by = String(ctx?.userName || ctx?.user?.email || "").trim();
+      data.meta.manual_cancelled_previous_status = String(qRow?.status || "");
+      data.meta.manual_cancelled_after_acceptance = wasAccepted ? true : false;
 
       const updated = await updateQuote(quoteId, { status: "cancelled", data });
       qRow = updated;
