@@ -646,6 +646,31 @@ textarea.autogrow{
 }
 
 
+/* Keep the remove (✕) button from getting clipped */
+.ps-table th.slim,
+.ps-table td.slim{
+  padding: 6px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.ps-remove{
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.ps-remove:disabled{
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+
 /* ===== Deposit ===== */
 .inline-controls{ display:inline-flex; gap: 12px; }
 .radio{ display:inline-flex; align-items:center; gap: 6px; font-size: 13px; }
