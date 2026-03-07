@@ -871,14 +871,16 @@ function renderClientAcceptance(data, qRow) {
       clientSigImg.src = src;
       clientSigImg.hidden = false;
     } else {
-      clientSigImg.src = "";
+      // Avoid showing a broken image icon/alt text when there's no signature.
+      clientSigImg.removeAttribute("src");
       clientSigImg.hidden = true;
     }
 
     clientSignedNameEl.textContent = name;
     clientSignedDateEl.textContent = formatDateDisplay(dateIso);
   } else {
-    clientSigImg.src = "";
+    // Avoid showing a broken image icon/alt text when the customer hasn't signed yet.
+    clientSigImg.removeAttribute("src");
     clientSigImg.hidden = true;
     clientSignedNameEl.textContent = "";
     clientSignedDateEl.textContent = "";

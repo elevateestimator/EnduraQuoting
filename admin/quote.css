@@ -35,6 +35,16 @@
 *{ box-sizing:border-box; }
 html{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
+/*
+  IMPORTANT:
+  We rely on the native `hidden` attribute in a few places (eg. customer signature image).
+  Author CSS (like `.sig-image{display:block}`) can override the browser default
+  `*[hidden]{display:none}` unless we enforce it.
+*/
+[hidden]{
+  display: none !important;
+}
+
 body{
   margin:0;
   font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
@@ -870,6 +880,15 @@ textarea.autogrow{
   max-width: 100%;
   object-fit: contain;
   display:block;
+}
+
+/* Safety: never show a broken image icon/alt text when the customer hasn't signed yet */
+.sig-image[hidden]{
+  display: none !important;
+}
+.sig-image:not([src]),
+.sig-image[src=""]{
+  display: none;
 }
 
 /* Utilities */
