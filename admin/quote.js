@@ -17,6 +17,9 @@ const saveBtn = $("#save-btn");
 const pdfBtn  = $("#pdf-btn");
 const sendBtn = $("#send-btn");
 
+const saveStateEl = $("#save-state");
+const saveStateTextEl = $("#save-state-text");
+
 const msgEl = $("#msg");
 const quoteCodeEl = $("#quote-code");
 const quoteStatusEl = $("#quote-status");
@@ -24,6 +27,8 @@ const docQuoteCodeEl = $("#doc-quote-code");
 
 // Company + rep
 const companyLogoEl = $("#company-logo");
+// Top-left app bar logo (screen) should match the company's branding too
+const appLogoEl = $("#app-logo") || $(".topbar .logo");
 const repSignatureEl = $("#rep-signature");
 const repPrintedNameEl = $("#rep-printed-name");
 
@@ -71,6 +76,20 @@ function showMsg(text) {
   }
   msgEl.hidden = false;
   msgEl.textContent = text;
+}
+
+/* ===== Save state (auto-save UX) ===== */
+function setSaveState(state, text) {
+  if (!saveStateEl) return;
+  if (state) saveStateEl.dataset.state = state;
+  else delete saveStateEl.dataset.state;
+  if (saveStateTextEl) saveStateTextEl.textContent = text || "";
+}
+
+function setManualSaveVisible(visible, label) {
+  if (!saveBtn) return;
+  saveBtn.hidden = !visible;
+  if (label) saveBtn.textContent = label;
 }
 
 async function postJSON(url, body) {
@@ -669,11 +688,18 @@ function applyCompanyToDom(company) {
     if (el && !safeStr(el.textContent)) el.remove();
   });
 
-  if (companyLogoEl) {
-    const src = company.logo_url || companyLogoEl.getAttribute("src");
-    if (src) companyLogoEl.src = src;
-    companyLogoEl.alt = company.name ? `${company.name} logo` : "Company logo";
-  }
+  // Keep BOTH the document letterhead logo and the app topbar logo in sync.
+  const logoSrc =
+    safeStr(company.logo_url) ||
+    safeStr(companyLogoEl?.getAttribute("src")) ||
+    safeStr(appLogoEl?.getAttribute("src"));
+
+  if (companyLogoEl && logoSrc) companyLogoEl.src = logoSrc;
+  if (appLogoEl && logoSrc) appLogoEl.src = logoSrc;
+
+  const alt = company.name ? `${company.name} logo` : "Company logo";
+  if (companyLogoEl) companyLogoEl.alt = alt;
+  if (appLogoEl) appLogoEl.alt = alt;
 }
 
 function ensurePreparedBy(data, ctx) {
@@ -1805,171 +1831,174 @@ if (!safeStr(data.terms) && safeStr(ctx?.company?.payment_terms)) {
     syncRepDateFromQuoteDate();
   });
 
-  /* =======================
-     AUTO-SAVE (admin)
-     - Saves after changes with a short debounce so users don't lose work.
-     - Keeps the manual Save button as a fallback.
-     ======================= */
-  const AUTO_SAVE_DELAY_MS = 900;
-  const AUTO_SAVE_SAVED_MS = 900;
+/* =======================
+   AUTO-SAVE (admin)
+   - Saves after changes with a short debounce so users don't lose work.
+   - Replaces the always-visible "Save" button with a clear status pill.
+   - If auto-save fails (network), we reveal a "Retry Save" button.
+   ======================= */
+const AUTO_SAVE_DELAY_MS = 900;
 
-  const _saveBtnDefaultText = saveBtn?.textContent || "Save";
-  let _autoDirty = false;
-  let _autoTimer = null;
-  let _autoInFlight = null;
-  let _autoRestoreTimer = null;
-  let _lastAutoErrorAt = 0;
+let _autoDirty = false;
+let _autoTimer = null;
+let _autoInFlight = null;
+let _lastAutoErrorAt = 0;
 
-  function setSaveBtnText(text) {
-    if (!saveBtn) return;
-    saveBtn.textContent = text;
+function setStateSaved() {
+  setSaveState("saved", "All changes saved");
+  setManualSaveVisible(false);
+}
+
+function setStateSaving() {
+  setSaveState("saving", "Saving…");
+  // If the user previously had an error, hide the retry button as soon as they edit again.
+  setManualSaveVisible(false);
+}
+
+function setStateAttention(message) {
+  setSaveState("attention", message || "Needs info to save");
+  setManualSaveVisible(false);
+}
+
+function setStateError(message) {
+  setSaveState("error", message || "Not saved");
+  setManualSaveVisible(true, "Retry Save");
+}
+
+// We just loaded the quote from the server, so we're in a "saved" state.
+setStateSaved();
+
+function scheduleAutoSave() {
+  clearTimeout(_autoTimer);
+  _autoTimer = setTimeout(() => runAutoSave(), AUTO_SAVE_DELAY_MS);
+}
+
+function markDirty() {
+  _autoDirty = true;
+
+  // Update the status immediately so the user understands they don't need a Save button.
+  if (canAutoSaveNow()) {
+    setStateSaving();
+  }
+  // If canAutoSaveNow() returns false, it already set a helpful status message.
+
+  scheduleAutoSave();
+}
+
+async function flushAutoSave() {
+  clearTimeout(_autoTimer);
+  if (_autoInFlight) {
+    try { await _autoInFlight; } catch {}
+  }
+}
+
+function canAutoSaveNow() {
+  // Match the same validation rules as manual Save/Send/PDF
+  const name = safeStr(getBoundValue("client_name"));
+  if (!name) {
+    setStateAttention("Add customer name to save");
+    return false;
   }
 
-  function restoreSaveBtnText(ms = 0) {
-    if (!saveBtn) return;
-    clearTimeout(_autoRestoreTimer);
-    _autoRestoreTimer = setTimeout(() => {
-      saveBtn.textContent = _saveBtnDefaultText;
-    }, ms);
-  }
-
-  function hintSave(text, ms = 1600) {
-    // A tiny hint on the Save button (no big toast spam)
-    setSaveBtnText(text);
-    restoreSaveBtnText(ms);
-  }
-
-  function pulseSaved() {
-    setSaveBtnText("Saved");
-    restoreSaveBtnText(AUTO_SAVE_SAVED_MS);
-  }
-
-  function scheduleAutoSave() {
-    clearTimeout(_autoTimer);
-    _autoTimer = setTimeout(() => runAutoSave(), AUTO_SAVE_DELAY_MS);
-  }
-
-  function markDirty() {
-    _autoDirty = true;
-    scheduleAutoSave();
-  }
-
-  async function flushAutoSave() {
-    clearTimeout(_autoTimer);
-    if (_autoInFlight) {
-      try { await _autoInFlight; } catch {}
-    }
-  }
-
-  function canAutoSaveNow() {
-    // Match the same validation rules as manual Save/Send/PDF
-    const name = safeStr(getBoundValue("client_name"));
-    if (!name) {
-      hintSave("Add name");
+  if (paymentScheduleBodyEl) {
+    const v = validatePaymentSchedule(readPaymentScheduleFromUI());
+    if (!v.ok) {
+      setStateAttention(v.message || "Fix payment schedule to save");
       return false;
     }
+  }
 
-    if (paymentScheduleBodyEl) {
-      const v = validatePaymentSchedule(readPaymentScheduleFromUI());
-      if (!v.ok) {
-        hintSave("Fix schedule");
-        return false;
+  return true;
+}
+
+function runAutoSave() {
+  if (!_autoDirty) return;
+  if (_autoInFlight) return;
+
+  // If a manual action is running, try again shortly.
+  if (saveBtn?.disabled || sendBtn?.disabled || pdfBtn?.disabled) {
+    scheduleAutoSave();
+    return;
+  }
+
+  if (!canAutoSaveNow()) return;
+
+  setStateSaving();
+
+  _autoInFlight = (async () => {
+    try {
+      const saved = await saveNow({ quiet: true });
+      if (saved) {
+        _autoDirty = false;
+        setStateSaved();
       }
+    } catch (e) {
+      console.error("Auto-save failed:", e);
+      setStateError("Not saved");
+
+      const now = Date.now();
+      if (now - _lastAutoErrorAt > 12000) {
+        _lastAutoErrorAt = now;
+        showMsg("Auto-save failed. Please click Retry Save.");
+        setTimeout(() => showMsg(""), 2600);
+      }
+    } finally {
+      _autoInFlight = null;
     }
+  })();
 
-    return true;
-  }
+  return _autoInFlight;
+}
 
-  function runAutoSave() {
-    if (!_autoDirty) return;
-    if (_autoInFlight) return;
+function wireAutoSaveListeners() {
+  if (!quotePageEl) return;
 
-    // If a manual action is running, try again shortly.
-    if (saveBtn?.disabled || sendBtn?.disabled || pdfBtn?.disabled) {
-      scheduleAutoSave();
-      return;
+  // Typing/changes anywhere inside the quote triggers autosave.
+  quotePageEl.addEventListener("input", (e) => {
+    const t = e.target;
+    if (!(t instanceof HTMLElement)) return;
+    if (t.matches("input, textarea, select")) markDirty();
+  });
+
+  quotePageEl.addEventListener("change", (e) => {
+    const t = e.target;
+    if (!(t instanceof HTMLElement)) return;
+    if (t.matches("input, textarea, select")) markDirty();
+  });
+
+  // Click actions that mutate the quote but don't fire input/change.
+  quotePageEl.addEventListener("click", (e) => {
+    const el = e.target instanceof Element ? e.target : null;
+    if (!el) return;
+
+    if (
+      el.closest('[data-action="remove"]') ||
+      el.closest(".ps-remove") ||
+      el.closest("#add-item") ||
+      el.closest("#btn-add-payment-step") ||
+      el.closest("#btn-use-default-schedule")
+    ) {
+      markDirty();
     }
+  });
 
-    if (!canAutoSaveNow()) return;
+  // Adding a product from the dialog (Add button).
+  productsDialog?.addEventListener("click", (e) => {
+    const el = e.target instanceof Element ? e.target : null;
+    if (!el) return;
 
-    setSaveBtnText("Saving…");
+    const row = el.closest(".product-row");
+    const btn = el.closest("button");
+    if (!row || !btn) return;
 
-    _autoInFlight = (async () => {
-      try {
-        const saved = await saveNow({ quiet: true });
-        if (saved) {
-          _autoDirty = false;
-          pulseSaved();
-        } else {
-          // Blocked by validation; keep dirty but don't spam
-          restoreSaveBtnText(900);
-        }
-      } catch (e) {
-        console.error("Auto-save failed:", e);
-        restoreSaveBtnText(0);
+    if (safeStr(btn.textContent).toLowerCase() === "add") {
+      markDirty();
+    }
+  });
+}
 
-        const now = Date.now();
-        if (now - _lastAutoErrorAt > 12000) {
-          _lastAutoErrorAt = now;
-          showMsg("Auto-save failed. Please click Save.");
-          setTimeout(() => showMsg(""), 2500);
-        }
-      } finally {
-        _autoInFlight = null;
-      }
-    })();
+wireAutoSaveListeners();
 
-    return _autoInFlight;
-  }
-
-  function wireAutoSaveListeners() {
-    if (!quotePageEl) return;
-
-    // Typing/changes anywhere inside the quote triggers autosave.
-    quotePageEl.addEventListener("input", (e) => {
-      const t = e.target;
-      if (!(t instanceof HTMLElement)) return;
-      if (t.matches("input, textarea, select")) markDirty();
-    });
-
-    quotePageEl.addEventListener("change", (e) => {
-      const t = e.target;
-      if (!(t instanceof HTMLElement)) return;
-      if (t.matches("input, textarea, select")) markDirty();
-    });
-
-    // Click actions that mutate the quote but don't fire input/change.
-    quotePageEl.addEventListener("click", (e) => {
-      const el = e.target instanceof Element ? e.target : null;
-      if (!el) return;
-
-      if (
-        el.closest('[data-action="remove"]') ||
-        el.closest(".ps-remove") ||
-        el.closest("#add-item") ||
-        el.closest("#btn-add-payment-step") ||
-        el.closest("#btn-use-default-schedule")
-      ) {
-        markDirty();
-      }
-    });
-
-    // Adding a product from the dialog (Add button).
-    productsDialog?.addEventListener("click", (e) => {
-      const el = e.target instanceof Element ? e.target : null;
-      if (!el) return;
-
-      const row = el.closest(".product-row");
-      const btn = el.closest("button");
-      if (!row || !btn) return;
-
-      if (safeStr(btn.textContent).toLowerCase() === "add") {
-        markDirty();
-      }
-    });
-  }
-
-  wireAutoSaveListeners();
 
   async function saveNow({ quiet = false } = {}) {
     // Preserve any customer acceptance signature so admin saves don't wipe it
@@ -1984,6 +2013,7 @@ if (!safeStr(data.terms) && safeStr(ctx?.company?.payment_terms)) {
     // Payment schedule must be valid before saving/sending
     const schedV = validatePaymentSchedule(payload.payment_schedule);
     if (!schedV.ok) {
+      setStateAttention(schedV.message || "Fix payment schedule to save");
       if (!quiet) showMsg(schedV.message || "Payment schedule must total 100%.");
       return null;
     }
@@ -1992,10 +2022,12 @@ if (!safeStr(data.terms) && safeStr(ctx?.company?.payment_terms)) {
     renderClientAcceptance(payload, qRow);
 
     if (!payload.bill_to.client_name) {
+      setStateAttention("Add customer name to save");
       if (!quiet) showMsg("Customer name is required (Bill To).");
       return null;
     }
 
+    setStateSaving();
     if (!quiet) showMsg("Saving…");
 
     const updated = await updateQuote(quoteId, {
@@ -2013,7 +2045,7 @@ if (!safeStr(data.terms) && safeStr(ctx?.company?.payment_terms)) {
 
     // Any successful save means there are no pending unsaved changes.
     _autoDirty = false;
-    restoreSaveBtnText(0);
+    setStateSaved();
 
     if (!quiet) {
       showMsg("Saved.");
@@ -2023,15 +2055,22 @@ if (!safeStr(data.terms) && safeStr(ctx?.company?.payment_terms)) {
     return { qRow, payload };
   }
 
-  saveBtn.addEventListener("click", async () => {
+  saveBtn?.addEventListener("click", async () => {
     try {
       await flushAutoSave();
       saveBtn.disabled = true;
-      await saveNow();
+
+      const saved = await saveNow({ quiet: true });
+      if (!saved) return;
+
+      showMsg("Saved.");
+      setTimeout(() => showMsg(""), 900);
     } catch (e) {
+      console.error(e);
+      setStateError("Not saved");
       showMsg(e?.message || "Save failed.");
     } finally {
-      saveBtn.disabled = false;
+      if (saveBtn) saveBtn.disabled = false;
     }
   });
   sendBtn?.addEventListener("click", async () => {

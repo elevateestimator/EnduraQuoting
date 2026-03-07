@@ -24,7 +24,15 @@
 
       <div class="actions">
         <button id="back-btn" class="btn ghost" type="button">Back</button>
-        <button id="save-btn" class="btn primary" type="button">Save</button>
+
+        <div id="save-state" class="save-state" data-state="saved" role="status" aria-live="polite">
+          <span class="save-dot" aria-hidden="true"></span>
+          <span id="save-state-text">All changes saved</span>
+        </div>
+
+        <!-- Shown only if auto-save fails (fallback) -->
+        <button id="save-btn" class="btn primary" type="button" hidden>Retry Save</button>
+
         <button id="pdf-btn" class="btn" type="button">Download PDF</button>
         <button id="send-btn" class="btn brand" type="button">Send to Customer</button>
       </div>
