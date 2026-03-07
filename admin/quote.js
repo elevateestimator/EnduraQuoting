@@ -939,7 +939,15 @@ function buildItemRow(item = {}) {
     <td class="num"><input type="text" class="i-price" inputmode="decimal" value="${centsToMoney(unitPriceCents)}" /></td>
     <td class="center"><input type="checkbox" class="i-tax" ${taxable ? "checked" : ""} /></td>
     <td class="line-total"><span>$${centsToMoney(lineCents)}</span></td>
-    <td class="no-print slim"><button class="btn small" type="button" data-action="remove">✕</button></td>
+    <td class="no-print slim">
+      <button
+        class="btn small"
+        type="button"
+        data-action="remove"
+        title="Remove line"
+        aria-label="Remove line"
+      >✕</button>
+    </td>
   `;
 
   tr.querySelectorAll("input, textarea").forEach((el) => {
@@ -962,6 +970,19 @@ function buildItemRow(item = {}) {
     if (!itemRowsEl.children.length) itemRowsEl.appendChild(buildItemRow());
     recalcTotals();
   });
+
+  // Auto-grow item description so it never scrolls (premium + easier to read)
+  const descEl = tr.querySelector(".i-desc");
+  if (descEl) {
+    const resize = () => {
+      descEl.style.height = "auto";
+      descEl.style.height = `${descEl.scrollHeight + 2}px`;
+    };
+    descEl.addEventListener("input", resize);
+    descEl.addEventListener("change", resize);
+    // Run after insertion (so scrollHeight is correct)
+    requestAnimationFrame(resize);
+  }
 
   return tr;
 }
