@@ -588,12 +588,18 @@ textarea.autogrow{
   transform: translateY(0);
 }
 
-.items-table .i-unit{
+.items-table .i-unit,
+.items-table .i-unit-input{
   padding: 10px;
   font-size: 12px;
   font-weight: 900;
   color: #111827;
   text-align: center;
+}
+
+/* Unit type is editable in the builder now, keep it compact + centered */
+.items-table .i-unit-input{
+  letter-spacing: .01em;
 }
 
 .items-table .muted-cell{
@@ -1140,4 +1146,10 @@ textarea.autogrow{
   color: #0b0f14;
   white-space: pre-wrap;
   line-height: 1.35;
+}
+
+/* PDF: never let long unbroken descriptions spill outside the table/page */
+.pdf-export .items-table td{
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }

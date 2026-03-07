@@ -935,7 +935,16 @@ function buildItemRow(item = {}) {
       <textarea rows="2" class="i-desc" placeholder="Description">${escapeHtml(description)}</textarea>
     </td>
     <td class="num"><input type="text" class="i-qty" inputmode="decimal" value="${qty || 0}" /></td>
-    <td class="center"><div class="i-unit">${escapeHtml(unitType)}</div></td>
+    <td class="center">
+      <input
+        type="text"
+        class="i-unit-input"
+        placeholder="Each"
+        value="${escapeHtml(unitType)}"
+        aria-label="Unit type"
+        title="Unit type (eg. Each, sqft, lf)"
+      />
+    </td>
     <td class="num"><input type="text" class="i-price" inputmode="decimal" value="${centsToMoney(unitPriceCents)}" /></td>
     <td class="center"><input type="checkbox" class="i-tax" ${taxable ? "checked" : ""} /></td>
     <td class="line-total"><span>$${centsToMoney(lineCents)}</span></td>
@@ -954,6 +963,17 @@ function buildItemRow(item = {}) {
     el.addEventListener("input", () => recalcTotals());
     el.addEventListener("change", () => recalcTotals());
   });
+
+  // Unit type is now editable per-quote (so you can override catalog defaults when needed)
+  const unitInput = tr.querySelector(".i-unit-input");
+  if (unitInput) {
+    const sync = () => {
+      tr.dataset.unitType = safeStr(unitInput.value) || "Each";
+    };
+    unitInput.addEventListener("input", sync);
+    unitInput.addEventListener("change", sync);
+    sync();
+  }
 
   // Money tidy-up (keeps PDFs clean too)
   const priceInput = tr.querySelector(".i-price");
@@ -1010,7 +1030,10 @@ function getItemsFromUI() {
   return rows.map((row) => {
     const show_qty_unit_price = row.dataset.showQtyUnitPrice !== "0";
     const product_id = safeStr(row.dataset.productId) || null;
-    const unit_type = safeStr(row.dataset.unitType) || "Each";
+    const unit_type =
+      safeStr($(".i-unit-input", row)?.value) ||
+      safeStr(row.dataset.unitType) ||
+      "Each";
 
     const name = safeStr($(".i-name", row)?.value);
     const description = safeStr($(".i-desc", row)?.value);
@@ -1558,6 +1581,12 @@ function buildPdfClone() {
     out.textContent = value;
     out.style.whiteSpace = "pre-wrap";
     out.style.display = "block";
+
+    // Prevent long unbroken strings (eg. pasted model numbers / notes) from
+    // bleeding outside the PDF table/page.
+    out.style.overflowWrap = "anywhere";
+    out.style.wordBreak = "break-word";
+    out.style.maxWidth = "100%";
 
     // Base typography for PDF text replacements
     out.style.border = "0";
