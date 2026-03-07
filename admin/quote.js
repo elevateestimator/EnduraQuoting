@@ -1022,16 +1022,41 @@ function formatCurrency(cents, currency = "CAD") {
   }
 }
 
+
+function getProductTitle(p) {
+  return (
+    safeStr(p?.name) ||
+    safeStr(p?.title) ||
+    safeStr(p?.product_name) ||
+    safeStr(p?.service_name) ||
+    "Unnamed"
+  );
+}
+
+function getProductDescription(p) {
+  return safeStr(p?.description) || safeStr(p?.desc) || "";
+}
+
+function getProductUnitType(p) {
+  return safeStr(p?.unit_type) || safeStr(p?.unit) || "Each";
+}
+
+function getProductPriceCents(p) {
+  const v = p?.price_per_unit_cents ?? p?.unit_price_cents ?? p?.price_cents ?? p?.price ?? 0;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
 function productToItem(product) {
   return {
     product_id: product.id,
-    name: product.name || "",
-    description: product.description || "",
-    unit_type: product.unit_type || "Each",
+    name: getProductTitle(product),
+    description: getProductDescription(product),
+    unit_type: getProductUnitType(product),
     // Default to showing breakdown unless explicitly turned off
     show_qty_unit_price: product.show_qty_unit_price !== false,
     qty: 1,
-    unit_price_cents: Number(product.price_per_unit_cents || 0),
+    unit_price_cents: getProductPriceCents(product),
     taxable: true,
   };
 }
@@ -1049,11 +1074,11 @@ function renderProductsList(products, currency) {
 
     const name = document.createElement("div");
     name.className = "product-name";
-    name.textContent = p.name || "Unnamed";
+    name.textContent = getProductTitle(p);
 
     const desc = document.createElement("div");
     desc.className = "product-desc";
-    desc.textContent = p.description || "";
+    desc.textContent = getProductDescription(p);
     if (!safeStr(desc.textContent)) desc.style.display = "none";
 
     const meta = document.createElement("div");
@@ -1061,11 +1086,11 @@ function renderProductsList(products, currency) {
 
     const priceTag = document.createElement("span");
     priceTag.className = "tag";
-    priceTag.textContent = formatCurrency(p.price_per_unit_cents || 0, currency);
+    priceTag.textContent = formatCurrency(getProductPriceCents(p), currency);
 
     const unitTag = document.createElement("span");
     unitTag.className = "tag";
-    unitTag.textContent = p.unit_type || "Each";
+    unitTag.textContent = getProductUnitType(p);
 
     const modeTag = document.createElement("span");
     modeTag.className = "tag";
