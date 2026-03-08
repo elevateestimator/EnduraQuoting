@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Elevate Estimator — Quote</title>
+    <link rel="stylesheet" href="./quote.css" />
+  </head>
+
+  <body>
+    <!-- Top app bar (screen only) -->
+    <header class="topbar no-print">
+      <div class="brand">
+        <img id="app-logo" class="logo" src="../assets/elevate-estimator-logo-light.png" alt="Company logo" />
+        <div class="brand-text">
+          <div class="brand-title">Quote Builder</div>
+          <div class="brand-sub">
+            <span id="quote-code">…</span>
+            <span class="dot">•</span>
+            <span id="quote-status">…</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="back-btn" class="btn ghost" type="button">Back</button>
+
+        <div id="save-state" class="save-state" data-state="saved" role="status" aria-live="polite">
+          <span class="save-dot" aria-hidden="true"></span>
+          <span id="save-state-text">All changes saved</span>
+        </div>
+
+        <!-- Shown only if auto-save fails (fallback) -->
+        <button id="save-btn" class="btn primary" type="button" hidden>Retry Save</button>
+
+        <!-- Manual status override (for customers who approve without signing online) -->
+        <button
+          id="mark-accepted-btn"
+          class="btn accept"
+          type="button"
+          title="Use when the customer approves without signing online (eg. deposit received)."
+        >
+          ✓ Mark as Accepted
+        </button>
+        <button
+          id="cancel-quote-btn"
+          class="btn danger"
+          type="button"
+          title="Mark this quote as cancelled (use when the job doesn't move forward)."
+        >
+          ✕ Cancel Quote
+        </button>
+
+        <button id="pdf-btn" class="btn" type="button">Download PDF</button>
+        <button id="send-btn" class="btn brand" type="button">Send to Customer</button>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <div id="msg" class="msg" hidden></div>
+
+      <!-- This is the page we capture into PDF -->
+      <section id="quote-page" class="page">
+        <!-- Letterhead -->
+        <header class="doc-header avoid-break">
+          <div class="letterhead">
+            <div class="logo-col">
+              <div class="logo-box">
+                <img
+                  id="company-logo"
+                  src="../assets/elevate-estimator-logo-light.png"
+                  alt="Company logo"
+                  class="doc-logo"
+                  crossorigin="anonymous"
+                />
+              </div>
+            </div>
+
+            <div class="company-col">
+              <div class="company-row">
+                <div class="company-block">
+                  <div class="company-name" data-company="name"></div>
+
+                  <div class="company-contact">
+                    <span data-company="addr1"></span>
+                    <span data-company="addr2"></span>
+                    <span data-company="phone"></span>
+                    <span data-company="email"></span>
+                    <span data-company="web"></span>
+                  </div>
+                </div>
+
+                <div class="doc-block">
+                  <div class="doc-pill">QUOTE</div>
+                  <div class="doc-code" id="doc-quote-code">…</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="accent-bar full-span"></div>
+
+            <div class="meta-strip full-span">
+              <div class="meta-field">
+                <span>Quote #</span>
+                <input type="text" data-bind="quote_no" readonly />
+              </div>
+
+              <div class="meta-field">
+                <span>Date</span>
+                <input type="date" data-bind="quote_date" />
+              </div>
+
+              <div class="meta-field">
+                <span>Expires</span>
+                <input type="date" data-bind="quote_expires" />
+              </div>
+
+              <div class="meta-field">
+                <span>Prepared by</span>
+                <input type="text" data-bind="prepared_by" readonly />
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <!-- Customer / Job -->
+        <section class="grid-2 avoid-break">
+          <div class="card">
+            <h3>Bill To</h3>
+
+            <div class="bill-fields">
+              <input
+                type="text"
+                placeholder="Client / Homeowner"
+                data-bind="client_name"
+              />
+
+              <div class="two-col">
+                <input type="text" placeholder="Phone" data-bind="client_phone" />
+                <input type="text" placeholder="Email" data-bind="client_email" />
+              </div>
+
+              <input
+                type="text"
+                placeholder="Billing Address"
+                data-bind="client_addr"
+              />
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Job Site</h3>
+
+            <div class="job-fields">
+              <input
+                type="text"
+                placeholder="Installation address"
+                data-bind="project_location"
+              />
+              <p class="helper">
+                Installation address (if different from billing).
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Items -->
+        <section class="card avoid-break">
+          <div class="row-between">
+            <h3>Items & Pricing</h3>
+            <div class="row-actions no-print">
+              <button id="add-product" class="btn brand cta" type="button">+ Add from Products</button>
+              <button id="add-item" class="btn secondary" type="button">+ Custom line</button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="items-table" aria-label="Line items">
+              <colgroup>
+                <col style="width: auto" />
+                <col style="width: 10%" />
+                <col style="width: 11%" />
+                <col style="width: 16%" />
+                <col style="width: 8%" />
+                <col style="width: 15%" />
+                <!-- Fixed width so the ✕ button never gets clipped -->
+                <col style="width: 64px" />
+              </colgroup>
+
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th class="num">Qty</th>
+                  <th class="center">Unit</th>
+                  <th class="num">Unit Price</th>
+                  <th class="center">Tax</th>
+                  <th class="num">Line Total</th>
+                  <th class="no-print slim"></th>
+                </tr>
+              </thead>
+
+              <tbody id="item-rows"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Totals -->
+        <section class="card totals avoid-break">
+          <h3>Summary</h3>
+
+          <div class="totals-grid">
+            <div class="row">
+              <div class="label">Subtotal</div>
+              <div class="spacer"></div>
+              <div class="value">
+                <span class="curr">$</span><span class="amt" id="subtotal">0.00</span>
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="label">Tax Rate</div>
+              <div class="spacer"></div>
+              <div class="value">
+                <span class="curr curr-placeholder">$</span>
+                <span class="amt amt-input">
+                  <input id="tax-rate" type="text" inputmode="decimal" value="13" class="short" />
+                  <span class="suffix">%</span>
+                </span>
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="label">Tax</div>
+              <div class="spacer"></div>
+              <div class="value">
+                <span class="curr">$</span><span class="amt" id="tax-amount">0.00</span>
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="label">Additional Fees</div>
+              <div class="spacer"></div>
+              <div class="value">
+                <span class="curr">$</span>
+                <span class="amt amt-input">
+                  <input id="fees" type="text" inputmode="decimal" placeholder="0.00" />
+                </span>
+              </div>
+            </div>
+
+            <div class="row total">
+              <div class="label">Total</div>
+              <div class="spacer"></div>
+              <div class="value">
+                <span class="curr">$</span><span class="amt" id="grand-total">0.00</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Payment schedule -->
+        <section class="card avoid-break" id="payment-schedule-card">
+          <div class="row-between">
+            <h3>Payment schedule</h3>
+
+            <div class="row-actions no-print">
+              <button id="btn-use-default-schedule" class="btn secondary small" type="button">
+                Use company default
+              </button>
+              <button id="btn-add-payment-step" class="btn brand small" type="button">
+                + Add step
+              </button>
+            </div>
+          </div>
+
+          <!-- Admin-only helper. Hide from PDF/customer output. -->
+          <p class="helper no-print">
+            Tell the customer how payments are split. Percentages must add up to
+            <strong>100%</strong>. Amounts update automatically based on the quote total.
+          </p>
+
+          <div class="table-wrap">
+            <table class="ps-table" aria-label="Payment schedule">
+              <colgroup>
+                <col />
+                <col style="width: 18%" />
+                <col style="width: 22%" />
+                <!-- Fixed width so the ✕ button never gets clipped -->
+                <col class="no-print slim" style="width: 56px" />
+              </colgroup>
+
+              <thead>
+                <tr>
+                  <th>Step</th>
+                  <th class="num">Percent</th>
+                  <th class="num">Amount</th>
+                  <th class="no-print slim"></th>
+                </tr>
+              </thead>
+
+              <tbody id="payment-schedule-body"></tbody>
+            </table>
+          </div>
+
+          <div class="ps-footer">
+            <div class="ps-total">
+              Total: <strong><span id="payment-schedule-total">0</span>%</strong>
+            </div>
+            <div id="payment-schedule-msg" class="ps-msg no-print"></div>
+          </div>
+        </section>
+
+        <!-- Terms -->
+        <section class="card avoid-break">
+          <h3>Terms &amp; Conditions</h3>
+          <textarea class="autogrow" rows="6" data-bind="terms"></textarea>
+        </section>
+
+        <!-- Notes -->
+        <section class="card avoid-break">
+          <h3>Notes & Exclusions</h3>
+          <textarea
+            class="autogrow"
+            rows="3"
+            data-bind="notes"
+            placeholder="Project-specific exclusions, colour selections, deck repairs, etc."
+          ></textarea>
+        </section>
+
+        <!-- Signatures -->
+        <section class="signatures avoid-break">
+          <div class="sig-block">
+            <div class="sig-line signature">
+              <span>Client Signature</span>
+              <img class="sig-image" id="client-signature-img" alt="Client signature" hidden />
+            </div>
+
+            <div class="sig-inline two">
+              <div class="sig-line">
+                <span>Printed Name</span>
+                <div class="sig-value" id="client-signed-name"></div>
+              </div>
+              <div class="sig-line">
+                <span>Date</span>
+                <div class="sig-value" id="client-signed-date"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sig-block">
+            <div class="sig-line signature">
+              <span>Representative Signature</span>
+              <div class="sig-signature" id="rep-signature"></div>
+            </div>
+
+            <div class="sig-inline two">
+              <div class="sig-line">
+                <span>Printed Name</span>
+                <div class="sig-value" id="rep-printed-name"></div>
+              </div>
+
+              <div class="sig-line">
+                <span>Date</span>
+                <div class="sig-value" id="rep-date"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <!-- Add from Products dialog (screen only) -->
+    <dialog id="products-dialog" class="dialog no-print">
+      <div class="dialog-head">
+        <div>
+          <div class="dialog-title">Add sale items</div>
+          <div class="dialog-sub">Pick from your Products &amp; Services catalog.</div>
+        </div>
+        <button id="products-close" class="btn small ghost" type="button">Close</button>
+      </div>
+
+      <div class="dialog-search">
+        <input id="products-search" type="text" placeholder="Search products…" />
+      </div>
+
+      <div id="products-msg" class="dialog-msg" hidden></div>
+
+      <div id="products-list" class="products-list" aria-label="Products list"></div>
+
+      <div id="products-empty" class="dialog-empty" hidden>
+        No products found. Add items in <strong>Products &amp; Services</strong>.
+      </div>
+    </dialog>
+
+    <script type="module" src="./quote.js"></script>
+  </body>
+</html>
