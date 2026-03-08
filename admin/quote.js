@@ -18,6 +18,7 @@ const pdfBtn  = $("#pdf-btn");
 const sendBtn = $("#send-btn");
 const markAcceptedBtn = $("#mark-accepted-btn");
 const cancelQuoteBtn = $("#cancel-quote-btn");
+let newVersionBtn = $("#new-version-btn");
 
 const saveStateEl = $("#save-state");
 const saveStateTextEl = $("#save-state-text");
@@ -172,9 +173,9 @@ function lockedQuoteTitle(status) {
 
 function lockedQuoteBody(status) {
   if (isAcceptedStatus(status)) {
-    return "This quote has been accepted, so the quote details can no longer be edited. You can still download the PDF or cancel the quote if the job falls through.";
+    return "This quote has been accepted, so the quote details can no longer be edited. Use New version in the top bar if you need to make changes while keeping this accepted record intact. You can still download the PDF or cancel the quote if the job falls through.";
   }
-  return "This quote has been cancelled, so the quote details can no longer be edited.";
+  return "This quote has been cancelled, so the quote details can no longer be edited. Use New version in the top bar if you need to make changes while keeping this cancelled record intact.";
 }
 
 function lockedQuoteToast(status) {
@@ -1703,6 +1704,121 @@ function collectDataFromUI(qRow, existingAcceptance = null) {
   };
 }
 
+
+function ensureNewVersionButton() {
+  if (newVersionBtn) return newVersionBtn;
+
+  const actionsEl = backBtn?.closest(".actions") || document.querySelector(".topbar .actions");
+  if (!actionsEl) return null;
+
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.id = "new-version-btn";
+  btn.className = "btn";
+  btn.textContent = "New version";
+  btn.title = "Create a separate draft copy so you can make changes without overwriting this quote.";
+
+  const insertBeforeEl = markAcceptedBtn || cancelQuoteBtn || pdfBtn || sendBtn || null;
+  if (insertBeforeEl && insertBeforeEl.parentElement === actionsEl) {
+    actionsEl.insertBefore(btn, insertBeforeEl);
+  } else {
+    actionsEl.appendChild(btn);
+  }
+
+  newVersionBtn = btn;
+  return btn;
+}
+
+function scrubForNewVersion(data) {
+  if (!data || typeof data !== "object") return data;
+
+  const clone = JSON.parse(JSON.stringify(data));
+
+  const kill = [
+    "accepted",
+    "accepted_at",
+    "acceptedAt",
+    "accepted_date",
+    "accepted_date_local",
+    "signed",
+    "signed_at",
+    "signedAt",
+    "signature",
+    "signatureDataUrl",
+    "signature_data_url",
+    "signature_image_data_url",
+    "signatureSvg",
+    "signature_svg",
+    "signer_email",
+    "signerEmail",
+    "signer_name",
+    "signerName",
+    "printed_name",
+    "printedName",
+    "public_id",
+    "publicId",
+    "public_token",
+    "publicToken",
+    "manual_accepted_at",
+    "manual_accepted_by",
+    "manual_cancelled_at",
+    "manual_cancelled_by",
+    "manual_cancelled_previous_status",
+    "manual_cancelled_after_acceptance",
+  ];
+
+  for (const k of kill) {
+    if (k in clone) delete clone[k];
+    if (clone.meta && k in clone.meta) delete clone.meta[k];
+  }
+
+  if (clone.acceptance) delete clone.acceptance;
+  if (clone.signing) delete clone.signing;
+  if ("quote_code" in clone) delete clone.quote_code;
+
+  clone.meta = clone.meta || {};
+  delete clone.meta.version_of_quote_id;
+  delete clone.meta.version_of_quote_no;
+  delete clone.meta.version_created_at;
+  delete clone.meta.version_type;
+  clone.meta.version_type = "new_version";
+  clone.meta.version_created_at = new Date().toISOString();
+
+  return clone;
+}
+
+async function createQuoteVersionFromPayload(sourceQuote, payload, ctx) {
+  const copiedData = scrubForNewVersion(payload);
+  copiedData.meta = copiedData.meta || {};
+  copiedData.meta.version_of_quote_id = sourceQuote?.id || null;
+  copiedData.meta.version_of_quote_no = sourceQuote?.quote_no ?? null;
+
+  const customerName = safeStr(payload?.bill_to?.client_name) || safeStr(sourceQuote?.customer_name) || null;
+  const customerEmail = safeStr(payload?.bill_to?.client_email) || safeStr(sourceQuote?.customer_email) || null;
+  const totalCents = Number(payload?.computed?.total_cents ?? sourceQuote?.total_cents ?? 0) || 0;
+  const currency = safeStr(sourceQuote?.currency) || safeStr(payload?.company?.currency) || "CAD";
+
+  const insertPayload = {
+    customer_name: customerName,
+    customer_email: customerEmail || null,
+    total_cents: totalCents,
+    currency,
+    status: "draft",
+    data: copiedData,
+    company_id: ctx?.companyId || sourceQuote?.company_id || null,
+    created_by: ctx?.userId || null,
+  };
+
+  const { data: inserted, error } = await supabase
+    .from("quotes")
+    .insert(insertPayload)
+    .select("id, quote_no")
+    .single();
+
+  if (error) throw error;
+  return inserted;
+}
+
 /* =========================================================
    PDF EXPORT (manual, no sideways drift)
    - html2canvas -> jsPDF
@@ -2195,6 +2311,7 @@ if (!safeStr(data.terms) && safeStr(ctx?.company?.payment_terms)) {
 
   fillUIFromData(qRow, data, ctx);
   syncQuoteStatusUI(qRow.status);
+  ensureNewVersionButton();
 
   function confirmEditOfSentQuote() {
     if (!isSentLikeStatus(qRow?.status) || _sentEditConfirmed) return true;
@@ -2293,6 +2410,40 @@ if (!safeStr(data.terms) && safeStr(ctx?.company?.payment_terms)) {
 
   backBtn.addEventListener("click", () => {
     window.location.href = "./dashboard.html";
+  });
+
+  newVersionBtn?.addEventListener("click", async () => {
+    const originalDirty = _autoDirty;
+    try {
+      const code = safeStr(quoteCodeEl?.textContent) || (qRow?.quote_no ? `Q-${qRow.quote_no}` : "this quote");
+      const ok = window.confirm(
+        `Create a new draft version from ${code}?
+
+This will open a separate draft copy so you can make changes without overwriting the current quote.`
+      );
+      if (!ok) return;
+
+      newVersionBtn.disabled = true;
+      showMsg("Creating new version…");
+
+      await flushAutoSave();
+
+      const existingAcceptance = qRow?.data?.acceptance || null;
+      const payload = collectDataFromUI(qRow, existingAcceptance);
+
+      const inserted = await createQuoteVersionFromPayload(qRow, payload, ctx);
+      window.location.href = `./quote.html?id=${inserted.id}`;
+    } catch (e) {
+      console.error(e);
+      if (originalDirty && !isAcceptedStatus(qRow?.status) && !isCancelledStatus(qRow?.status)) {
+        _autoDirty = true;
+        scheduleAutoSave();
+      }
+      showMsg(e?.message || "Failed to create new version.");
+      setTimeout(() => showMsg(""), 2200);
+    } finally {
+      if (newVersionBtn) newVersionBtn.disabled = false;
+    }
   });
 
   addItemBtn.addEventListener("click", () => {
