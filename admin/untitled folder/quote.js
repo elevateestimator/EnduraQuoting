@@ -92,6 +92,11 @@ function isCancelledStatus(value) {
   return s === "cancelled" || s === "canceled";
 }
 
+function isSentLikeStatus(value) {
+  const s = normalizeStatus(value);
+  return s === "sent" || s === "viewed";
+}
+
 function prettyStatus(value) {
   const s = normalizeStatus(value);
   if (s === "accepted") return "Accepted";
@@ -157,6 +162,64 @@ function syncCancelButton(status) {
       if (sendBtn.title === "This quote is cancelled and can't be sent.") sendBtn.title = "";
     }
   }
+}
+
+
+let _quoteEditingLocked = false;
+let _sentEditConfirmed = false;
+
+function setQuoteEditingLocked(locked, status) {
+  if (!quotePageEl) return;
+
+  const nextLocked = !!locked;
+  if (_quoteEditingLocked === nextLocked) {
+    if (nextLocked) {
+      quotePageEl.classList.add("quote-locked");
+    }
+    return;
+  }
+
+  _quoteEditingLocked = nextLocked;
+  quotePageEl.classList.toggle("quote-locked", nextLocked);
+
+  const controls = $$("input, textarea, select, button", quotePageEl);
+  controls.forEach((el) => {
+    if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement || el instanceof HTMLButtonElement)) return;
+
+    if (nextLocked) {
+      if (!("lockOrigDisabled" in el.dataset)) {
+        el.dataset.lockOrigDisabled = el.disabled ? "1" : "0";
+      }
+      el.dataset.lockedByStatus = "1";
+      el.disabled = true;
+      return;
+    }
+
+    if (el.dataset.lockedByStatus === "1") {
+      el.disabled = el.dataset.lockOrigDisabled === "1";
+      delete el.dataset.lockedByStatus;
+      delete el.dataset.lockOrigDisabled;
+    }
+  });
+
+  if (productsDialog && nextLocked) closeDialog(productsDialog);
+
+  if (nextLocked) {
+    setManualSaveVisible(false);
+    setSaveState(
+      "saved",
+      isAcceptedStatus(status) ? "Locked — Accepted" : "Locked — Cancelled"
+    );
+  }
+}
+
+function syncQuoteStatusUI(status) {
+  if (quoteStatusEl) quoteStatusEl.textContent = prettyStatus(status);
+  syncMarkAcceptedButton(status);
+  syncCancelButton(status);
+
+  const locked = isAcceptedStatus(status) || isCancelledStatus(status);
+  setQuoteEditingLocked(locked, status);
 }
 
 /* ===== Save state (auto-save UX) ===== */
@@ -1432,7 +1495,7 @@ function fillUIFromData(qRow, data, ctx) {
   quoteCodeEl.textContent = quoteCode;
   if (docQuoteCodeEl) docQuoteCodeEl.textContent = quoteCode;
 
-  quoteStatusEl.textContent = prettyStatus(qRow.status);
+  syncQuoteStatusUI(qRow.status);
 
   setBoundValue("quote_no", quoteCode);
   setBoundValue("quote_date", data.meta.quote_date);
@@ -2008,10 +2071,102 @@ if (!safeStr(data.terms) && safeStr(ctx?.company?.payment_terms)) {
   await hydrateBillToFromCustomer(data, qRow);
 
   fillUIFromData(qRow, data, ctx);
+  syncQuoteStatusUI(qRow.status);
 
-  // Keep the manual "Mark as Accepted" button in sync with the current quote status.
-    syncMarkAcceptedButton(qRow.status);
-    syncCancelButton(qRow.status);
+  function confirmEditOfSentQuote() {
+    if (!isSentLikeStatus(qRow?.status) || _sentEditConfirmed) return true;
+
+    const ok = window.confirm(
+      "This quote has already been sent to the customer.\n\nIf you make changes now, the customer-facing quote will update.\n\nAre you sure you want to make changes?"
+    );
+
+    if (ok) {
+      _sentEditConfirmed = true;
+      showMsg("Editing enabled. Changes will update the sent quote.");
+      setTimeout(() => {
+        if (msgEl && msgEl.textContent === "Editing enabled. Changes will update the sent quote.") {
+          showMsg("");
+        }
+      }, 2200);
+    }
+
+    return ok;
+  }
+
+  function allowEditAttempt() {
+    if (isAcceptedStatus(qRow?.status)) {
+      showMsg("This quote is accepted and can't be edited.");
+      setTimeout(() => {
+        if (msgEl && msgEl.textContent === "This quote is accepted and can't be edited.") showMsg("");
+      }, 1800);
+      return false;
+    }
+
+    if (isCancelledStatus(qRow?.status)) {
+      showMsg("This quote is cancelled and can't be edited.");
+      setTimeout(() => {
+        if (msgEl && msgEl.textContent === "This quote is cancelled and can't be edited.") showMsg("");
+      }, 1800);
+      return false;
+    }
+
+    if (isSentLikeStatus(qRow?.status)) return confirmEditOfSentQuote();
+    return true;
+  }
+
+  function getEditAttemptControl(target) {
+    if (!(target instanceof Element) || !quotePageEl) return null;
+    const el = target.closest("input, textarea, select, button");
+    if (!el || !quotePageEl.contains(el) || el.disabled) return null;
+
+    if ((el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) && el.readOnly) {
+      return null;
+    }
+
+    return el;
+  }
+
+  function interceptEditAttempt(e) {
+    const control = getEditAttemptControl(e.target);
+    if (!control) return;
+
+    const status = qRow?.status;
+    if (!isSentLikeStatus(status) && !isAcceptedStatus(status) && !isCancelledStatus(status)) return;
+
+    const ok = allowEditAttempt();
+    if (ok) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    if (typeof e.stopImmediatePropagation === "function") e.stopImmediatePropagation();
+
+    if (e.type === "focusin" && typeof control.blur === "function") {
+      setTimeout(() => control.blur(), 0);
+    }
+  }
+
+  if (quotePageEl) {
+    quotePageEl.addEventListener("pointerdown", interceptEditAttempt, true);
+    quotePageEl.addEventListener("click", interceptEditAttempt, true);
+    quotePageEl.addEventListener("focusin", interceptEditAttempt, true);
+    quotePageEl.addEventListener("beforeinput", interceptEditAttempt, true);
+    quotePageEl.addEventListener(
+      "keydown",
+      (e) => {
+        const key = String(e.key || "");
+        const maybeEditKey =
+          key === "Enter" ||
+          key === " " ||
+          key === "Spacebar" ||
+          key === "Backspace" ||
+          key === "Delete" ||
+          key.length === 1;
+
+        if (maybeEditKey) interceptEditAttempt(e);
+      },
+      true
+    );
+  }
 
   backBtn.addEventListener("click", () => {
     window.location.href = "./dashboard.html";
@@ -2113,6 +2268,14 @@ async function flushAutoSave() {
 }
 
 function canAutoSaveNow() {
+  if (isAcceptedStatus(qRow?.status) || isCancelledStatus(qRow?.status)) {
+    setSaveState(
+      "saved",
+      isAcceptedStatus(qRow?.status) ? "Locked — Accepted" : "Locked — Cancelled"
+    );
+    return false;
+  }
+
   // Match the same validation rules as manual Save/Send/PDF
   const name = safeStr(getBoundValue("client_name"));
   if (!name) {
@@ -2260,9 +2423,7 @@ wireAutoSaveListeners();
     });
 
     qRow = updated;
-    quoteStatusEl.textContent = prettyStatus(qRow.status);
-    syncMarkAcceptedButton(qRow.status);
-    syncCancelButton(qRow.status);
+    syncQuoteStatusUI(qRow.status);
 
     quoteCodeEl.textContent = payload.quote_code;
     if (docQuoteCodeEl) docQuoteCodeEl.textContent = payload.quote_code;
@@ -2326,9 +2487,9 @@ wireAutoSaveListeners();
 
       // Update UI if API returns status
       if (result?.status) {
-        quoteStatusEl.textContent = prettyStatus(result.status);
-        syncMarkAcceptedButton(result.status);
-        syncCancelButton(result.status);
+        qRow = { ...qRow, status: result.status };
+        _sentEditConfirmed = false;
+        syncQuoteStatusUI(result.status);
       }
 
       // Copy link (nice touch)
@@ -2379,10 +2540,9 @@ wireAutoSaveListeners();
 
       const updated = await updateQuote(quoteId, { status: "cancelled", data });
       qRow = updated;
+      _sentEditConfirmed = false;
 
-      quoteStatusEl.textContent = prettyStatus(qRow.status);
-      syncMarkAcceptedButton(qRow.status);
-      syncCancelButton(qRow.status);
+      syncQuoteStatusUI(qRow.status);
 
       showMsg("Quote cancelled.");
       setTimeout(() => showMsg(""), 1200);
@@ -2391,8 +2551,7 @@ wireAutoSaveListeners();
       showMsg(e?.message || "Failed to cancel quote.");
       setTimeout(() => showMsg(""), 2400);
     } finally {
-      syncCancelButton(qRow?.status);
-      syncMarkAcceptedButton(qRow?.status);
+      syncQuoteStatusUI(qRow?.status);
     }
   });
 
@@ -2428,10 +2587,9 @@ wireAutoSaveListeners();
       // Status drives dashboards + filtering. We intentionally do NOT create data.acceptance here.
       const updated = await updateQuote(quoteId, { status: "accepted", data });
       qRow = updated;
+      _sentEditConfirmed = false;
 
-      quoteStatusEl.textContent = prettyStatus(qRow.status);
-      syncMarkAcceptedButton(qRow.status);
-      syncCancelButton(qRow.status);
+      syncQuoteStatusUI(qRow.status);
 
       showMsg("Marked as accepted.");
       setTimeout(() => showMsg(""), 1200);
@@ -2440,7 +2598,7 @@ wireAutoSaveListeners();
       showMsg(e?.message || "Failed to mark as accepted.");
       setTimeout(() => showMsg(""), 2200);
     } finally {
-      syncMarkAcceptedButton(qRow?.status);
+      syncQuoteStatusUI(qRow?.status);
     }
   });
 

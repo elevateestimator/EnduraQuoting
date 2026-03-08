@@ -196,6 +196,35 @@ body{
   font-weight: 950;
 }
 
+
+/* ===== Read-only after Accepted / Cancelled ===== */
+.quote-locked{
+  position: relative;
+}
+.quote-locked input:disabled,
+.quote-locked textarea:disabled,
+.quote-locked select:disabled{
+  cursor: not-allowed;
+  color: #6b7280;
+  background: #f8fafc !important;
+  border-color: #d8dee8;
+  -webkit-text-fill-color: #6b7280;
+  opacity: 1;
+}
+.quote-locked .items-table input:disabled,
+.quote-locked .items-table textarea:disabled,
+.quote-locked .meta-field input:disabled{
+  background: transparent !important;
+}
+.quote-locked button:disabled{
+  cursor: not-allowed;
+}
+.quote-locked .row-actions,
+.quote-locked .inline-controls,
+.quote-locked .ps-actions{
+  opacity: 0.75;
+}
+
 /* ===== Layout wrapper ===== */
 .wrap{
   max-width: 1100px;

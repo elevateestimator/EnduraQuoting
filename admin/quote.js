@@ -69,6 +69,7 @@ const clientSignedDateEl = $("#client-signed-date");
 const quoteDateInput = $('[data-bind="quote_date"]');
 
 const quotePageEl = $("#quote-page");
+const wrapEl = $(".wrap");
 
 function showMsg(text) {
   if (!text) {
@@ -165,6 +166,117 @@ function syncCancelButton(status) {
 }
 
 
+function lockedQuoteTitle(status) {
+  return isAcceptedStatus(status) ? "Accepted quote — editing is locked" : "Cancelled quote — editing is locked";
+}
+
+function lockedQuoteBody(status) {
+  if (isAcceptedStatus(status)) {
+    return "This quote has been accepted, so the quote details can no longer be edited. You can still download the PDF or cancel the quote if the job falls through.";
+  }
+  return "This quote has been cancelled, so the quote details can no longer be edited.";
+}
+
+function lockedQuoteToast(status) {
+  return isAcceptedStatus(status)
+    ? "This quote has been accepted, so it is no longer editable."
+    : "This quote has been cancelled, so it is no longer editable.";
+}
+
+let _quoteLockNoticeEl = null;
+let _quoteLockNoticeTimer = null;
+let _quoteLockShieldEl = null;
+
+function ensureQuoteLockNotice() {
+  if (_quoteLockNoticeEl) return _quoteLockNoticeEl;
+  const host = wrapEl || quotePageEl?.parentElement || document.body;
+  if (!host || !quotePageEl) return null;
+
+  const el = document.createElement("div");
+  el.className = "quote-lock-notice no-print";
+  el.hidden = true;
+  el.innerHTML = `
+    <div class="quote-lock-notice__eyebrow">Quote locked</div>
+    <div class="quote-lock-notice__title"></div>
+    <div class="quote-lock-notice__body"></div>
+  `;
+
+  host.insertBefore(el, quotePageEl);
+  _quoteLockNoticeEl = el;
+  return el;
+}
+
+function flashQuoteLockNotice() {
+  const el = ensureQuoteLockNotice();
+  if (!el || el.hidden) return;
+  el.classList.remove("is-flash");
+  void el.offsetWidth;
+  el.classList.add("is-flash");
+  clearTimeout(_quoteLockNoticeTimer);
+  _quoteLockNoticeTimer = setTimeout(() => el.classList.remove("is-flash"), 850);
+}
+
+function renderQuoteLockNotice(status) {
+  const el = ensureQuoteLockNotice();
+  if (!el) return;
+
+  if (!isAcceptedStatus(status) && !isCancelledStatus(status)) {
+    el.hidden = true;
+    el.removeAttribute("data-status");
+    el.classList.remove("is-flash");
+    return;
+  }
+
+  el.hidden = false;
+  el.dataset.status = isAcceptedStatus(status) ? "accepted" : "cancelled";
+  const titleEl = el.querySelector(".quote-lock-notice__title");
+  const bodyEl = el.querySelector(".quote-lock-notice__body");
+  if (titleEl) titleEl.textContent = lockedQuoteTitle(status);
+  if (bodyEl) bodyEl.textContent = lockedQuoteBody(status);
+}
+
+function ensureQuoteLockShield() {
+  if (_quoteLockShieldEl) return _quoteLockShieldEl;
+  if (!quotePageEl) return null;
+
+  const shield = document.createElement("button");
+  shield.type = "button";
+  shield.className = "quote-lock-shield no-print";
+  shield.hidden = true;
+  shield.setAttribute("aria-label", "This quote is locked and cannot be edited");
+  shield.innerHTML = `<span class="quote-lock-shield__badge"></span>`;
+
+  shield.addEventListener("click", () => {
+    const status = shield.dataset.status || "";
+    const text = lockedQuoteToast(status);
+    showMsg(text);
+    flashQuoteLockNotice();
+    setTimeout(() => {
+      if (msgEl && msgEl.textContent === text) showMsg("");
+    }, 2400);
+  });
+
+  quotePageEl.appendChild(shield);
+  _quoteLockShieldEl = shield;
+  return shield;
+}
+
+function syncQuoteLockShield(status, locked) {
+  const shield = ensureQuoteLockShield();
+  if (!shield) return;
+
+  if (!locked || (!isAcceptedStatus(status) && !isCancelledStatus(status))) {
+    shield.hidden = true;
+    shield.removeAttribute("data-status");
+    return;
+  }
+
+  shield.hidden = false;
+  shield.dataset.status = isAcceptedStatus(status) ? "accepted" : "cancelled";
+  const badge = shield.querySelector(".quote-lock-shield__badge");
+  if (badge) badge.textContent = isAcceptedStatus(status) ? "Accepted — not editable" : "Cancelled — not editable";
+}
+
 let _quoteEditingLocked = false;
 let _sentEditConfirmed = false;
 
@@ -173,8 +285,15 @@ function setQuoteEditingLocked(locked, status) {
 
   const nextLocked = !!locked;
   if (_quoteEditingLocked === nextLocked) {
+    quotePageEl.classList.toggle("quote-locked", nextLocked);
+    renderQuoteLockNotice(status);
+    syncQuoteLockShield(status, nextLocked);
     if (nextLocked) {
-      quotePageEl.classList.add("quote-locked");
+      setManualSaveVisible(false);
+      setSaveState(
+        "saved",
+        isAcceptedStatus(status) ? "Locked — Accepted" : "Locked — Cancelled"
+      );
     }
     return;
   }
@@ -185,6 +304,7 @@ function setQuoteEditingLocked(locked, status) {
   const controls = $$("input, textarea, select, button", quotePageEl);
   controls.forEach((el) => {
     if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement || el instanceof HTMLButtonElement)) return;
+    if (el === _quoteLockShieldEl || el.classList?.contains("quote-lock-shield")) return;
 
     if (nextLocked) {
       if (!("lockOrigDisabled" in el.dataset)) {
@@ -203,6 +323,9 @@ function setQuoteEditingLocked(locked, status) {
   });
 
   if (productsDialog && nextLocked) closeDialog(productsDialog);
+
+  renderQuoteLockNotice(status);
+  syncQuoteLockShield(status, nextLocked);
 
   if (nextLocked) {
     setManualSaveVisible(false);
@@ -2095,17 +2218,17 @@ if (!safeStr(data.terms) && safeStr(ctx?.company?.payment_terms)) {
 
   function allowEditAttempt() {
     if (isAcceptedStatus(qRow?.status)) {
-      showMsg("This quote is accepted and can't be edited.");
+      showMsg(lockedQuoteToast(qRow?.status));
       setTimeout(() => {
-        if (msgEl && msgEl.textContent === "This quote is accepted and can't be edited.") showMsg("");
+        if (msgEl && msgEl.textContent === lockedQuoteToast(qRow?.status)) showMsg("");
       }, 1800);
       return false;
     }
 
     if (isCancelledStatus(qRow?.status)) {
-      showMsg("This quote is cancelled and can't be edited.");
+      showMsg(lockedQuoteToast(qRow?.status));
       setTimeout(() => {
-        if (msgEl && msgEl.textContent === "This quote is cancelled and can't be edited.") showMsg("");
+        if (msgEl && msgEl.textContent === lockedQuoteToast(qRow?.status)) showMsg("");
       }, 1800);
       return false;
     }
