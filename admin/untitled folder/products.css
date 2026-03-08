@@ -1160,39 +1160,3 @@ textarea:focus{
   color: rgba(11, 15, 20, 0.85);
   font-weight: 950;
 }
-
-
-/* AI description helper */
-.field-top{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap: 10px;
-}
-
-.btn-ai{
-  padding: 8px 10px;
-  font-size: 12px;
-  font-weight: 900;
-  border-radius: 10px;
-  white-space: nowrap;
-}
-
-.ai-hint{
-  margin-top: 6px;
-  line-height: 1.35;
-}
-
-.btn[disabled],
-.btn:disabled{
-  opacity: 0.62;
-  cursor: not-allowed;
-  transform: none;
-}
-
-@media (max-width: 640px){
-  .field-top{
-    align-items:flex-start;
-    flex-direction:column;
-  }
-}

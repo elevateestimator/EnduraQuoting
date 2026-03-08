@@ -42,8 +42,6 @@ const msgEl = document.getElementById("product-msg");
 // Inputs
 const nameEl = document.getElementById("name");
 const descEl = document.getElementById("description");
-const aiDescBtn = document.getElementById("ai-desc-btn");
-const aiDescHintEl = document.getElementById("ai-desc-hint");
 const unitEl = document.getElementById("unit_type");
 const priceEl = document.getElementById("price_per_unit");
 const showQtyUnitEl = document.getElementById("show_qty_unit");
@@ -152,74 +150,6 @@ function sanitizeString(s) {
 function normalizeOptional(s) {
   const v = sanitizeString(s);
   return v ? v : null;
-}
-
-function updateAiDescButton() {
-  if (!aiDescBtn) return;
-  const hasText = sanitizeString(descEl?.value).length > 0;
-  aiDescBtn.textContent = hasText ? "Enhance this description" : "Create description";
-  if (aiDescHintEl) {
-    aiDescHintEl.textContent = hasText
-      ? "Use AI to rewrite what you already typed so it sounds cleaner and more professional."
-      : "Optional. Use AI to write a short, professional description for this item.";
-  }
-}
-
-async function callAiProductDescription({ name, unit_type, description }) {
-  const { data } = await supabase.auth.getSession();
-  const token = data?.session?.access_token || "";
-
-  const res = await fetch("/api/ai-product-description", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({ name, unit_type, description }),
-  });
-
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json?.error || "AI request failed.");
-  return String(json?.description || "");
-}
-
-async function handleAiDescClick() {
-  if (!aiDescBtn || aiDescBtn.disabled) return;
-
-  setFormMsg("");
-  setError("");
-
-  const name = sanitizeString(nameEl.value);
-  if (!name) {
-    setFormMsg("Add a name first, then click Create description.");
-    nameEl.focus();
-    return;
-  }
-
-  const unit_type = sanitizeString(unitEl.value) || "Each";
-  const current = sanitizeString(descEl.value);
-  const action = current ? "enhance" : "create";
-
-  aiDescBtn.disabled = true;
-  aiDescBtn.textContent = action === "enhance" ? "Enhancing…" : "Creating…";
-
-  try {
-    const out = await callAiProductDescription({ name, unit_type, description: current });
-    if (!out.trim()) throw new Error("AI returned an empty description.");
-
-    descEl.value = out;
-    descEl.dispatchEvent(new Event("input", { bubbles: true }));
-    descEl.focus();
-    toast("Description updated.");
-  } catch (err) {
-    const msg =
-      err?.message ||
-      "Could not generate a description. Make sure OPENAI_API_KEY is set in Vercel environment variables.";
-    setFormMsg(msg);
-  } finally {
-    aiDescBtn.disabled = false;
-    updateAiDescButton();
-  }
 }
 
 function clearTable() {
@@ -347,8 +277,6 @@ function resetForm() {
   unitEl.value = "Each";
   priceEl.value = "0.00";
   showQtyUnitEl.checked = true;
-
-  updateAiDescButton();
 }
 
 function openCreate() {
@@ -377,8 +305,6 @@ function openEdit(p) {
   unitEl.value = p.unit_type || "Each";
   priceEl.value = centsToInput(p.price_per_unit_cents ?? 0);
   showQtyUnitEl.checked = !!p.show_qty_unit_price;
-
-  updateAiDescButton();
 
   dialogTitle.textContent = "Sale item";
   dialogSub.textContent = "Edit details. Changes apply to future quotes (existing quotes keep their snapshot).";
@@ -417,8 +343,6 @@ async function init() {
 
   if (logoutBtn) logoutBtn.addEventListener("click", logout);
   if (cancelBtn) cancelBtn.addEventListener("click", () => closeDialog(dialog));
-  if (descEl) descEl.addEventListener("input", updateAiDescButton);
-  if (aiDescBtn) aiDescBtn.addEventListener("click", handleAiDescClick);
 
   const session = await requireSessionOrRedirect();
   if (!session) return;
