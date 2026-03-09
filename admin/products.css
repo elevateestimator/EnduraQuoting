@@ -1171,32 +1171,17 @@ textarea:focus{
 }
 
 .btn-ai{
-  padding: 8px 10px;
+  padding: 10px 14px;
   font-size: 12px;
   font-weight: 900;
-  border-radius: 10px;
-  white-space: nowrap;
-}
-
-.ai-hint{
-  margin-top: 6px;
-  line-height: 1.35;
-}
-
-.ai-callout{
-  margin-top: 2px;
-  padding: 10px 12px;
   border-radius: 12px;
-  border: 1px solid rgba(31, 78, 216, 0.14);
-  background: rgba(31, 78, 216, 0.06);
-  color: rgba(11, 15, 20, 0.86);
-  font-size: 12px;
-  line-height: 1.4;
-  font-weight: 650;
+  white-space: nowrap;
+  letter-spacing: -0.01em;
+  box-shadow: 0 8px 18px rgba(31, 78, 216, 0.18);
 }
 
-.ai-callout strong{
-  font-weight: 900;
+.btn-ai:hover{
+  transform: translateY(-1px);
 }
 
 .btn[disabled],

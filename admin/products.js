@@ -43,7 +43,6 @@ const msgEl = document.getElementById("product-msg");
 const nameEl = document.getElementById("name");
 const descEl = document.getElementById("description");
 const aiDescBtn = document.getElementById("ai-desc-btn");
-const aiDescHintEl = document.getElementById("ai-desc-hint");
 const unitEl = document.getElementById("unit_type");
 const priceEl = document.getElementById("price_per_unit");
 const showQtyUnitEl = document.getElementById("show_qty_unit");
@@ -157,12 +156,9 @@ function normalizeOptional(s) {
 function updateAiDescButton() {
   if (!aiDescBtn) return;
   const hasText = sanitizeString(descEl?.value).length > 0;
-  aiDescBtn.textContent = hasText ? "AI improves this for me" : "AI writes this for me";
-  if (aiDescHintEl) {
-    aiDescHintEl.textContent = hasText
-      ? "Click this and AI will rewrite what you already typed into a cleaner, more professional description automatically."
-      : "Add the item name, then click this and AI will write a clean, professional description for you automatically.";
-  }
+  aiDescBtn.textContent = hasText
+    ? "Click for AI enhanced description"
+    : "Click for AI description";
 }
 
 async function callAiProductDescription({ name, unit_type, description }) {
@@ -191,7 +187,7 @@ async function handleAiDescClick() {
 
   const name = sanitizeString(nameEl.value);
   if (!name) {
-    setFormMsg("Add the item name first, then click \"AI writes this for me.\"");
+    setFormMsg("Add the item name first.");
     nameEl.focus();
     return;
   }
@@ -201,7 +197,7 @@ async function handleAiDescClick() {
   const action = current ? "enhance" : "create";
 
   aiDescBtn.disabled = true;
-  aiDescBtn.textContent = action === "enhance" ? "AI is improving…" : "AI is writing…";
+  aiDescBtn.textContent = action === "enhance" ? "Enhancing…" : "Generating…";
 
   try {
     const out = await callAiProductDescription({ name, unit_type, description: current });
@@ -210,7 +206,7 @@ async function handleAiDescClick() {
     descEl.value = out;
     descEl.dispatchEvent(new Event("input", { bubbles: true }));
     descEl.focus();
-    toast(action === "enhance" ? "Description improved." : "Description created.");
+    toast(action === "enhance" ? "AI enhanced the description." : "AI created the description.");
   } catch (err) {
     const msg =
       err?.message ||
