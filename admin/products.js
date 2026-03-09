@@ -157,11 +157,11 @@ function normalizeOptional(s) {
 function updateAiDescButton() {
   if (!aiDescBtn) return;
   const hasText = sanitizeString(descEl?.value).length > 0;
-  aiDescBtn.textContent = hasText ? "Enhance this description" : "Create description";
+  aiDescBtn.textContent = hasText ? "AI improves this for me" : "AI writes this for me";
   if (aiDescHintEl) {
     aiDescHintEl.textContent = hasText
-      ? "Use AI to rewrite what you already typed so it sounds cleaner and more professional."
-      : "Optional. Use AI to write a short, professional description for this item.";
+      ? "Click this and AI will rewrite what you already typed into a cleaner, more professional description automatically."
+      : "Add the item name, then click this and AI will write a clean, professional description for you automatically.";
   }
 }
 
@@ -191,7 +191,7 @@ async function handleAiDescClick() {
 
   const name = sanitizeString(nameEl.value);
   if (!name) {
-    setFormMsg("Add a name first, then click Create description.");
+    setFormMsg("Add the item name first, then click \"AI writes this for me.\"");
     nameEl.focus();
     return;
   }
@@ -201,7 +201,7 @@ async function handleAiDescClick() {
   const action = current ? "enhance" : "create";
 
   aiDescBtn.disabled = true;
-  aiDescBtn.textContent = action === "enhance" ? "Enhancing…" : "Creating…";
+  aiDescBtn.textContent = action === "enhance" ? "AI is improving…" : "AI is writing…";
 
   try {
     const out = await callAiProductDescription({ name, unit_type, description: current });
@@ -210,7 +210,7 @@ async function handleAiDescClick() {
     descEl.value = out;
     descEl.dispatchEvent(new Event("input", { bubbles: true }));
     descEl.focus();
-    toast("Description updated.");
+    toast(action === "enhance" ? "Description improved." : "Description created.");
   } catch (err) {
     const msg =
       err?.message ||
