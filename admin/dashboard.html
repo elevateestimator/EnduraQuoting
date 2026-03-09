@@ -161,13 +161,17 @@
             </div>
 
             <div class="canvas-chart" aria-hidden="true">
-              <div class="chart-grid"></div>
-              <svg id="chart-svg" class="chart-svg" viewBox="0 0 1200 260" preserveAspectRatio="none">
-                <path id="chart-open-area" class="chart-open-area" d="" />
-                <path id="chart-open-line" class="chart-open-line" d="" />
-                <path id="chart-accepted-line" class="chart-accepted-line" d="" />
-              </svg>
-              <div id="chart-empty" class="chart-empty" hidden>No quote activity in the last 30 days.</div>
+              <div class="chart-stage">
+                <div id="chart-y-axis" class="chart-y-axis"></div>
+
+                <div class="chart-plot-wrap">
+                  <svg id="chart-svg" class="chart-svg" viewBox="0 0 1200 280" preserveAspectRatio="none"></svg>
+                  <div id="chart-empty" class="chart-empty" hidden>No quote activity in the last 30 days.</div>
+                </div>
+
+                <div class="chart-axis-spacer" aria-hidden="true"></div>
+                <div id="chart-x-axis" class="chart-x-axis"></div>
+              </div>
 
               <div class="chart-foot">
                 <div class="legend">

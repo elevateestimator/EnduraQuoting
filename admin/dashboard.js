@@ -45,10 +45,19 @@ const teamCloseKpi = document.getElementById("team-close-kpi");
 const teamCloseBar = document.getElementById("team-close-bar");
 
 // Chart
-const chartOpenArea = document.getElementById("chart-open-area");
-const chartOpenLine = document.getElementById("chart-open-line");
-const chartAcceptedLine = document.getElementById("chart-accepted-line");
+const chartSvg = document.getElementById("chart-svg");
+const chartYAxis = document.getElementById("chart-y-axis");
+const chartXAxis = document.getElementById("chart-x-axis");
 const chartEmpty = document.getElementById("chart-empty");
+
+const CHART_W = 1200;
+const CHART_H = 280;
+const CHART_TOP = 16;
+const CHART_BOTTOM = 18;
+const CHART_LEFT = 8;
+const CHART_RIGHT = 8;
+const CHART_X_TICKS = [0, 6, 12, 18, 24, 29];
+const CHART_Y_SEGMENTS = 4;
 
 // Dialog
 const createDialog = document.getElementById("create-dialog");
@@ -248,44 +257,206 @@ function buildDailySeries(quotes) {
   return buckets;
 }
 
-function buildLinePath(values, scaleMax, width = 1200, height = 260, top = 18, bottom = 22, left = 12, right = 12) {
-  const usableW = width - left - right;
-  const usableH = height - top - bottom;
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function formatCompactMoney(cents = 0) {
+  const dollars = Math.abs(Number(cents || 0)) / 100;
+  const sign = Number(cents || 0) < 0 ? "-" : "";
+
+  if (dollars >= 1000000) {
+    const v = dollars >= 10000000 ? Math.round(dollars / 1000000) : Math.round((dollars / 1000000) * 10) / 10;
+    return `${sign}$${String(v).replace(/\.0$/, "")}M`;
+  }
+
+  if (dollars >= 1000) {
+    const v = dollars >= 100000 ? Math.round(dollars / 1000) : Math.round((dollars / 1000) * 10) / 10;
+    return `${sign}$${String(v).replace(/\.0$/, "")}k`;
+  }
+
+  return `${sign}$${Math.round(dollars).toLocaleString("en-CA")}`;
+}
+
+function formatAxisDate(date) {
+  try {
+    return new Date(date).toLocaleDateString("en-CA", {
+      month: "short",
+      day: "numeric",
+    });
+  } catch {
+    return "";
+  }
+}
+
+function niceScaleMax(maxCents, segments = CHART_Y_SEGMENTS) {
+  const raw = Math.max(0, Number(maxCents || 0));
+  if (raw <= 0) return 0;
+
+  const roughStep = raw / segments;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)));
+  const residual = roughStep / magnitude;
+
+  let niceResidual = 1;
+  if (residual <= 1) niceResidual = 1;
+  else if (residual <= 2) niceResidual = 2;
+  else if (residual <= 2.5) niceResidual = 2.5;
+  else if (residual <= 5) niceResidual = 5;
+  else niceResidual = 10;
+
+  return niceResidual * magnitude * segments;
+}
+
+function buildChartPoints(values, scaleMax) {
+  const usableW = CHART_W - CHART_LEFT - CHART_RIGHT;
+  const usableH = CHART_H - CHART_TOP - CHART_BOTTOM;
   const max = Math.max(1, Number(scaleMax || 0));
   const step = values.length > 1 ? usableW / (values.length - 1) : usableW;
 
-  return values
-    .map((value, i) => {
-      const x = left + step * i;
-      const y = top + usableH - (Number(value || 0) / max) * usableH;
-      return `${i === 0 ? "M" : "L"}${x.toFixed(2)} ${y.toFixed(2)}`;
-    })
-    .join(" ");
+  return values.map((value, i) => {
+    const x = CHART_LEFT + step * i;
+    const y = CHART_TOP + usableH - (Number(value || 0) / max) * usableH;
+    return { x, y, value: Number(value || 0) };
+  });
 }
 
-function buildAreaPath(values, scaleMax, width = 1200, height = 260, top = 18, bottom = 22, left = 12, right = 12) {
-  const line = buildLinePath(values, scaleMax, width, height, top, bottom, left, right);
-  const usableW = width - left - right;
-  const step = values.length > 1 ? usableW / (values.length - 1) : usableW;
-  const lastX = left + step * (values.length - 1);
-  const baseY = height - bottom;
-  return `${line} L${lastX.toFixed(2)} ${baseY.toFixed(2)} L${left.toFixed(2)} ${baseY.toFixed(2)} Z`;
+function buildSmoothLinePath(points, minY = CHART_TOP, maxY = CHART_H - CHART_BOTTOM) {
+  if (!points.length) return "";
+  if (points.length === 1) return `M ${points[0].x.toFixed(2)} ${points[0].y.toFixed(2)}`;
+
+  let d = `M ${points[0].x.toFixed(2)} ${points[0].y.toFixed(2)}`;
+
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const p0 = points[i - 1] || points[i];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2] || p2;
+
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp1y = clamp(p1.y + (p2.y - p0.y) / 6, minY, maxY);
+    const cp2y = clamp(p2.y - (p3.y - p1.y) / 6, minY, maxY);
+
+    d += ` C ${cp1x.toFixed(2)} ${cp1y.toFixed(2)}, ${cp2x.toFixed(2)} ${cp2y.toFixed(2)}, ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`;
+  }
+
+  return d;
+}
+
+function buildSmoothAreaPath(points, baseY = CHART_H - CHART_BOTTOM) {
+  if (!points.length) return "";
+  const line = buildSmoothLinePath(points);
+  const first = points[0];
+  const last = points[points.length - 1];
+  return `${line} L ${last.x.toFixed(2)} ${baseY.toFixed(2)} L ${first.x.toFixed(2)} ${baseY.toFixed(2)} Z`;
+}
+
+function renderYAxis(scaleMax, tickValues) {
+  if (!chartYAxis) return;
+  if (!tickValues.length) {
+    chartYAxis.innerHTML = `<span class="chart-y-label is-bottom" style="top:100%">$0</span>`;
+    return;
+  }
+
+  const usableH = CHART_H - CHART_TOP - CHART_BOTTOM;
+  const max = Math.max(1, Number(scaleMax || 0));
+
+  chartYAxis.innerHTML = tickValues
+    .map((value, idx) => {
+      const y = CHART_TOP + usableH - (Number(value || 0) / max) * usableH;
+      const classes = ["chart-y-label"];
+      if (idx === 0) classes.push("is-top");
+      if (idx === tickValues.length - 1) classes.push("is-bottom");
+      return `<span class="${classes.join(" ")}" style="top:${(y / CHART_H) * 100}%">${formatCompactMoney(value)}</span>`;
+    })
+    .join("");
+}
+
+function renderXAxis(series) {
+  if (!chartXAxis) return;
+  const usableW = CHART_W - CHART_LEFT - CHART_RIGHT;
+  const step = series.length > 1 ? usableW / (series.length - 1) : usableW;
+
+  chartXAxis.innerHTML = CHART_X_TICKS.map((idx, i) => {
+    const safeIdx = Math.min(series.length - 1, Math.max(0, idx));
+    const x = CHART_LEFT + step * safeIdx;
+    const classes = ["chart-x-label"];
+    if (i === 0) classes.push("is-start");
+    if (i === CHART_X_TICKS.length - 1) classes.push("is-end");
+    return `<span class="${classes.join(" ")}" style="left:${(x / CHART_W) * 100}%">${formatAxisDate(series[safeIdx]?.date)}</span>`;
+  }).join("");
 }
 
 function renderChart(quotes) {
-  if (!chartOpenArea || !chartOpenLine || !chartAcceptedLine) return;
+  if (!chartSvg) return;
 
   const series = buildDailySeries(quotes);
   const openValues = series.map((d) => d.open);
   const acceptedValues = series.map((d) => d.accepted);
   const hasAnyActivity = series.some((d) => d.open > 0 || d.accepted > 0);
 
-  const max = Math.max(1, ...openValues, ...acceptedValues);
+  const maxRaw = Math.max(0, ...openValues, ...acceptedValues);
+  const scaleMax = niceScaleMax(maxRaw);
+  const tickValues = scaleMax > 0
+    ? Array.from({ length: CHART_Y_SEGMENTS + 1 }, (_, i) => scaleMax - (scaleMax / CHART_Y_SEGMENTS) * i)
+    : [0];
 
-  chartOpenArea.setAttribute("d", buildAreaPath(openValues, max, 1200, 260));
-  chartOpenLine.setAttribute("d", buildLinePath(openValues, max, 1200, 260));
-  chartAcceptedLine.setAttribute("d", buildLinePath(acceptedValues, max, 1200, 260));
+  const openPoints = buildChartPoints(openValues, scaleMax || 1);
+  const acceptedPoints = buildChartPoints(acceptedValues, scaleMax || 1);
+  const baseY = CHART_H - CHART_BOTTOM;
+  const xStep = series.length > 1 ? (CHART_W - CHART_LEFT - CHART_RIGHT) / (series.length - 1) : (CHART_W - CHART_LEFT - CHART_RIGHT);
 
+  renderYAxis(scaleMax, tickValues);
+  renderXAxis(series);
+
+  const svgParts = [];
+  svgParts.push(`
+    <defs>
+      <linearGradient id="chart-open-gradient" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#3b5bdb" stop-opacity="0.18"></stop>
+        <stop offset="65%" stop-color="#3b5bdb" stop-opacity="0.06"></stop>
+        <stop offset="100%" stop-color="#3b5bdb" stop-opacity="0"></stop>
+      </linearGradient>
+      <filter id="chart-soft-glow" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#3b5bdb" flood-opacity="0.10"></feDropShadow>
+      </filter>
+    </defs>
+  `);
+
+  svgParts.push('<g class="chart-grid-group">');
+  tickValues.forEach((value) => {
+    const y = scaleMax > 0
+      ? CHART_TOP + (CHART_H - CHART_TOP - CHART_BOTTOM) - (Number(value || 0) / scaleMax) * (CHART_H - CHART_TOP - CHART_BOTTOM)
+      : baseY;
+    svgParts.push(`<line x1="${CHART_LEFT}" y1="${y.toFixed(2)}" x2="${(CHART_W - CHART_RIGHT).toFixed(2)}" y2="${y.toFixed(2)}" class="chart-grid-line ${value === 0 ? 'is-zero' : ''}" />`);
+  });
+  CHART_X_TICKS.forEach((idx) => {
+    const safeIdx = Math.min(series.length - 1, Math.max(0, idx));
+    const x = CHART_LEFT + xStep * safeIdx;
+    svgParts.push(`<line x1="${x.toFixed(2)}" y1="${CHART_TOP}" x2="${x.toFixed(2)}" y2="${baseY.toFixed(2)}" class="chart-grid-vertical" />`);
+  });
+  svgParts.push('</g>');
+
+  const openPath = buildSmoothLinePath(openPoints);
+  const acceptedPath = buildSmoothLinePath(acceptedPoints);
+  const openAreaPath = buildSmoothAreaPath(openPoints, baseY);
+
+  svgParts.push(`<path class="chart-open-area" d="${openAreaPath}" />`);
+  svgParts.push(`<path class="chart-open-line" d="${openPath}" />`);
+  svgParts.push(`<path class="chart-accepted-line" d="${acceptedPath}" />`);
+
+  if (hasAnyActivity) {
+    const latestOpen = [...openPoints].reverse().find((p) => p.value > 0) || openPoints[openPoints.length - 1];
+    const latestAccepted = [...acceptedPoints].reverse().find((p) => p.value > 0) || acceptedPoints[acceptedPoints.length - 1];
+    if (latestOpen) {
+      svgParts.push(`<circle class="chart-open-point" cx="${latestOpen.x.toFixed(2)}" cy="${latestOpen.y.toFixed(2)}" r="4.5" />`);
+    }
+    if (latestAccepted) {
+      svgParts.push(`<circle class="chart-accepted-point" cx="${latestAccepted.x.toFixed(2)}" cy="${latestAccepted.y.toFixed(2)}" r="4" />`);
+    }
+  }
+
+  chartSvg.innerHTML = svgParts.join('');
   if (chartEmpty) chartEmpty.hidden = hasAnyActivity;
 }
 
