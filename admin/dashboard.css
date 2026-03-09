@@ -115,6 +115,7 @@ a{ color: inherit; }
   display:grid;
   place-items:center;
   color: rgba(11, 15, 20, 0.74);
+  flex: 0 0 18px;
 }
 
 .nav-item.active .nav-ico{
@@ -263,6 +264,21 @@ a{ color: inherit; }
   border-color: rgba(15, 23, 42, 0.14);
 }
 
+.range-pill{
+  display:inline-flex;
+  align-items:center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  background: rgba(15, 23, 42, 0.03);
+  color: rgba(11, 15, 20, 0.82);
+  font-weight: 850;
+  font-size: 13px;
+  cursor: default;
+  user-select: none;
+}
+
 .link{
   appearance:none;
   border:0;
@@ -384,6 +400,7 @@ a{ color: inherit; }
   padding: 0;
   border-top: 1px solid rgba(15, 23, 42, 0.10);
   background: #f1f4f8;
+  min-height: 300px;
 }
 
 .chart-grid{
@@ -401,8 +418,41 @@ a{ color: inherit; }
   height: 240px;
   width: 100%;
   display:block;
-  color: rgba(31, 78, 216, 0.90);
   padding: 6px 10px 0;
+  overflow: visible;
+}
+
+.chart-open-area{
+  fill: rgba(31, 78, 216, 0.10);
+}
+
+.chart-open-line{
+  fill: none;
+  stroke: rgba(31, 78, 216, 0.92);
+  stroke-width: 3.5;
+  vector-effect: non-scaling-stroke;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chart-accepted-line{
+  fill: none;
+  stroke: rgba(22, 163, 74, 0.92);
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chart-empty{
+  position:absolute;
+  inset:0;
+  display:grid;
+  place-items:center;
+  color: rgba(90, 101, 114, 0.95);
+  font-weight: 800;
+  font-size: 13px;
+  pointer-events:none;
 }
 
 .chart-foot{
@@ -512,7 +562,7 @@ a{ color: inherit; }
 
 .recent-item{
   display:grid;
-  grid-template-columns: 1fr 140px 130px;
+  grid-template-columns: 1fr 140px;
   gap: 12px;
   align-items:center;
 
@@ -855,9 +905,12 @@ input:focus{
     align-items:flex-start;
     flex-direction:column;
   }
-  .topbar-right{ width:100%; }
+  .topbar-right{ width:100%; flex-wrap:wrap; }
   .topbar-right .btn{ width:100%; }
+  .range-pill{ width:100%; justify-content:center; }
   .dominant-value{ font-size: 44px; }
+  .section-head{ flex-direction: column; align-items: stretch; }
+  .section-actions{ width: 100%; justify-content: space-between; }
 }
 
 /* =========================================================

@@ -1,12 +1,11 @@
 import { supabase } from "../js/api.js";
-import { listQuotes, createQuote } from "../js/quotesApi.js";
+import { createQuote } from "../js/quotesApi.js";
 import { makeDefaultQuoteData } from "../js/quoteDefaults.js";
 
 /**
  * Command Center Dashboard
- * - One dominant metric: Open Pipeline
- * - Recent quotes feed (small, fast)
- * - Everything else is intentionally staged as “coming soon”
+ * - Real last 30 day metrics + chart
+ * - Proper navigation to all built pages
  */
 
 const workspaceNameEl = document.getElementById("workspace-name");
@@ -21,6 +20,12 @@ const createBtnHero = document.getElementById("create-btn-hero");
 const qaCreate = document.getElementById("qa-create");
 const logoutBtn = document.getElementById("logout-btn");
 const qaCustomers = document.getElementById("qa-customers");
+const qaQuotes = document.getElementById("qa-quotes");
+const qaProducts = document.getElementById("qa-products");
+const qaSettings = document.getElementById("qa-settings");
+const btnAllQuotes = document.getElementById("btn-all-quotes");
+const btnViewAllRecent = document.getElementById("btn-view-all-recent");
+const btnLeaderboard = document.getElementById("btn-leaderboard");
 
 // Recent
 const recentLoading = document.getElementById("recent-loading");
@@ -34,6 +39,16 @@ const kpiAccepted = document.getElementById("kpi-accepted");
 const kpiAcceptedValue = document.getElementById("kpi-accepted-value");
 const kpiPipeline = document.getElementById("kpi-pipeline");
 const kpiClose = document.getElementById("kpi-close");
+const teamOpenKpi = document.getElementById("team-open-kpi");
+const teamOpenBar = document.getElementById("team-open-bar");
+const teamCloseKpi = document.getElementById("team-close-kpi");
+const teamCloseBar = document.getElementById("team-close-bar");
+
+// Chart
+const chartOpenArea = document.getElementById("chart-open-area");
+const chartOpenLine = document.getElementById("chart-open-line");
+const chartAcceptedLine = document.getElementById("chart-accepted-line");
+const chartEmpty = document.getElementById("chart-empty");
 
 // Dialog
 const createDialog = document.getElementById("create-dialog");
@@ -45,6 +60,7 @@ const customerNameEl = document.getElementById("customer_name");
 const customerEmailEl = document.getElementById("customer_email");
 
 let toastTimer = null;
+const LAST_30_DAYS = 30;
 
 function toast(msg) {
   if (!toastEl) return;
@@ -175,10 +191,108 @@ function renderRecentItem(q) {
   return item;
 }
 
+function startOfLocalDay(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function addDays(date, days) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function localDayKey(date) {
+  const d = new Date(date);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function last30DayStart() {
+  const today = startOfLocalDay(new Date());
+  return addDays(today, -(LAST_30_DAYS - 1));
+}
+
+function buildDailySeries(quotes) {
+  const start = last30DayStart();
+  const buckets = [];
+  const index = new Map();
+
+  for (let i = 0; i < LAST_30_DAYS; i += 1) {
+    const date = addDays(start, i);
+    const key = localDayKey(date);
+    const row = { date, key, open: 0, accepted: 0 };
+    buckets.push(row);
+    index.set(key, row);
+  }
+
+  for (const q of quotes) {
+    if (!q?.created_at) continue;
+    const key = localDayKey(new Date(q.created_at));
+    const bucket = index.get(key);
+    if (!bucket) continue;
+
+    const cents = Number(q.total_cents || 0);
+    const status = normalizeStatus(q.status);
+
+    if (status === "accepted") {
+      bucket.accepted += cents;
+    } else if (status === "draft" || status === "sent" || status === "viewed") {
+      bucket.open += cents;
+    }
+  }
+
+  return buckets;
+}
+
+function buildLinePath(values, scaleMax, width = 1200, height = 260, top = 18, bottom = 22, left = 12, right = 12) {
+  const usableW = width - left - right;
+  const usableH = height - top - bottom;
+  const max = Math.max(1, Number(scaleMax || 0));
+  const step = values.length > 1 ? usableW / (values.length - 1) : usableW;
+
+  return values
+    .map((value, i) => {
+      const x = left + step * i;
+      const y = top + usableH - (Number(value || 0) / max) * usableH;
+      return `${i === 0 ? "M" : "L"}${x.toFixed(2)} ${y.toFixed(2)}`;
+    })
+    .join(" ");
+}
+
+function buildAreaPath(values, scaleMax, width = 1200, height = 260, top = 18, bottom = 22, left = 12, right = 12) {
+  const line = buildLinePath(values, scaleMax, width, height, top, bottom, left, right);
+  const usableW = width - left - right;
+  const step = values.length > 1 ? usableW / (values.length - 1) : usableW;
+  const lastX = left + step * (values.length - 1);
+  const baseY = height - bottom;
+  return `${line} L${lastX.toFixed(2)} ${baseY.toFixed(2)} L${left.toFixed(2)} ${baseY.toFixed(2)} Z`;
+}
+
+function renderChart(quotes) {
+  if (!chartOpenArea || !chartOpenLine || !chartAcceptedLine) return;
+
+  const series = buildDailySeries(quotes);
+  const openValues = series.map((d) => d.open);
+  const acceptedValues = series.map((d) => d.accepted);
+  const hasAnyActivity = series.some((d) => d.open > 0 || d.accepted > 0);
+
+  const max = Math.max(1, ...openValues, ...acceptedValues);
+
+  chartOpenArea.setAttribute("d", buildAreaPath(openValues, max, 1200, 260));
+  chartOpenLine.setAttribute("d", buildLinePath(openValues, max, 1200, 260));
+  chartAcceptedLine.setAttribute("d", buildLinePath(acceptedValues, max, 1200, 260));
+
+  if (chartEmpty) chartEmpty.hidden = hasAnyActivity;
+}
+
 function updateKPIs(quotes) {
   const counts = { draft: 0, sent: 0, accepted: 0 };
-  let pipeline = 0;        // open pipeline (Draft + Sent/View, exclude Accepted/Cancelled)
-  let acceptedValue = 0;   // total accepted value (all-time for now)
+  let pipeline = 0;
+  let acceptedValue = 0;
 
   for (const q of quotes) {
     const s = normalizeStatus(q.status);
@@ -205,6 +319,17 @@ function updateKPIs(quotes) {
   if (kpiAcceptedValue) kpiAcceptedValue.textContent = formatMoney(acceptedValue, "CAD");
   if (kpiPipeline) kpiPipeline.textContent = formatMoney(pipeline, "CAD");
   if (kpiClose) kpiClose.textContent = closeRate === null ? "—%" : `${closeRate}%`;
+
+  if (teamOpenKpi) teamOpenKpi.textContent = formatMoney(pipeline, "CAD");
+  if (teamCloseKpi) teamCloseKpi.textContent = closeRate === null ? "—%" : `${closeRate}%`;
+  if (teamOpenBar) {
+    const acceptedOrOpen = pipeline + acceptedValue;
+    const pct = acceptedOrOpen > 0 ? Math.round((pipeline / acceptedOrOpen) * 100) : 0;
+    teamOpenBar.style.width = `${Math.min(100, Math.max(0, pct))}%`;
+  }
+  if (teamCloseBar) {
+    teamCloseBar.style.width = `${Math.min(100, Math.max(0, closeRate || 0))}%`;
+  }
 }
 
 async function requireSessionOrRedirect() {
@@ -227,15 +352,6 @@ function setCreateMsg(text) {
   if (createMsg) createMsg.textContent = text || "";
 }
 
-function wireComingSoon() {
-  const soonEls = Array.from(document.querySelectorAll("[data-soon='1']"));
-  for (const el of soonEls) {
-    el.addEventListener("click", () => {
-      toast("Coming next — this page isn’t built yet.");
-    });
-  }
-}
-
 function wireCreateButtons() {
   const opens = [createBtn, createBtnHero, qaCreate].filter(Boolean);
   for (const b of opens) {
@@ -249,46 +365,64 @@ function wireCreateButtons() {
   }
 }
 
+function goTo(path) {
+  window.location.href = path;
+}
+
 function wireRealNav() {
-  // Customers page exists now (no "coming soon" toast)
+  const quoteButtons = [btnAllQuotes, btnViewAllRecent, btnLeaderboard, qaQuotes].filter(Boolean);
+  quoteButtons.forEach((el) => {
+    el.addEventListener("click", () => goTo("./quotes.html"));
+  });
+
   if (qaCustomers) {
-    qaCustomers.addEventListener("click", () => {
-      window.location.href = "./customers.html";
-    });
+    qaCustomers.addEventListener("click", () => goTo("./customers.html"));
+  }
+  if (qaProducts) {
+    qaProducts.addEventListener("click", () => goTo("./products.html"));
+  }
+  if (qaSettings) {
+    qaSettings.addEventListener("click", () => goTo("./settings.html"));
   }
 }
 
-async function loadRecentQuotes() {
+async function loadDashboardQuotes() {
   setError("");
   if (recentEmpty) recentEmpty.hidden = true;
   if (recentList) recentList.innerHTML = "";
   if (recentLoading) recentLoading.hidden = false;
 
   try {
-    // Load more than we render so KPIs feel real
-    const quotes = await listQuotes({ limit: 200 });
+    const since = last30DayStart().toISOString();
+
+    const { data, error } = await supabase
+      .from("quotes")
+      .select("id, quote_no, customer_name, customer_email, total_cents, currency, status, created_at")
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(500);
+
+    if (error) throw error;
+
+    const quotes = data || [];
 
     if (recentLoading) recentLoading.hidden = true;
 
-    if (!quotes?.length) {
+    if (!quotes.length) {
       if (recentEmpty) recentEmpty.hidden = false;
       updateKPIs([]);
+      renderChart([]);
       return;
     }
 
-    const sorted = [...quotes].sort((a, b) => {
-      const da = new Date(a.created_at).getTime();
-      const db = new Date(b.created_at).getTime();
-      return db - da;
-    });
-
-    const recent = sorted.slice(0, 8);
+    const recent = quotes.slice(0, 8);
     for (const q of recent) recentList.appendChild(renderRecentItem(q));
 
-    updateKPIs(sorted);
+    updateKPIs(quotes);
+    renderChart(quotes);
   } catch (e) {
     if (recentLoading) recentLoading.hidden = true;
-    setError(e?.message || "Failed to load quotes.");
+    setError(e?.message || "Failed to load dashboard data.");
   }
 }
 
@@ -311,7 +445,6 @@ function inferWorkspaceName(session) {
 }
 
 async function init() {
-  wireComingSoon();
   wireCreateButtons();
   wireRealNav();
 
@@ -362,7 +495,7 @@ async function init() {
     });
   }
 
-  await loadRecentQuotes();
+  await loadDashboardQuotes();
 }
 
 init();
