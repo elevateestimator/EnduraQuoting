@@ -694,17 +694,23 @@ setLogoWithFallback(docLogoEl, docLogoInitialsEl, initials, primaryLogo, fallbac
   // Contact
   const addr1 = safeStr(company.addr1 || company.address1 || company.address || "");
   const addr2 = safeStr(company.addr2 || company.address2 || "");
+  const phone = safeStr(company.phone);
+  const email = safeStr(company.email || company.owner_email || "");
+  const web = safeStr(company.web || company.website || "");
 
-  $("#v-company-addr1").textContent = addr1;
-  $("#v-company-addr2").textContent = addr2;
-  $("#v-company-phone").textContent = safeStr(company.phone);
-  $("#v-company-email").textContent = safeStr(company.email);
-  $("#v-company-web").textContent = safeStr(company.web);
-
-  // Remove empty contact spans (avoids stray bullets)
-  $$("#v-company-contact span").forEach((el) => {
-    if (!safeStr(el.textContent)) el.remove();
-  });
+  // Rebuild the contact line every render instead of deleting empty spans.
+  // The old approach removed nodes from the DOM on first render, which then
+  // caused the second render after signing to crash before the modal could close.
+  const contactWrap = $("#v-company-contact");
+  if (contactWrap) {
+    contactWrap.innerHTML = "";
+    const parts = [addr1, addr2, phone, email, web].filter((part) => safeStr(part));
+    for (const part of parts) {
+      const span = document.createElement("span");
+      span.textContent = part;
+      contactWrap.appendChild(span);
+    }
+  }
 
   // Meta
   $("#v-meta-quote").textContent = quoteCode;
@@ -808,7 +814,7 @@ setLogoWithFallback(docLogoEl, docLogoInitialsEl, initials, primaryLogo, fallbac
   } else {
     // Not accepted yet
     if (clientSigImg) {
-      clientSigImg.src = "";
+      clientSigImg.removeAttribute("src");
       clientSigImg.hidden = true;
     }
     $("#v-client-name").textContent = "";
@@ -925,49 +931,61 @@ async function submitSignature() {
   sigSubmitBtn.textContent = "Submitting…";
   showBanner("");
 
+  const dataUrl = sigCanvas.toDataURL("image/png");
+  const accepted_date = ymdTodayLocal();
+
   try {
-    // Use the canvas pixels (hi-res) as a PNG data URL
-    const dataUrl = sigCanvas.toDataURL("image/png");
-
-    const accepted_date = ymdTodayLocal();
-
     await postJSON("/api/accept-quote", {
       quote_id: _quoteRow.id,
       signature_data_url: dataUrl,
       accepted_date,
     });
+  } catch (e) {
+    showBanner(e?.message || "Failed to submit signature.");
+    sigSubmitBtn.disabled = false;
+    sigSubmitBtn.textContent = "Sign & Accept";
+    return;
+  }
 
-    // Optimistic UI (instant feedback) — we'll re-fetch right after.
-    try {
-      if (!_quoteData) _quoteData = {};
-      _quoteData.acceptance = {
+  // The signature is confirmed at this point. Update the UI immediately so the
+  // customer never gets stuck staring at an open modal if a follow-up render fails.
+  try {
+    if (!_quoteData || typeof _quoteData !== "object") _quoteData = {};
+
+    _quoteData = {
+      ..._quoteData,
+      acceptance: {
         accepted_at: new Date().toISOString(),
         accepted_date,
+        signature_image_data_url: dataUrl,
         signature_data_url: dataUrl,
         name:
           safeStr(_quoteData?.bill_to?.client_name) ||
           safeStr(_quoteRow?.customer_name) ||
           "Client",
-      };
-      _quoteRow = { ..._quoteRow, status: "signed", data: _quoteData };
-      fillQuote(_quoteRow);
-    } catch {}
+      },
+    };
 
-    // Re-fetch (ensures we render server truth)
-    const refreshed = await getJSON(`/api/public-quote?id=${encodeURIComponent(_quoteRow.id)}`);
-    _quoteRow = refreshed.quote;
-    _quoteData = _quoteRow.data || {};
-
+    _quoteRow = { ..._quoteRow, status: "accepted", data: _quoteData };
     fillQuote(_quoteRow);
+  } catch (renderErr) {
+    console.warn("Optimistic signature render failed:", renderErr);
+  }
 
-    closeSigModal();
+  closeSigModal();
+  showBanner("Thank you — your signature has been confirmed.");
+  window.scrollTo({ top: 0, behavior: "smooth" });
 
-    showBanner("Signed. Thank you — you can download a PDF copy any time.");
-
-    // Scroll back to top for clarity
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  } catch (e) {
-    showBanner(e?.message || "Failed to submit signature.");
+  // Refresh from server truth, but don't break the confirmed UX if this fails.
+  try {
+    const refreshed = await getJSON(`/api/public-quote?id=${encodeURIComponent(_quoteRow.id)}`);
+    if (refreshed?.quote) {
+      _quoteRow = refreshed.quote;
+      _quoteData = _quoteRow.data || {};
+      fillQuote(_quoteRow);
+    }
+  } catch (refreshErr) {
+    console.warn("Quote refresh after signature failed:", refreshErr);
   } finally {
     sigSubmitBtn.disabled = false;
     sigSubmitBtn.textContent = "Sign & Accept";
