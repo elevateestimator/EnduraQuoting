@@ -1,5 +1,4 @@
 import { supabase } from "../js/api.js";
-import { createQuote } from "../js/quotesApi.js";
 import { makeDefaultQuoteData } from "../js/quoteDefaults.js";
 
 /**
@@ -67,11 +66,29 @@ const createForm = document.getElementById("create-form");
 const createCancelBtn = document.getElementById("create-cancel");
 const createSubmitBtn = document.getElementById("create-submit");
 const createMsg = document.getElementById("create-msg");
-const customerNameEl = document.getElementById("customer_name");
-const customerEmailEl = document.getElementById("customer_email");
+const customerSearchEl = document.getElementById("customer_search");
+const customerListEl = document.getElementById("customer_list");
+const customerEmptyEl = document.getElementById("customer_empty");
+const selectedCustomerEl = document.getElementById("selected_customer");
+const selectedCustomerNameEl = document.getElementById("selected_customer_name");
+const selectedCustomerMetaEl = document.getElementById("selected_customer_meta");
+const quickCustomerToggleBtn = document.getElementById("quick_customer_toggle");
+const quickCustomerPanel = document.getElementById("quick_customer_panel");
+const quickCustomerNameEl = document.getElementById("quick_customer_name");
+const quickCustomerCompanyEl = document.getElementById("quick_customer_company");
+const quickCustomerEmailEl = document.getElementById("quick_customer_email");
+const quickCustomerPhoneEl = document.getElementById("quick_customer_phone");
+const quickCustomerAddressEl = document.getElementById("quick_customer_address");
+const quickCustomerCancelBtn = document.getElementById("quick_customer_cancel");
+const quickCustomerSubmitBtn = document.getElementById("quick_customer_submit");
+const quickCustomerMsgEl = document.getElementById("quick_customer_msg");
 
 let toastTimer = null;
 const LAST_30_DAYS = 30;
+let companyId = null;
+let userId = null;
+let allCustomers = [];
+let selectedCustomer = null;
 
 function toast(msg) {
   if (!toastEl) return;
@@ -104,6 +121,276 @@ function closeDialog(d) {
   if (!d) return;
   if (typeof d.close === "function") d.close();
   else d.removeAttribute("open");
+}
+
+function safeStr(v) {
+  return String(v ?? "").trim();
+}
+
+function splitFullName(name) {
+  const parts = safeStr(name).split(/\s+/).filter(Boolean);
+  return {
+    first_name: parts.shift() || null,
+    last_name: parts.join(" ") || null,
+  };
+}
+
+function chooseCustomerDisplayName(c) {
+  const first = safeStr(c?.first_name);
+  const last = safeStr(c?.last_name);
+  const full = [first, last].filter(Boolean).join(" ").trim();
+  const company = safeStr(c?.company_name);
+  if (company && full) return `${full} (${company})`;
+  return company || full || safeStr(c?.email) || "Unnamed customer";
+}
+
+function chooseCustomerMeta(c) {
+  return [safeStr(c?.email), safeStr(c?.phone), safeStr(c?.billing_address)].filter(Boolean).join(" • ") || "No extra details yet";
+}
+
+function customerSearchText(c) {
+  return [
+    chooseCustomerDisplayName(c),
+    safeStr(c?.company_name),
+    safeStr(c?.email),
+    safeStr(c?.phone),
+    safeStr(c?.billing_address),
+  ].join(" ").toLowerCase();
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function setQuickCustomerMsg(text) {
+  if (quickCustomerMsgEl) quickCustomerMsgEl.textContent = text || "";
+}
+
+function resetQuickCustomerForm() {
+  if (quickCustomerNameEl) quickCustomerNameEl.value = "";
+  if (quickCustomerCompanyEl) quickCustomerCompanyEl.value = "";
+  if (quickCustomerEmailEl) quickCustomerEmailEl.value = "";
+  if (quickCustomerPhoneEl) quickCustomerPhoneEl.value = "";
+  if (quickCustomerAddressEl) quickCustomerAddressEl.value = "";
+  setQuickCustomerMsg("");
+}
+
+function toggleQuickCustomerPanel(open) {
+  if (!quickCustomerPanel) return;
+  quickCustomerPanel.hidden = !open;
+  if (quickCustomerToggleBtn) {
+    quickCustomerToggleBtn.textContent = open ? "Hide quick add" : "+ Quick add customer";
+  }
+  if (open) {
+    quickCustomerNameEl?.focus();
+  } else {
+    resetQuickCustomerForm();
+  }
+}
+
+function updateCreateSubmitState() {
+  if (!createSubmitBtn) return;
+  const hasCustomer = !!selectedCustomer;
+  createSubmitBtn.disabled = !hasCustomer;
+  createSubmitBtn.textContent = hasCustomer ? "Create & open" : "Choose customer first";
+}
+
+function setSelectedCustomer(customer) {
+  selectedCustomer = customer || null;
+
+  if (selectedCustomer && selectedCustomerEl) {
+    selectedCustomerEl.hidden = false;
+    if (selectedCustomerNameEl) selectedCustomerNameEl.textContent = chooseCustomerDisplayName(selectedCustomer);
+    if (selectedCustomerMetaEl) selectedCustomerMetaEl.textContent = chooseCustomerMeta(selectedCustomer);
+  } else if (selectedCustomerEl) {
+    selectedCustomerEl.hidden = true;
+    if (selectedCustomerNameEl) selectedCustomerNameEl.textContent = "";
+    if (selectedCustomerMetaEl) selectedCustomerMetaEl.textContent = "";
+  }
+
+  renderCustomerList(customerSearchEl?.value || "");
+  updateCreateSubmitState();
+}
+
+function renderCustomerList(search = "") {
+  if (!customerListEl) return;
+  const q = safeStr(search).toLowerCase();
+  const rows = q ? allCustomers.filter((c) => customerSearchText(c).includes(q)) : [...allCustomers];
+
+  customerListEl.innerHTML = "";
+
+  if (!rows.length) {
+    if (customerEmptyEl) customerEmptyEl.hidden = false;
+    customerListEl.innerHTML = '<div class="customer-loading">No matching customers.</div>';
+    return;
+  }
+
+  if (customerEmptyEl) customerEmptyEl.hidden = true;
+
+  for (const customer of rows) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "customer-option" + (selectedCustomer?.id === customer.id ? " is-selected" : "");
+    btn.innerHTML = `
+      <span class="customer-option-name">${escapeHtml(chooseCustomerDisplayName(customer))}</span>
+      <span class="customer-option-meta">${escapeHtml(chooseCustomerMeta(customer))}</span>
+    `;
+    btn.addEventListener("click", () => {
+      setCreateMsg("");
+      setSelectedCustomer(customer);
+    });
+    customerListEl.appendChild(btn);
+  }
+}
+
+async function loadCustomersForCreateDialog() {
+  if (!customerListEl) return;
+  customerListEl.innerHTML = '<div class="customer-loading">Loading customers…</div>';
+  if (customerEmptyEl) customerEmptyEl.hidden = true;
+
+  const { data, error } = await supabase
+    .from("customers")
+    .select("id, first_name, last_name, company_name, email, phone, billing_address")
+    .limit(300);
+
+  if (error) throw error;
+
+  allCustomers = (data || []).sort((a, b) => chooseCustomerDisplayName(a).localeCompare(chooseCustomerDisplayName(b)));
+  renderCustomerList(customerSearchEl?.value || "");
+}
+
+function buildQuoteSeedFromCustomer(customer) {
+  const customer_name = chooseCustomerDisplayName(customer);
+  const customer_email = safeStr(customer?.email) || null;
+  const data = makeDefaultQuoteData({ customer_name, customer_email });
+  data.customer_id = customer.id;
+  data.bill_to = data.bill_to || {};
+  data.bill_to.client_name = customer_name;
+  data.bill_to.client_email = safeStr(customer?.email);
+  data.bill_to.client_phone = safeStr(customer?.phone);
+  data.bill_to.client_addr = safeStr(customer?.billing_address);
+  return { customer_name, customer_email, data };
+}
+
+async function createCustomerRecord() {
+  const rawName = safeStr(quickCustomerNameEl?.value);
+  if (!rawName) throw new Error("Customer / homeowner name is required.");
+
+  const { first_name, last_name } = splitFullName(rawName);
+  const payloadBase = {
+    first_name,
+    last_name,
+    company_name: safeStr(quickCustomerCompanyEl?.value) || null,
+    email: safeStr(quickCustomerEmailEl?.value) || null,
+    phone: safeStr(quickCustomerPhoneEl?.value) || null,
+    billing_address: safeStr(quickCustomerAddressEl?.value) || null,
+    company_id: companyId,
+    created_by: userId,
+  };
+
+  let result = await supabase
+    .from("customers")
+    .insert(payloadBase)
+    .select("id, first_name, last_name, company_name, email, phone, billing_address")
+    .single();
+
+  if (result.error && /created_by/i.test(String(result.error.message || result.error.details || ""))) {
+    const { created_by, ...fallback } = payloadBase;
+    result = await supabase
+      .from("customers")
+      .insert(fallback)
+      .select("id, first_name, last_name, company_name, email, phone, billing_address")
+      .single();
+  }
+
+  if (result.error) throw result.error;
+  return result.data;
+}
+
+async function handleQuickCustomerCreate() {
+  setQuickCustomerMsg("");
+  setCreateMsg("");
+
+  try {
+    if (quickCustomerSubmitBtn) {
+      quickCustomerSubmitBtn.disabled = true;
+      quickCustomerSubmitBtn.textContent = "Saving…";
+    }
+
+    const customer = await createCustomerRecord();
+    allCustomers = [customer, ...allCustomers.filter((c) => c.id !== customer.id)];
+    if (customerSearchEl) customerSearchEl.value = "";
+    setSelectedCustomer(customer);
+    toggleQuickCustomerPanel(false);
+    toast("Customer created.");
+  } catch (err) {
+    setQuickCustomerMsg(err?.message || "Failed to create customer.");
+  } finally {
+    if (quickCustomerSubmitBtn) {
+      quickCustomerSubmitBtn.disabled = false;
+      quickCustomerSubmitBtn.textContent = "Save customer";
+    }
+  }
+}
+
+async function openCreateQuoteDialog() {
+  setError("");
+  setCreateMsg("");
+  setSelectedCustomer(null);
+  if (customerSearchEl) customerSearchEl.value = "";
+  toggleQuickCustomerPanel(false);
+  openDialog(createDialog);
+  customerSearchEl?.focus();
+
+  try {
+    await loadCustomersForCreateDialog();
+  } catch (err) {
+    setCreateMsg(err?.message || "Failed to load customers.");
+    if (customerListEl) customerListEl.innerHTML = '<div class="customer-loading">Could not load customers.</div>';
+  }
+}
+
+async function getCompanyContext(uid) {
+  const { data, error } = await supabase
+    .from("company_members")
+    .select("company_id, role")
+    .eq("user_id", uid)
+    .limit(1);
+
+  if (error) throw error;
+  return data?.[0] || null;
+}
+
+async function createQuoteShellFromSelectedCustomer() {
+  if (!selectedCustomer) throw new Error("Choose a customer first.");
+  const seed = buildQuoteSeedFromCustomer(selectedCustomer);
+
+  const payloadBase = {
+    customer_name: seed.customer_name,
+    customer_email: seed.customer_email,
+    customer_id: selectedCustomer.id,
+    total_cents: 0,
+    currency: "CAD",
+    status: "draft",
+    data: seed.data,
+    company_id: companyId,
+    created_by: userId,
+  };
+
+  let result = await supabase.from("quotes").insert(payloadBase).select("id, quote_no").single();
+
+  if (result.error && /customer_id/i.test(String(result.error.message || result.error.details || ""))) {
+    const { customer_id, ...fallback } = payloadBase;
+    result = await supabase.from("quotes").insert(fallback).select("id, quote_no").single();
+  }
+
+  if (result.error) throw result.error;
+  return result.data;
 }
 
 function formatMoney(cents = 0, currency = "CAD") {
@@ -660,13 +947,7 @@ function setCreateMsg(text) {
 function wireCreateButtons() {
   const opens = [createBtn, createBtnHero, qaCreate].filter(Boolean);
   for (const b of opens) {
-    b.addEventListener("click", () => {
-      setCreateMsg("");
-      customerNameEl.value = "";
-      customerEmailEl.value = "";
-      openDialog(createDialog);
-      customerNameEl.focus();
-    });
+    b.addEventListener("click", openCreateQuoteDialog);
   }
 }
 
@@ -762,16 +1043,32 @@ async function init() {
   if (userEmailEl) userEmailEl.textContent = session.user.email || "";
   if (workspaceNameEl) workspaceNameEl.textContent = inferWorkspaceName(session);
 
+  try {
+    userId = session.user.id;
+    const membership = await getCompanyContext(userId);
+    companyId = membership?.company_id || null;
+
+    if (!companyId) {
+      setError("No company membership found for this account. Create a company or ask an admin to invite you.");
+      [createBtn, createBtnHero, qaCreate].filter(Boolean).forEach((el) => (el.disabled = true));
+    }
+  } catch (err) {
+    setError(err?.message || "Could not load company membership.");
+    [createBtn, createBtnHero, qaCreate].filter(Boolean).forEach((el) => (el.disabled = true));
+  }
+
   if (createForm) {
+    customerSearchEl?.addEventListener("input", () => renderCustomerList(customerSearchEl.value || ""));
+    quickCustomerToggleBtn?.addEventListener("click", () => toggleQuickCustomerPanel(quickCustomerPanel?.hidden ?? true));
+    quickCustomerCancelBtn?.addEventListener("click", () => toggleQuickCustomerPanel(false));
+    quickCustomerSubmitBtn?.addEventListener("click", handleQuickCustomerCreate);
+
     createForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       setCreateMsg("");
 
-      const customer_name = customerNameEl.value.trim();
-      const customer_email = customerEmailEl.value.trim() || null;
-
-      if (!customer_name) {
-        setCreateMsg("Customer name is required.");
+      if (!selectedCustomer) {
+        setCreateMsg("Choose a customer first.");
         return;
       }
 
@@ -779,23 +1076,14 @@ async function init() {
         createSubmitBtn.disabled = true;
         createSubmitBtn.textContent = "Creating…";
 
-        const data = makeDefaultQuoteData({ customer_name, customer_email });
-
-        const q = await createQuote({
-          customer_name,
-          customer_email,
-          total_cents: 0,
-          currency: "CAD",
-          data,
-        });
+        const q = await createQuoteShellFromSelectedCustomer();
 
         closeDialog(createDialog);
         window.location.href = `./quote.html?id=${q.id}`;
       } catch (err) {
         setCreateMsg(err?.message || "Failed to create quote.");
       } finally {
-        createSubmitBtn.disabled = false;
-        createSubmitBtn.textContent = "Create & open";
+        updateCreateSubmitState();
       }
     });
   }

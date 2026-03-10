@@ -286,26 +286,85 @@
 
     <!-- Create Quote Dialog -->
     <dialog id="create-dialog" class="dialog">
-      <form id="create-form" class="dialog-form" method="dialog">
+      <form id="create-form" class="dialog-form quote-create-form" method="dialog">
         <h2>Create quote</h2>
         <p class="muted small" style="margin: 0 0 10px">
-          Creates a draft shell. Add scope + items on the next screen.
+          Choose a saved customer first, or quick add one right here. The quote will be attached to that customer record.
         </p>
 
         <label class="field">
-          <span>Customer name</span>
-          <input id="customer_name" type="text" required placeholder="John Smith" />
+          <span>Choose customer</span>
+          <input
+            id="customer_search"
+            type="search"
+            placeholder="Search by name, company, email, or phone…"
+            autocomplete="off"
+          />
         </label>
 
-        <label class="field">
-          <span>Customer email (optional)</span>
-          <input id="customer_email" type="email" placeholder="john@email.com" />
-        </label>
+        <div id="customer_list" class="customer-list" role="listbox" aria-label="Saved customers"></div>
+        <div id="customer_empty" class="customer-empty" hidden>
+          No saved customers yet. Use quick add below.
+        </div>
+
+        <div id="selected_customer" class="selected-customer" hidden>
+          <div class="selected-label">Selected customer</div>
+          <div id="selected_customer_name" class="selected-name">—</div>
+          <div id="selected_customer_meta" class="selected-meta">—</div>
+        </div>
+
+        <div class="create-divider">
+          <span>or</span>
+          <button id="quick_customer_toggle" class="btn btn-secondary" type="button">
+            + Quick add customer
+          </button>
+        </div>
+
+        <section id="quick_customer_panel" class="quick-customer-panel" hidden>
+          <div class="quick-panel-head">
+            <div class="quick-title">Quick add customer</div>
+            <div class="muted small">Save the customer now, then the quote opens already attached to them.</div>
+          </div>
+
+          <div class="customer-grid">
+            <label class="field customer-grid-full">
+              <span>Customer / homeowner name</span>
+              <input id="quick_customer_name" type="text" placeholder="John Smith" />
+            </label>
+
+            <label class="field">
+              <span>Company (optional)</span>
+              <input id="quick_customer_company" type="text" placeholder="Smith Roofing" />
+            </label>
+
+            <label class="field">
+              <span>Email (optional)</span>
+              <input id="quick_customer_email" type="email" placeholder="john@email.com" />
+            </label>
+
+            <label class="field">
+              <span>Phone (optional)</span>
+              <input id="quick_customer_phone" type="text" placeholder="(555) 555-5555" />
+            </label>
+
+            <label class="field customer-grid-full">
+              <span>Billing address (optional)</span>
+              <input id="quick_customer_address" type="text" placeholder="123 Main St" />
+            </label>
+          </div>
+
+          <div class="dialog-actions">
+            <button id="quick_customer_cancel" class="btn btn-quiet" type="button">Close</button>
+            <button id="quick_customer_submit" class="btn btn-primary" type="button">Save customer</button>
+          </div>
+
+          <div id="quick_customer_msg" class="muted small"></div>
+        </section>
 
         <div class="dialog-actions">
           <button id="create-cancel" class="btn btn-quiet" type="button">Cancel</button>
-          <button id="create-submit" class="btn btn-primary" type="submit">
-            Create & open
+          <button id="create-submit" class="btn btn-primary" type="submit" disabled>
+            Choose customer first
           </button>
         </div>
 
