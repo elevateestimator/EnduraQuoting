@@ -151,6 +151,9 @@
 
           <div class="topbar-right">
             <a class="btn btn-secondary" href="./customers.html">All customers</a>
+            <button id="btn-edit-customer" class="btn btn-secondary" type="button">
+              Edit customer
+            </button>
             <button id="btn-create-quote" class="btn btn-primary" type="button">
               Create quote
             </button>
@@ -286,6 +289,62 @@
         </main>
       </div>
     </div>
+
+    <dialog id="customer-edit-dialog" class="dialog">
+      <form id="customer-edit-form" class="dialog-form" method="dialog">
+        <h2>Edit customer</h2>
+        <p class="muted small" style="margin: 0 0 10px">
+          Update this customer for future quotes and quick access.
+        </p>
+
+        <div class="form-grid">
+          <label class="field">
+            <span>First name</span>
+            <input id="edit_first_name" type="text" required placeholder="John" />
+          </label>
+
+          <label class="field">
+            <span>Last name</span>
+            <input id="edit_last_name" type="text" required placeholder="Smith" />
+          </label>
+        </div>
+
+        <label class="field">
+          <span>Company name (optional)</span>
+          <input id="edit_company_name" type="text" placeholder="Smith Holdings" />
+        </label>
+
+        <label class="field">
+          <span>Billing address</span>
+          <textarea
+            id="edit_billing_address"
+            rows="3"
+            placeholder="Street, city, province, postal code"
+          ></textarea>
+        </label>
+
+        <div class="form-grid">
+          <label class="field">
+            <span>Email</span>
+            <input id="edit_email" type="email" placeholder="john@email.com" />
+          </label>
+
+          <label class="field">
+            <span>Phone</span>
+            <input id="edit_phone" type="tel" placeholder="(555) 555‑5555" />
+          </label>
+        </div>
+
+        <div class="dialog-actions">
+          <button id="customer-edit-cancel" class="btn btn-quiet" type="button">Cancel</button>
+          <button id="customer-edit-submit" class="btn btn-primary" type="submit">
+            Save changes
+          </button>
+        </div>
+
+        <div id="customer-edit-msg" class="muted small"></div>
+      </form>
+    </dialog>
 
     <div id="toast" class="toast" hidden></div>
 

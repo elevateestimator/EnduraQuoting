@@ -8,6 +8,7 @@ import { makeDefaultQuoteData } from "../js/quoteDefaults.js";
  * - Shows quotes only for this customer
  *   (queries server-side by customer_id when available, else falls back to json/email/name)
  * - Actions: Open, New version, Cancel
+ * - Can edit the customer directly from the detail page
  */
 
 const workspaceNameEl = document.getElementById("workspace-name");
@@ -19,6 +20,7 @@ const toastEl = document.getElementById("toast");
 let toastTimer = null;
 
 const btnCreateQuote = document.getElementById("btn-create-quote");
+const btnEditCustomer = document.getElementById("btn-edit-customer");
 const btnCopyEmail = document.getElementById("btn-copy-email");
 
 const pageH1 = document.getElementById("page-h1");
@@ -41,6 +43,19 @@ const quotesLoadingEl = document.getElementById("quotes-loading");
 const quotesEmptyEl = document.getElementById("quotes-empty");
 const quotesTableWrap = document.getElementById("quotes-table-wrap");
 const quotesBody = document.getElementById("quotes-body");
+
+// Edit dialog
+const editDialog = document.getElementById("customer-edit-dialog");
+const editForm = document.getElementById("customer-edit-form");
+const editCancelBtn = document.getElementById("customer-edit-cancel");
+const editSubmitBtn = document.getElementById("customer-edit-submit");
+const editMsgEl = document.getElementById("customer-edit-msg");
+const editFirstNameEl = document.getElementById("edit_first_name");
+const editLastNameEl = document.getElementById("edit_last_name");
+const editCompanyNameEl = document.getElementById("edit_company_name");
+const editBillingAddressEl = document.getElementById("edit_billing_address");
+const editEmailEl = document.getElementById("edit_email");
+const editPhoneEl = document.getElementById("edit_phone");
 
 const params = new URLSearchParams(window.location.search);
 const customerId = params.get("id");
@@ -67,6 +82,23 @@ function setError(message) {
   }
   errorBox.hidden = false;
   errorBox.textContent = message;
+}
+
+function setEditMsg(message) {
+  if (!editMsgEl) return;
+  editMsgEl.textContent = message || "";
+}
+
+function openDialog(d) {
+  if (!d) return;
+  if (typeof d.showModal === "function") d.showModal();
+  else d.setAttribute("open", "");
+}
+
+function closeDialog(d) {
+  if (!d) return;
+  if (typeof d.close === "function") d.close();
+  else d.removeAttribute("open");
 }
 
 function wireComingSoon() {
@@ -109,6 +141,15 @@ function formatDateShort(iso) {
   } catch {
     return iso ?? "";
   }
+}
+
+function sanitizeString(s) {
+  return String(s || "").trim();
+}
+
+function normalizeOptional(s) {
+  const v = sanitizeString(s);
+  return v ? v : null;
 }
 
 function normalizeStatus(status) {
@@ -162,9 +203,28 @@ function safeLower(s) {
 }
 
 function customerFullName(c) {
-  const first = String(c?.first_name || "").trim();
-  const last = String(c?.last_name || "").trim();
-  return [first, last].filter(Boolean).join(" ").trim();
+  const first = sanitizeString(c?.first_name || c?.firstName || "");
+  const last = sanitizeString(c?.last_name || c?.lastName || "");
+  const full = [first, last].filter(Boolean).join(" ").trim();
+  return full || sanitizeString(c?.full_name || c?.fullName || c?.name || c?.customer_name || "");
+}
+
+function customerCompanyName(c) {
+  return sanitizeString(
+    c?.company_name || c?.companyName || c?.company || c?.business_name || c?.businessName || c?.organization || c?.org || ""
+  );
+}
+
+function customerEmail(c) {
+  return sanitizeString(c?.email || c?.customer_email || c?.email_address || "");
+}
+
+function customerPhone(c) {
+  return sanitizeString(c?.phone || c?.phone_number || c?.mobile || "");
+}
+
+function customerAddress(c) {
+  return sanitizeString(c?.billing_address || c?.billingAddress || c?.address || c?.customer_address || "");
 }
 
 // --- Quote loading (server-side filtering) ---------------------------------
@@ -209,7 +269,7 @@ async function fetchQuotesByDataCustomerId(id) {
 }
 
 async function fetchQuotesByEmail(email) {
-  const e = String(email || "").trim();
+  const e = sanitizeString(email);
   if (!e) return [];
   const { data, error } = await supabase
     .from("quotes")
@@ -223,7 +283,7 @@ async function fetchQuotesByEmail(email) {
 }
 
 async function fetchQuotesByName(fullName) {
-  const n = String(fullName || "").trim();
+  const n = sanitizeString(fullName);
   if (!n) return [];
   const { data, error } = await supabase
     .from("quotes")
@@ -252,7 +312,7 @@ function dedupeQuotes(...lists) {
 async function fetchCustomerQuotes(c) {
   if (!c?.id) return [];
 
-  const email = String(c.email || "").trim();
+  const email = customerEmail(c);
   const fullName = customerFullName(c);
 
   let customerIdColumnOK = true;
@@ -481,32 +541,103 @@ async function loadCustomer() {
   return data;
 }
 
+function populateEditForm(c) {
+  if (!c) return;
+  setEditMsg("");
+  editFirstNameEl.value = sanitizeString(c?.first_name || c?.firstName || "");
+  editLastNameEl.value = sanitizeString(c?.last_name || c?.lastName || "");
+  editCompanyNameEl.value = customerCompanyName(c);
+  editBillingAddressEl.value = customerAddress(c);
+  editEmailEl.value = customerEmail(c);
+  editPhoneEl.value = customerPhone(c);
+}
+
+function openEditCustomer() {
+  if (!customer) return;
+  populateEditForm(customer);
+  openDialog(editDialog);
+  editFirstNameEl?.focus();
+}
+
 function setCustomerUI(c) {
   const full = customerFullName(c) || "Customer";
-  const company = c.company_name ? String(c.company_name) : "—";
+  const company = customerCompanyName(c);
+  const email = customerEmail(c);
+  const phone = customerPhone(c);
+  const address = customerAddress(c);
 
   pageH1.textContent = full;
-  pageSubtitle.textContent = c.company_name ? "Customer profile + quote history." : "Customer profile + quote history.";
+  pageSubtitle.textContent = company ? `${company} • Customer profile + quote history.` : "Customer profile + quote history.";
 
   custNameEl.textContent = full;
-  custCompanyEl.textContent = c.company_name ? c.company_name : "Company: —";
+  custCompanyEl.textContent = company ? `Company • ${company}` : "Company • —";
 
-  custEmailEl.textContent = c.email || "—";
-  custPhoneEl.textContent = c.phone || "—";
-  custAddressEl.textContent = c.billing_address || "—";
+  custEmailEl.textContent = email || "—";
+  custPhoneEl.textContent = phone || "—";
+  custAddressEl.textContent = address || "—";
 
-  if (c.email) {
-    btnCopyEmail.hidden = false;
-    btnCopyEmail.addEventListener("click", async () => {
-      try {
-        await navigator.clipboard.writeText(String(c.email));
-        toast("Email copied.");
-      } catch {
-        toast("Copy failed.");
-      }
-    });
-  } else {
-    btnCopyEmail.hidden = true;
+  if (btnCopyEmail) {
+    if (email) {
+      btnCopyEmail.hidden = false;
+      btnCopyEmail.onclick = async () => {
+        try {
+          await navigator.clipboard.writeText(email);
+          toast("Email copied.");
+        } catch {
+          toast("Copy failed.");
+        }
+      };
+    } else {
+      btnCopyEmail.hidden = true;
+      btnCopyEmail.onclick = null;
+    }
+  }
+}
+
+async function updateCustomerRecord() {
+  if (!customer?.id) return;
+
+  const first_name = sanitizeString(editFirstNameEl.value);
+  const last_name = sanitizeString(editLastNameEl.value);
+
+  if (!first_name || !last_name) {
+    setEditMsg("First name and last name are required.");
+    return;
+  }
+
+  const payload = {
+    first_name,
+    last_name,
+    company_name: normalizeOptional(editCompanyNameEl.value),
+    billing_address: normalizeOptional(editBillingAddressEl.value),
+    email: normalizeOptional(editEmailEl.value),
+    phone: normalizeOptional(editPhoneEl.value),
+  };
+
+  try {
+    setError("");
+    setEditMsg("");
+    editSubmitBtn.disabled = true;
+    editSubmitBtn.textContent = "Saving…";
+
+    const { data, error } = await supabase
+      .from("customers")
+      .update(payload)
+      .eq("id", customer.id)
+      .select("*")
+      .single();
+
+    if (error) throw error;
+
+    customer = data || { ...customer, ...payload };
+    setCustomerUI(customer);
+    closeDialog(editDialog);
+    toast("Customer updated.");
+  } catch (e) {
+    setEditMsg(e?.message || "Failed to save customer.");
+  } finally {
+    editSubmitBtn.disabled = false;
+    editSubmitBtn.textContent = "Save changes";
   }
 }
 
@@ -514,7 +645,7 @@ async function createQuoteForCustomer() {
   if (!customer) return;
 
   const name = customerFullName(customer) || "(Customer)";
-  const email = customer.email || null;
+  const email = customerEmail(customer) || null;
 
   try {
     btnCreateQuote.disabled = true;
@@ -603,6 +734,12 @@ async function init() {
 
   if (logoutBtn) logoutBtn.addEventListener("click", logout);
   if (btnCreateQuote) btnCreateQuote.addEventListener("click", createQuoteForCustomer);
+  if (btnEditCustomer) btnEditCustomer.addEventListener("click", openEditCustomer);
+  if (editCancelBtn) editCancelBtn.addEventListener("click", () => closeDialog(editDialog));
+  if (editForm) editForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    await updateCustomerRecord();
+  });
 
   const session = await requireSessionOrRedirect();
   if (!session) return;
