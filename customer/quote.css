@@ -835,3 +835,118 @@ body{
   cursor: not-allowed;
   box-shadow: none;
 }
+
+/* Customer quote payment schedule polish (non-destructive)
+   Append this to the bottom of the current customer quote.css
+   so nothing else on the page gets reverted. */
+
+/* Give the helper text breathing room above the schedule grid */
+#payment-schedule-card .helper{
+  margin: 10px 2px 16px;
+  line-height: 1.45;
+}
+
+#payment-schedule-card .table-wrap{
+  margin-top: 2px;
+}
+
+#payment-schedule-card .ps-table tbody td{
+  word-break: break-word;
+}
+
+#payment-schedule-card .ps-footer{
+  margin-top: 12px;
+}
+
+/* Mobile: turn the payment schedule grid into stacked cards so nothing gets cut off */
+@media (max-width: 720px){
+  #payment-schedule-card .helper{
+    margin: 10px 2px 14px;
+  }
+
+  #payment-schedule-card .table-wrap{
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+    overflow: visible;
+  }
+
+  #payment-schedule-card .ps-table{
+    width: 100%;
+    table-layout: auto;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  #payment-schedule-card .ps-table colgroup,
+  #payment-schedule-card .ps-table thead{
+    display: none;
+  }
+
+  #payment-schedule-card .ps-table,
+  #payment-schedule-card .ps-table tbody,
+  #payment-schedule-card .ps-table tr,
+  #payment-schedule-card .ps-table td{
+    display: block;
+    width: 100%;
+  }
+
+  #payment-schedule-card .ps-table tbody tr{
+    margin: 0 0 10px;
+    border: 1px solid #e7e9f2;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #ffffff;
+    box-shadow: 0 1px 0 rgba(2,6,23,0.04);
+  }
+
+  #payment-schedule-card .ps-table tbody tr:last-child{
+    margin-bottom: 0;
+  }
+
+  #payment-schedule-card .ps-table tbody td{
+    border-bottom: 1px solid #e7e9f2;
+    padding: 10px 12px;
+    text-align: left !important;
+    display: grid;
+    grid-template-columns: minmax(78px, auto) 1fr;
+    gap: 12px;
+    align-items: start;
+  }
+
+  #payment-schedule-card .ps-table tbody td:last-child{
+    border-bottom: 0;
+  }
+
+  #payment-schedule-card .ps-table tbody td:nth-child(1)::before,
+  #payment-schedule-card .ps-table tbody td:nth-child(2)::before,
+  #payment-schedule-card .ps-table tbody td:nth-child(3)::before{
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: .10em;
+    text-transform: uppercase;
+    color: #6b7280;
+    line-height: 1.3;
+    padding-top: 2px;
+  }
+
+  #payment-schedule-card .ps-table tbody td:nth-child(1)::before{ content: "Step"; }
+  #payment-schedule-card .ps-table tbody td:nth-child(2)::before{ content: "Percent"; }
+  #payment-schedule-card .ps-table tbody td:nth-child(3)::before{ content: "Amount"; }
+
+  #payment-schedule-card .ps-table tbody td:nth-child(1){
+    font-weight: 900;
+  }
+
+  #payment-schedule-card .ps-table tbody td:nth-child(2),
+  #payment-schedule-card .ps-table tbody td:nth-child(3){
+    font-variant-numeric: tabular-nums;
+  }
+
+  #payment-schedule-card .ps-footer{
+    margin-top: 12px;
+    row-gap: 6px;
+  }
+}
+
