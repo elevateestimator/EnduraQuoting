@@ -49,15 +49,17 @@ const chartSvg = document.getElementById("chart-svg");
 const chartYAxis = document.getElementById("chart-y-axis");
 const chartXAxis = document.getElementById("chart-x-axis");
 const chartEmpty = document.getElementById("chart-empty");
+const chartPlotWrap = document.querySelector(".chart-plot-wrap");
+let chartTooltip = document.getElementById("chart-tooltip");
 
 const CHART_W = 1200;
 const CHART_H = 280;
-const CHART_TOP = 16;
-const CHART_BOTTOM = 18;
-const CHART_LEFT = 8;
-const CHART_RIGHT = 8;
+const CHART_TOP = 8;
+const CHART_BOTTOM = 20;
+const CHART_LEFT = 6;
+const CHART_RIGHT = 6;
 const CHART_X_TICKS = [0, 6, 12, 18, 24, 29];
-const CHART_Y_SEGMENTS = 4;
+const CHART_Y_SEGMENTS = 5;
 
 // Dialog
 const createDialog = document.getElementById("create-dialog");
@@ -289,6 +291,32 @@ function formatAxisDate(date) {
   }
 }
 
+
+function formatTooltipDate(date) {
+  try {
+    return new Date(date).toLocaleDateString("en-CA", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return "";
+  }
+}
+
+function ensureChartTooltip() {
+  if (!chartPlotWrap) return null;
+  if (!chartTooltip) {
+    chartTooltip = document.createElement("div");
+    chartTooltip.id = "chart-tooltip";
+    chartTooltip.className = "chart-tooltip";
+    chartTooltip.hidden = true;
+    chartTooltip.setAttribute("aria-hidden", "true");
+    chartPlotWrap.appendChild(chartTooltip);
+  }
+  return chartTooltip;
+}
+
 function niceScaleMax(maxCents, segments = CHART_Y_SEGMENTS) {
   const raw = Math.max(0, Number(maxCents || 0));
   if (raw <= 0) return 0;
@@ -296,13 +324,8 @@ function niceScaleMax(maxCents, segments = CHART_Y_SEGMENTS) {
   const roughStep = raw / segments;
   const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)));
   const residual = roughStep / magnitude;
-
-  let niceResidual = 1;
-  if (residual <= 1) niceResidual = 1;
-  else if (residual <= 2) niceResidual = 2;
-  else if (residual <= 2.5) niceResidual = 2.5;
-  else if (residual <= 5) niceResidual = 5;
-  else niceResidual = 10;
+  const niceSteps = [1, 1.25, 1.5, 2, 2.5, 3, 4, 5, 6, 7.5, 8, 10];
+  const niceResidual = niceSteps.find((step) => residual <= step) || 10;
 
   return niceResidual * magnitude * segments;
 }
@@ -387,6 +410,103 @@ function renderXAxis(series) {
   }).join("");
 }
 
+function hideChartTooltipAndHover() {
+  if (chartTooltip) chartTooltip.hidden = true;
+  const hoverGroup = chartSvg?.querySelector("#chart-hover-group");
+  if (hoverGroup) hoverGroup.setAttribute("display", "none");
+}
+
+function positionChartTooltip(index, series, openPoints, acceptedPoints) {
+  const tooltip = ensureChartTooltip();
+  if (!tooltip || !chartPlotWrap) return;
+
+  const day = series[index];
+  tooltip.innerHTML = `
+    <div class="chart-tooltip-date">${formatTooltipDate(day.date)}</div>
+    <div class="chart-tooltip-row">
+      <span class="chart-tooltip-swatch open"></span>
+      <span class="chart-tooltip-label">Open pipeline</span>
+      <span class="chart-tooltip-value">${formatMoney(day.open, "CAD")}</span>
+    </div>
+    <div class="chart-tooltip-row">
+      <span class="chart-tooltip-swatch accepted"></span>
+      <span class="chart-tooltip-label">Accepted</span>
+      <span class="chart-tooltip-value">${formatMoney(day.accepted, "CAD")}</span>
+    </div>
+  `;
+  tooltip.hidden = false;
+
+  const wrapRect = chartPlotWrap.getBoundingClientRect();
+  const anchorPoint = openPoints[index] && acceptedPoints[index]
+    ? (openPoints[index].y <= acceptedPoints[index].y ? openPoints[index] : acceptedPoints[index])
+    : (openPoints[index] || acceptedPoints[index]);
+
+  const anchorX = (anchorPoint.x / CHART_W) * wrapRect.width;
+  const anchorY = (anchorPoint.y / CHART_H) * wrapRect.height;
+
+  const tooltipRect = tooltip.getBoundingClientRect();
+  let left = anchorX + 14;
+  if (left + tooltipRect.width > wrapRect.width - 10) {
+    left = anchorX - tooltipRect.width - 14;
+  }
+  left = Math.max(10, Math.min(left, wrapRect.width - tooltipRect.width - 10));
+
+  let top = anchorY - tooltipRect.height - 12;
+  if (top < 10) top = anchorY + 14;
+  top = Math.max(10, Math.min(top, wrapRect.height - tooltipRect.height - 10));
+
+  tooltip.style.left = `${left}px`;
+  tooltip.style.top = `${top}px`;
+}
+
+function showChartHover(index, series, openPoints, acceptedPoints, baseY) {
+  const hoverGroup = chartSvg?.querySelector("#chart-hover-group");
+  const hoverLine = chartSvg?.querySelector("#chart-hover-line");
+  const hoverOpen = chartSvg?.querySelector("#chart-hover-open");
+  const hoverAccepted = chartSvg?.querySelector("#chart-hover-accepted");
+  if (!hoverGroup || !hoverLine || !hoverOpen || !hoverAccepted) return;
+
+  const openPoint = openPoints[index];
+  const acceptedPoint = acceptedPoints[index];
+
+  hoverGroup.setAttribute("display", "block");
+  hoverLine.setAttribute("x1", openPoint.x.toFixed(2));
+  hoverLine.setAttribute("x2", openPoint.x.toFixed(2));
+  hoverLine.setAttribute("y1", CHART_TOP.toFixed(2));
+  hoverLine.setAttribute("y2", baseY.toFixed(2));
+
+  hoverOpen.setAttribute("cx", openPoint.x.toFixed(2));
+  hoverOpen.setAttribute("cy", openPoint.y.toFixed(2));
+  hoverAccepted.setAttribute("cx", acceptedPoint.x.toFixed(2));
+  hoverAccepted.setAttribute("cy", acceptedPoint.y.toFixed(2));
+
+  positionChartTooltip(index, series, openPoints, acceptedPoints);
+}
+
+function wireChartHover(series, openPoints, acceptedPoints, baseY) {
+  const hitArea = chartSvg?.querySelector(".chart-hit-area");
+  if (!hitArea || !chartSvg || !chartPlotWrap || !series.length) return;
+
+  const usableW = CHART_W - CHART_LEFT - CHART_RIGHT;
+  const step = series.length > 1 ? usableW / (series.length - 1) : usableW;
+
+  const getIndexFromEvent = (event) => {
+    const rect = chartSvg.getBoundingClientRect();
+    const x = ((event.clientX - rect.left) / rect.width) * CHART_W;
+    const local = clamp(x - CHART_LEFT, 0, usableW);
+    return clamp(Math.round(local / step), 0, series.length - 1);
+  };
+
+  const onMove = (event) => {
+    const index = getIndexFromEvent(event);
+    showChartHover(index, series, openPoints, acceptedPoints, baseY);
+  };
+
+  hitArea.addEventListener("mouseenter", onMove);
+  hitArea.addEventListener("mousemove", onMove);
+  hitArea.addEventListener("mouseleave", hideChartTooltipAndHover);
+}
+
 function renderChart(quotes) {
   if (!chartSvg) return;
 
@@ -456,8 +576,22 @@ function renderChart(quotes) {
     }
   }
 
+  svgParts.push(`
+    <g id="chart-hover-group" display="none">
+      <line id="chart-hover-line" class="chart-hover-line" x1="0" y1="${CHART_TOP}" x2="0" y2="${baseY}" />
+      <circle id="chart-hover-open" class="chart-hover-point open" cx="0" cy="0" r="5"></circle>
+      <circle id="chart-hover-accepted" class="chart-hover-point accepted" cx="0" cy="0" r="4.5"></circle>
+    </g>
+  `);
+
+  svgParts.push(`<rect class="chart-hit-area" x="${CHART_LEFT}" y="${CHART_TOP}" width="${(CHART_W - CHART_LEFT - CHART_RIGHT).toFixed(2)}" height="${(CHART_H - CHART_TOP - CHART_BOTTOM).toFixed(2)}"></rect>`);
+
   chartSvg.innerHTML = svgParts.join('');
   if (chartEmpty) chartEmpty.hidden = hasAnyActivity;
+
+  ensureChartTooltip();
+  hideChartTooltipAndHover();
+  wireChartHover(series, openPoints, acceptedPoints, baseY);
 }
 
 function updateKPIs(quotes) {
