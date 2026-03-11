@@ -5,14 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Elevate Estimator — Customer</title>
 
-    <!-- Base command-center styling shared with Customers -->
     <link rel="stylesheet" href="./customers.css" />
     <link rel="stylesheet" href="./customer.css" />
   </head>
 
   <body>
     <div class="app">
-      <!-- Sidebar -->
       <aside class="sidebar" aria-label="Primary">
         <a class="brand" href="./dashboard.html" aria-label="Elevate Estimator home">
           <img
@@ -139,7 +137,6 @@
         </div>
       </aside>
 
-      <!-- Main -->
       <div class="main">
         <header class="topbar">
           <div class="topbar-left">
@@ -164,7 +161,6 @@
         <main class="content">
           <div id="error-box" class="alert" hidden></div>
 
-          <!-- Customer overview -->
           <section class="panel">
             <div class="section-head">
               <div>
@@ -205,6 +201,31 @@
               </div>
             </div>
 
+            <div class="pipeline-grid">
+              <div class="info-block">
+                <div class="info-label">Pipeline</div>
+
+                <div class="info-row">
+                  <div class="info-k">Status</div>
+                  <div class="info-v info-v-inline">
+                    <span id="cust-pipeline-status" class="pipeline-badge new">New</span>
+                  </div>
+                </div>
+
+                <div class="info-row">
+                  <div class="info-k">Source</div>
+                  <div id="cust-lead-source" class="info-v">Manual</div>
+                </div>
+              </div>
+
+              <div class="info-block">
+                <div class="info-label">Notes</div>
+                <div id="cust-notes-empty" class="notes-empty" hidden>No notes yet.</div>
+                <div id="cust-notes-intro" class="notes-intro" hidden></div>
+                <div id="cust-notes-details" class="notes-detail-list" hidden></div>
+              </div>
+            </div>
+
             <div class="metrics" role="group" aria-label="Customer metrics">
               <div class="metric">
                 <div class="metric-label">Quotes</div>
@@ -228,7 +249,6 @@
             </div>
           </section>
 
-          <!-- Quotes for this customer -->
           <section class="panel">
             <div class="section-head">
               <div>
@@ -294,18 +314,18 @@
       <form id="customer-edit-form" class="dialog-form" method="dialog">
         <h2>Edit customer</h2>
         <p class="muted small" style="margin: 0 0 10px">
-          Update this customer for future quotes and quick access.
+          Update the same details used in the pipeline so this customer page and the leads page always stay in sync.
         </p>
 
         <div class="form-grid">
           <label class="field">
             <span>First name</span>
-            <input id="edit_first_name" type="text" required placeholder="John" />
+            <input id="edit_first_name" type="text" placeholder="John" />
           </label>
 
           <label class="field">
             <span>Last name</span>
-            <input id="edit_last_name" type="text" required placeholder="Smith" />
+            <input id="edit_last_name" type="text" placeholder="Smith" />
           </label>
         </div>
 
@@ -334,6 +354,41 @@
             <input id="edit_phone" type="tel" placeholder="(555) 555‑5555" />
           </label>
         </div>
+
+        <div class="form-grid">
+          <label class="field">
+            <span>Status</span>
+            <select id="edit_pipeline_status">
+              <option value="new">New</option>
+              <option value="contacted">Contacted</option>
+              <option value="qualified">Qualified</option>
+              <option value="won">Won</option>
+              <option value="lost">Lost</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Source</span>
+            <select id="edit_lead_source">
+              <option value="manual">Manual</option>
+              <option value="website">Website</option>
+              <option value="phone">Phone</option>
+              <option value="referral">Referral</option>
+              <option value="zapier">Zapier</option>
+              <option value="make">Make</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+        </div>
+
+        <label class="field">
+          <span>Notes</span>
+          <textarea
+            id="edit_lead_notes"
+            rows="5"
+            placeholder="What came in, what they asked for, job details, timeline…"
+          ></textarea>
+        </label>
 
         <div class="dialog-actions">
           <button id="customer-edit-cancel" class="btn btn-quiet" type="button">Cancel</button>

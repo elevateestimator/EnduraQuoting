@@ -5,10 +5,9 @@ import { makeDefaultQuoteData } from "../js/quoteDefaults.js";
 /**
  * Customer detail page
  * - Shows customer info
+ * - Shows pipeline status / source / notes (same backing record as Leads)
+ * - Lets you edit the customer directly from this page
  * - Shows quotes only for this customer
- *   (queries server-side by customer_id when available, else falls back to json/email/name)
- * - Actions: Open, New version, Cancel
- * - Can edit the customer directly from the detail page
  */
 
 const workspaceNameEl = document.getElementById("workspace-name");
@@ -31,6 +30,11 @@ const custCompanyEl = document.getElementById("cust-company");
 const custEmailEl = document.getElementById("cust-email");
 const custPhoneEl = document.getElementById("cust-phone");
 const custAddressEl = document.getElementById("cust-address");
+const custPipelineStatusEl = document.getElementById("cust-pipeline-status");
+const custLeadSourceEl = document.getElementById("cust-lead-source");
+const custNotesEmptyEl = document.getElementById("cust-notes-empty");
+const custNotesIntroEl = document.getElementById("cust-notes-intro");
+const custNotesDetailsEl = document.getElementById("cust-notes-details");
 
 const kpiQuotesEl = document.getElementById("kpi-quotes");
 const kpiPipelineEl = document.getElementById("kpi-pipeline");
@@ -56,12 +60,17 @@ const editCompanyNameEl = document.getElementById("edit_company_name");
 const editBillingAddressEl = document.getElementById("edit_billing_address");
 const editEmailEl = document.getElementById("edit_email");
 const editPhoneEl = document.getElementById("edit_phone");
+const editPipelineStatusEl = document.getElementById("edit_pipeline_status");
+const editLeadSourceEl = document.getElementById("edit_lead_source");
+const editLeadNotesEl = document.getElementById("edit_lead_notes");
 
 const params = new URLSearchParams(window.location.search);
 const customerId = params.get("id");
 
 let customer = null;
 let allCustomerQuotes = [];
+
+const STATUS_ORDER = ["new", "contacted", "qualified", "won", "lost"];
 
 function toast(msg) {
   if (!toastEl) return;
@@ -152,19 +161,18 @@ function normalizeOptional(s) {
   return v ? v : null;
 }
 
-function normalizeStatus(status) {
-  const s = String(status || "").trim().toLowerCase();
+function normalizeQuoteStatus(status) {
+  const s = sanitizeString(status).toLowerCase();
   if (["accepted", "signed"].includes(s)) return "accepted";
-  if (["viewed"].includes(s)) return "viewed";
-  if (["sent"].includes(s)) return "sent";
+  if (s === "viewed") return "viewed";
+  if (s === "sent") return "sent";
   if (["cancelled", "canceled"].includes(s)) return "cancelled";
   return s || "draft";
 }
 
-function prettyStatus(status) {
-  const s = normalizeStatus(status);
+function prettyQuoteStatus(status) {
+  const s = normalizeQuoteStatus(status);
   if (s === "accepted") return "Accepted";
-  if (s === "signed") return "Signed";
   if (s === "viewed") return "Viewed";
   if (s === "sent") return "Sent";
   if (s === "cancelled") return "Cancelled";
@@ -172,7 +180,7 @@ function prettyStatus(status) {
 }
 
 function badgeClass(status) {
-  const s = normalizeStatus(status);
+  const s = normalizeQuoteStatus(status);
   if (s === "accepted") return "accepted";
   if (s === "sent") return "sent";
   if (s === "viewed") return "viewed";
@@ -181,8 +189,49 @@ function badgeClass(status) {
 }
 
 function canCancel(status) {
-  const s = normalizeStatus(status);
+  const s = normalizeQuoteStatus(status);
   return s !== "accepted" && s !== "cancelled";
+}
+
+function normalizePipelineStatus(status) {
+  const s = sanitizeString(status).toLowerCase();
+  return STATUS_ORDER.includes(s) ? s : "new";
+}
+
+function prettyPipelineStatus(status) {
+  const s = normalizePipelineStatus(status);
+  if (s === "contacted") return "Contacted";
+  if (s === "qualified") return "Qualified";
+  if (s === "won") return "Won";
+  if (s === "lost") return "Lost";
+  return "New";
+}
+
+function normalizeLeadSource(source) {
+  const s = sanitizeString(source).toLowerCase();
+  return s || "manual";
+}
+
+function prettyLeadSource(source) {
+  const s = normalizeLeadSource(source);
+  if (s === "website") return "Website";
+  if (s === "phone") return "Phone";
+  if (s === "referral") return "Referral";
+  if (s === "zapier") return "Zapier";
+  if (s === "make") return "Make";
+  if (s === "other") return "Other";
+  return "Manual";
+}
+
+function ensureLeadSourceOption(value, label = null) {
+  if (!editLeadSourceEl) return;
+  const normalized = normalizeLeadSource(value);
+  const exists = Array.from(editLeadSourceEl.options || []).some((opt) => opt.value === normalized);
+  if (exists) return;
+  const opt = document.createElement("option");
+  opt.value = normalized;
+  opt.textContent = label || prettyLeadSource(normalized);
+  editLeadSourceEl.appendChild(opt);
 }
 
 function setQuotesLoading(isLoading) {
@@ -227,8 +276,71 @@ function customerAddress(c) {
   return sanitizeString(c?.billing_address || c?.billingAddress || c?.address || c?.customer_address || "");
 }
 
-// --- Quote loading (server-side filtering) ---------------------------------
+function customerDisplayName(c) {
+  return customerFullName(c) || customerCompanyName(c) || customerEmail(c) || "Customer";
+}
 
+function parseLeadNotes(notes) {
+  const raw = sanitizeString(notes);
+  if (!raw) return { intro: "", details: [] };
+
+  const lines = raw
+    .split(/\r?\n+/)
+    .map((line) => sanitizeString(line))
+    .filter(Boolean);
+
+  const introParts = [];
+  const details = [];
+
+  for (const line of lines) {
+    const idx = line.indexOf(":");
+    if (idx > 0 && idx < line.length - 1) {
+      const label = sanitizeString(line.slice(0, idx));
+      const value = sanitizeString(line.slice(idx + 1));
+      if (label && value) {
+        details.push({ label, value });
+        continue;
+      }
+    }
+    introParts.push(line);
+  }
+
+  return {
+    intro: introParts.join("\n").trim(),
+    details,
+  };
+}
+
+function renderCustomerNotes(notes) {
+  if (!custNotesEmptyEl || !custNotesIntroEl || !custNotesDetailsEl) return;
+  const parsed = parseLeadNotes(notes);
+
+  custNotesEmptyEl.hidden = !!(parsed.intro || parsed.details.length);
+  custNotesIntroEl.hidden = !parsed.intro;
+  custNotesDetailsEl.hidden = !parsed.details.length;
+
+  custNotesIntroEl.textContent = parsed.intro || "";
+  custNotesDetailsEl.innerHTML = "";
+
+  for (const detail of parsed.details) {
+    const row = document.createElement("div");
+    row.className = "notes-detail-row";
+
+    const labelEl = document.createElement("div");
+    labelEl.className = "notes-detail-label";
+    labelEl.textContent = detail.label;
+
+    const valueEl = document.createElement("div");
+    valueEl.className = "notes-detail-value";
+    valueEl.textContent = detail.value;
+
+    row.appendChild(labelEl);
+    row.appendChild(valueEl);
+    custNotesDetailsEl.appendChild(row);
+  }
+}
+
+// --- Quote loading (server-side filtering) ---------------------------------
 const SELECT_BASE =
   "id, quote_no, customer_name, customer_email, total_cents, currency, status, created_at";
 const SELECT_WITH_CUSTOMER_ID = `${SELECT_BASE}, customer_id`;
@@ -318,7 +430,6 @@ async function fetchCustomerQuotes(c) {
   let customerIdColumnOK = true;
   let byId = [];
 
-  // 1) Prefer a real FK column if you have it
   try {
     byId = await fetchQuotesByCustomerId(c.id);
   } catch (e) {
@@ -330,15 +441,11 @@ async function fetchCustomerQuotes(c) {
     }
   }
 
-  // 2) If no customer_id column, use json fallback (we stamp data.customer_id on create)
   const byData = customerIdColumnOK ? [] : await fetchQuotesByDataCustomerId(c.id);
-
-  // 3) Backfill older quotes by email (best) or name (last resort)
   const byEmail = email ? await fetchQuotesByEmail(email) : [];
 
   let byName = [];
   if (!email && fullName) {
-    // Only use name fallback if we didn't find anything by ID/json.
     if ((byId?.length || 0) + (byData?.length || 0) === 0) {
       byName = await fetchQuotesByName(fullName);
     }
@@ -349,18 +456,15 @@ async function fetchCustomerQuotes(c) {
 
 function computeKPIs(quotes) {
   const totalQuotes = quotes.length;
-
   let pipeline = 0;
   let accepted = 0;
-
   let last = null;
 
   for (const q of quotes) {
-    const s = normalizeStatus(q.status);
+    const s = normalizeQuoteStatus(q.status);
     const cents = Number(q.total_cents || 0);
 
     if (s === "accepted") accepted += cents;
-
     if (s !== "accepted" && s !== "cancelled") pipeline += cents;
 
     const t = new Date(q.created_at).getTime();
@@ -388,7 +492,7 @@ function renderQuoteRow(q) {
   const tdStatus = document.createElement("td");
   const badge = document.createElement("span");
   badge.className = `badge ${badgeClass(q.status)}`;
-  badge.textContent = prettyStatus(q.status);
+  badge.textContent = prettyQuoteStatus(q.status);
   tdStatus.appendChild(badge);
   tr.appendChild(tdStatus);
 
@@ -491,7 +595,6 @@ function renderQuotes(quotes, { search = "" } = {}) {
   }
 
   if (quotesCountEl) quotesCountEl.textContent = String(filtered.length);
-
   clearQuotesTable();
 
   if (!filtered.length) {
@@ -501,10 +604,7 @@ function renderQuotes(quotes, { search = "" } = {}) {
   }
 
   setQuotesEmpty(false);
-
   for (const q of filtered) quotesBody.appendChild(renderQuoteRow(q));
-
-  // KPIs should reflect the full customer set, not search filter
   computeKPIs(quotes);
 }
 
@@ -550,6 +650,10 @@ function populateEditForm(c) {
   editBillingAddressEl.value = customerAddress(c);
   editEmailEl.value = customerEmail(c);
   editPhoneEl.value = customerPhone(c);
+  if (editPipelineStatusEl) editPipelineStatusEl.value = normalizePipelineStatus(c?.pipeline_status);
+  ensureLeadSourceOption(c?.lead_source);
+  if (editLeadSourceEl) editLeadSourceEl.value = normalizeLeadSource(c?.lead_source);
+  if (editLeadNotesEl) editLeadNotesEl.value = sanitizeString(c?.lead_notes);
 }
 
 function openEditCustomer() {
@@ -560,21 +664,32 @@ function openEditCustomer() {
 }
 
 function setCustomerUI(c) {
-  const full = customerFullName(c) || "Customer";
+  const full = customerDisplayName(c);
   const company = customerCompanyName(c);
   const email = customerEmail(c);
   const phone = customerPhone(c);
   const address = customerAddress(c);
+  const pipelineStatus = normalizePipelineStatus(c?.pipeline_status);
+  const leadSource = normalizeLeadSource(c?.lead_source);
+  const notes = sanitizeString(c?.lead_notes);
 
   pageH1.textContent = full;
-  pageSubtitle.textContent = company ? `${company} • Customer profile + quote history.` : "Customer profile + quote history.";
+  pageSubtitle.textContent = company
+    ? `${company} • Pipeline + quote history.`
+    : "Pipeline + quote history.";
 
   custNameEl.textContent = full;
   custCompanyEl.textContent = company ? `Company • ${company}` : "Company • —";
-
   custEmailEl.textContent = email || "—";
   custPhoneEl.textContent = phone || "—";
   custAddressEl.textContent = address || "—";
+
+  if (custPipelineStatusEl) {
+    custPipelineStatusEl.textContent = prettyPipelineStatus(pipelineStatus);
+    custPipelineStatusEl.className = `pipeline-badge ${pipelineStatus}`;
+  }
+  if (custLeadSourceEl) custLeadSourceEl.textContent = prettyLeadSource(leadSource);
+  renderCustomerNotes(notes);
 
   if (btnCopyEmail) {
     if (email) {
@@ -597,22 +712,24 @@ function setCustomerUI(c) {
 async function updateCustomerRecord() {
   if (!customer?.id) return;
 
-  const first_name = sanitizeString(editFirstNameEl.value);
-  const last_name = sanitizeString(editLastNameEl.value);
-
-  if (!first_name || !last_name) {
-    setEditMsg("First name and last name are required.");
-    return;
-  }
-
   const payload = {
-    first_name,
-    last_name,
+    first_name: normalizeOptional(editFirstNameEl.value),
+    last_name: normalizeOptional(editLastNameEl.value),
     company_name: normalizeOptional(editCompanyNameEl.value),
     billing_address: normalizeOptional(editBillingAddressEl.value),
     email: normalizeOptional(editEmailEl.value),
     phone: normalizeOptional(editPhoneEl.value),
+    pipeline_status: normalizePipelineStatus(editPipelineStatusEl?.value),
+    lead_source: normalizeLeadSource(editLeadSourceEl?.value),
+    lead_notes: normalizeOptional(editLeadNotesEl?.value),
+    updated_at: new Date().toISOString(),
   };
+
+  const hasIdentity = [payload.first_name, payload.last_name, payload.company_name, payload.email, payload.phone].some(Boolean);
+  if (!hasIdentity) {
+    setEditMsg("Add at least a name, company, email, or phone so the customer is identifiable.");
+    return;
+  }
 
   try {
     setError("");
@@ -644,7 +761,7 @@ async function updateCustomerRecord() {
 async function createQuoteForCustomer() {
   if (!customer) return;
 
-  const name = customerFullName(customer) || "(Customer)";
+  const name = customerDisplayName(customer) || "(Customer)";
   const email = customerEmail(customer) || null;
 
   try {
@@ -652,16 +769,10 @@ async function createQuoteForCustomer() {
     btnCreateQuote.textContent = "Creating…";
 
     const data = makeDefaultQuoteData({ customer_name: name, customer_email: email });
-
-    // Stamp linkage in json so we can always query quotes for this customer,
-    // even if your quotes table doesn't have a customer_id column yet.
     try {
       if (data && typeof data === "object") data.customer_id = customer.id;
-    } catch {
-      // ignore
-    }
+    } catch {}
 
-    // Try to set customer_id if your quotes table supports it.
     const payload = {
       customer_id: customer.id,
       customer_name: name,
@@ -677,8 +788,6 @@ async function createQuoteForCustomer() {
       q = await createQuote(payload);
     } catch (e) {
       const msg = String(e?.message || "").toLowerCase();
-
-      // If customer_id column isn't in your quotes table yet, fall back gracefully.
       if (msg.includes("customer_id") || msg.includes("column") || msg.includes("schema")) {
         const fallback = { ...payload };
         delete fallback.customer_id;
@@ -689,7 +798,6 @@ async function createQuoteForCustomer() {
     }
 
     if (!q?.id) throw new Error("Quote created but missing id.");
-
     window.location.href = `./quote.html?id=${q.id}`;
   } catch (err) {
     setError(err?.message || "Failed to create quote.");
@@ -736,10 +844,12 @@ async function init() {
   if (btnCreateQuote) btnCreateQuote.addEventListener("click", createQuoteForCustomer);
   if (btnEditCustomer) btnEditCustomer.addEventListener("click", openEditCustomer);
   if (editCancelBtn) editCancelBtn.addEventListener("click", () => closeDialog(editDialog));
-  if (editForm) editForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    await updateCustomerRecord();
-  });
+  if (editForm) {
+    editForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      await updateCustomerRecord();
+    });
+  }
 
   const session = await requireSessionOrRedirect();
   if (!session) return;
