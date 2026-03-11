@@ -1528,6 +1528,7 @@ input:focus{
   }
 }
 
+
 /* =========================================================
    Dashboard mobile-only polish
    Append this to the BOTTOM of your current dashboard.css
@@ -1955,5 +1956,246 @@ input:focus{
   .recent-item,
   .lead-snippet-item {
     padding-inline: 0;
+  }
+}
+
+
+
+/* =========================================================
+   Mobile menu + compact mobile dashboard header
+   Desktop remains untouched.
+   ========================================================= */
+.mobile-menu-btn,
+.mobile-menu-panel,
+.mobile-menu-backdrop{
+  display:none;
+}
+
+@media (max-width: 1040px){
+  body.mobile-menu-open{
+    overflow:hidden;
+  }
+
+  .app{
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar{
+    display:none;
+  }
+
+  .mobile-menu-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    flex-direction:column;
+    gap:4px;
+    width:42px;
+    height:42px;
+    padding:0;
+    border-radius:12px;
+    border:1px solid rgba(15, 23, 42, 0.12);
+    background: rgba(255,255,255,0.92);
+    box-shadow: var(--shadow-1);
+    cursor:pointer;
+    flex: 0 0 42px;
+  }
+
+  .mobile-menu-btn span{
+    display:block;
+    width:18px;
+    height:2px;
+    border-radius:999px;
+    background: rgba(11, 15, 20, 0.78);
+  }
+
+  .topbar{
+    position: sticky;
+    top: 0;
+    z-index: 60;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    background: rgba(246, 247, 250, 0.94);
+    backdrop-filter: blur(10px);
+  }
+
+  .topbar-left{
+    display:flex;
+    align-items:center;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .page-title{
+    min-width:0;
+  }
+
+  .page-title h1{
+    font-size: 20px;
+    line-height: 1.15;
+  }
+
+  .subtitle{
+    display:none;
+  }
+
+  .topbar-right{
+    display:none;
+  }
+
+  .mobile-menu-backdrop{
+    display:block;
+    position:fixed;
+    inset:0;
+    background: rgba(11, 15, 20, 0.42);
+    opacity:0;
+    pointer-events:none;
+    transition: opacity .18s ease;
+    z-index: 79;
+    border:0;
+    padding:0;
+  }
+
+  .mobile-menu-panel{
+    display:flex;
+    flex-direction:column;
+    position:fixed;
+    top:0;
+    left:0;
+    bottom:0;
+    width:min(320px, 86vw);
+    padding: 16px 14px 18px;
+    background: #f1f4f8;
+    border-right: 1px solid rgba(15, 23, 42, 0.10);
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+    transform: translateX(-104%);
+    transition: transform .22s ease;
+    z-index: 80;
+    overflow-y:auto;
+  }
+
+  body.mobile-menu-open .mobile-menu-panel{
+    transform: translateX(0);
+  }
+
+  body.mobile-menu-open .mobile-menu-backdrop{
+    opacity:1;
+    pointer-events:auto;
+  }
+
+  .mobile-menu-head{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap: 12px;
+    padding: 4px 4px 14px;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    margin-bottom: 12px;
+  }
+
+  .mobile-menu-brand{
+    display:flex;
+    align-items:center;
+    gap: 12px;
+    min-width:0;
+  }
+
+  .mobile-menu-logo{
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+    flex: 0 0 40px;
+  }
+
+  .mobile-workspace-name{
+    font-weight: 950;
+    letter-spacing: -0.01em;
+    font-size: 15px;
+    color: var(--text);
+  }
+
+  .mobile-user-email{
+    margin-top: 2px;
+    font-size: 12px;
+    color: rgba(11, 15, 20, 0.68);
+    font-weight: 700;
+    overflow-wrap:anywhere;
+  }
+
+  .mobile-menu-close{
+    appearance:none;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    background: rgba(255,255,255,0.86);
+    color: rgba(11, 15, 20, 0.82);
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    font-size: 18px;
+    font-weight: 900;
+    line-height: 1;
+    cursor:pointer;
+    flex: 0 0 38px;
+  }
+
+  .mobile-menu-nav{
+    display:flex;
+    flex-direction:column;
+    gap: 14px;
+    padding: 4px 2px 0;
+  }
+
+  .mobile-menu-panel .nav-group{
+    display:flex;
+    flex-direction:column;
+    gap: 4px;
+  }
+
+  .mobile-menu-panel .nav-group-label{
+    display:block;
+    padding: 10px 12px 6px;
+  }
+
+  .mobile-menu-panel .nav-item{
+    width:100%;
+    white-space:normal;
+    padding: 11px 12px;
+    border-radius: 11px;
+  }
+
+  .mobile-menu-panel .nav-item.active{
+    box-shadow: inset 3px 0 0 var(--brand);
+    background: rgba(255,255,255,0.92);
+  }
+
+  .mobile-menu-actions{
+    margin-top:auto;
+    display:flex;
+    flex-direction:column;
+    gap: 10px;
+    padding: 16px 4px 0;
+    border-top: 1px solid rgba(15, 23, 42, 0.08);
+  }
+
+  .mobile-menu-actions .btn{
+    width:100%;
+    justify-content:center;
+  }
+}
+
+@media (max-width: 520px){
+  .topbar{
+    padding: 10px 12px;
+  }
+
+  .mobile-menu-panel{
+    width:min(320px, 92vw);
+    padding: 14px 12px 16px;
+  }
+
+  .page-title h1{
+    font-size: 18px;
   }
 }

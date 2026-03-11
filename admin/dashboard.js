@@ -18,6 +18,15 @@ const createBtn = document.getElementById("create-btn");
 const createBtnHero = document.getElementById("create-btn-hero");
 const qaCreate = document.getElementById("qa-create");
 const logoutBtn = document.getElementById("logout-btn");
+const mobileMenuBtn = document.getElementById("mobile-menu-btn");
+const mobileMenuCloseBtn = document.getElementById("mobile-menu-close");
+const mobileMenuBackdrop = document.getElementById("mobile-menu-backdrop");
+const mobileMenuPanel = document.getElementById("mobile-menu-panel");
+const mobileCreateBtn = document.getElementById("mobile-create-btn");
+const mobileLogoutBtn = document.getElementById("mobile-logout-btn");
+const mobileWorkspaceNameEl = document.getElementById("mobile-workspace-name");
+const mobileUserEmailEl = document.getElementById("mobile-user-email");
+const mobileCloseEls = Array.from(document.querySelectorAll("[data-mobile-close]"));
 const qaCustomers = document.getElementById("qa-customers");
 const qaQuotes = document.getElementById("qa-quotes");
 const qaProducts = document.getElementById("qa-products");
@@ -127,6 +136,47 @@ function closeDialog(d) {
   if (!d) return;
   if (typeof d.close === "function") d.close();
   else d.removeAttribute("open");
+}
+
+function isMobileViewport() {
+  return window.matchMedia("(max-width: 1040px)").matches;
+}
+
+function openMobileMenu() {
+  if (!mobileMenuPanel || !isMobileViewport()) return;
+  document.body.classList.add("mobile-menu-open");
+  mobileMenuBtn?.setAttribute("aria-expanded", "true");
+}
+
+function closeMobileMenu() {
+  document.body.classList.remove("mobile-menu-open");
+  mobileMenuBtn?.setAttribute("aria-expanded", "false");
+}
+
+function wireMobileMenu() {
+  if (!mobileMenuBtn) return;
+
+  mobileMenuBtn.addEventListener("click", () => {
+    if (document.body.classList.contains("mobile-menu-open")) closeMobileMenu();
+    else openMobileMenu();
+  });
+
+  mobileMenuCloseBtn?.addEventListener("click", closeMobileMenu);
+  mobileMenuBackdrop?.addEventListener("click", closeMobileMenu);
+
+  mobileCloseEls.forEach((el) => {
+    el.addEventListener("click", () => {
+      if (isMobileViewport()) closeMobileMenu();
+    });
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeMobileMenu();
+  });
+
+  window.addEventListener("resize", () => {
+    if (!isMobileViewport()) closeMobileMenu();
+  });
 }
 
 function safeStr(v) {
@@ -439,6 +489,7 @@ async function handleQuickCustomerCreate() {
 }
 
 async function openCreateQuoteDialog() {
+  closeMobileMenu();
   setError("");
   setCreateMsg("");
   setSelectedCustomer(null);
@@ -1045,7 +1096,7 @@ function setCreateMsg(text) {
 }
 
 function wireCreateButtons() {
-  const opens = [createBtn, createBtnHero, qaCreate].filter(Boolean);
+  const opens = [createBtn, createBtnHero, qaCreate, mobileCreateBtn].filter(Boolean);
   for (const b of opens) {
     b.addEventListener("click", openCreateQuoteDialog);
   }
@@ -1185,15 +1236,20 @@ function inferWorkspaceName(session) {
 async function init() {
   wireCreateButtons();
   wireRealNav();
+  wireMobileMenu();
 
-  if (logoutBtn) logoutBtn.addEventListener("click", logout);
+  [logoutBtn, mobileLogoutBtn].filter(Boolean).forEach((el) => el.addEventListener("click", logout));
   if (createCancelBtn) createCancelBtn.addEventListener("click", () => closeDialog(createDialog));
 
   const session = await requireSessionOrRedirect();
   if (!session) return;
 
-  if (userEmailEl) userEmailEl.textContent = session.user.email || "";
-  if (workspaceNameEl) workspaceNameEl.textContent = inferWorkspaceName(session);
+  const emailText = session.user.email || "";
+  const workspaceText = inferWorkspaceName(session);
+  if (userEmailEl) userEmailEl.textContent = emailText;
+  if (workspaceNameEl) workspaceNameEl.textContent = workspaceText;
+  if (mobileUserEmailEl) mobileUserEmailEl.textContent = emailText;
+  if (mobileWorkspaceNameEl) mobileWorkspaceNameEl.textContent = workspaceText;
 
   try {
     userId = session.user.id;
