@@ -162,7 +162,7 @@
           <div class="topbar-left">
             <div class="page-title">
               <h1>Leads</h1>
-              <div class="subtitle">Manage active pipeline customers here. Every record is saved in your Customers database.</div>
+              <div class="subtitle">Active pipeline hub. Every lead here is a real customer record in your database.</div>
             </div>
           </div>
 
@@ -228,6 +228,11 @@
             </div>
 
             <div class="metric-card">
+              <div class="metric-label">Contacted</div>
+              <div id="metric-contacted" class="metric-value">—</div>
+            </div>
+
+            <div class="metric-card">
               <div class="metric-label">Qualified</div>
               <div id="metric-qualified" class="metric-value">—</div>
             </div>
@@ -235,6 +240,11 @@
             <div class="metric-card">
               <div class="metric-label">Won</div>
               <div id="metric-won" class="metric-value">—</div>
+            </div>
+
+            <div class="metric-card">
+              <div class="metric-label">Lost</div>
+              <div id="metric-lost" class="metric-value">—</div>
             </div>
           </section>
 
@@ -265,7 +275,7 @@
                   <input
                     id="search"
                     type="search"
-                    placeholder="Search name, company, email, phone, notes…"
+                    placeholder="Search name, company, email, phone, notes, quote #…"
                     autocomplete="off"
                   />
                 </div>
@@ -293,21 +303,8 @@
               <div class="empty-sub">Create your first customer now. Later, Make or Zapier can post customers into this same pipeline.</div>
             </div>
 
-            <div id="table-wrap" class="table-wrap" hidden>
-              <table class="table" aria-label="Pipeline customers table">
-                <thead>
-                  <tr>
-                    <th style="width: 240px">Customer</th>
-                    <th style="width: 190px">Company</th>
-                    <th style="width: 240px">Contact</th>
-                    <th style="width: 140px">Status</th>
-                    <th style="width: 140px">Source</th>
-                    <th style="width: 140px">Created</th>
-                    <th style="width: 150px">Actions</th>
-                  </tr>
-                </thead>
-                <tbody id="leads-body"></tbody>
-              </table>
+            <div id="hub-wrap" class="hub-wrap" hidden>
+              <div id="lead-list" class="lead-list"></div>
             </div>
           </section>
         </main>
