@@ -16,12 +16,6 @@ const backBtn = $("#back-btn");
 const saveBtn = $("#save-btn");
 const pdfBtn  = $("#pdf-btn");
 const sendBtn = $("#send-btn");
-const markAcceptedBtn = $("#mark-accepted-btn");
-const cancelQuoteBtn = $("#cancel-quote-btn");
-let newVersionBtn = $("#new-version-btn");
-
-const saveStateEl = $("#save-state");
-const saveStateTextEl = $("#save-state-text");
 
 const msgEl = $("#msg");
 const quoteCodeEl = $("#quote-code");
@@ -30,8 +24,6 @@ const docQuoteCodeEl = $("#doc-quote-code");
 
 // Company + rep
 const companyLogoEl = $("#company-logo");
-// Top-left app bar logo (screen) should match the company's branding too
-const appLogoEl = $("#app-logo") || $(".topbar .logo");
 const repSignatureEl = $("#rep-signature");
 const repPrintedNameEl = $("#rep-printed-name");
 
@@ -53,13 +45,7 @@ const grandTotalEl = $("#grand-total");
 
 const taxRateEl = $("#tax-rate");
 const feesEl = $("#fees");
-
-// Payment schedule (per-quote override)
-const paymentScheduleBodyEl = $("#payment-schedule-body");
-const paymentScheduleTotalEl = $("#payment-schedule-total");
-const paymentScheduleMsgEl = $("#payment-schedule-msg");
-const addPaymentStepBtn = $("#btn-add-payment-step");
-const useDefaultScheduleBtn = $("#btn-use-default-schedule");
+const depositDueEl = $("#deposit-due");
 
 const repDateEl = $("#rep-date");
 
@@ -70,7 +56,20 @@ const clientSignedDateEl = $("#client-signed-date");
 const quoteDateInput = $('[data-bind="quote_date"]');
 
 const quotePageEl = $("#quote-page");
-const wrapEl = $(".wrap");
+
+// Mobile nav / actions
+const mobileMenuBtn = $("#mobile-menu-btn");
+const mobileMenuCloseBtn = $("#mobile-menu-close");
+const mobileMenuBackdrop = $("#mobile-menu-backdrop");
+const mobileMenuPanel = $("#mobile-menu-panel");
+const mobileMenuLogoutBtn = $("#mobile-menu-logout");
+const mobileWorkspaceNameEl = $("#mobile-workspace-name");
+const mobileUserEmailEl = $("#mobile-user-email");
+const mobileBackBtn = $("#mobile-back-btn");
+const mobileSaveBtn = $("#mobile-save-btn");
+const mobilePdfBtn = $("#mobile-pdf-btn");
+const mobileSendBtn = $("#mobile-send-btn");
+const mobileCloseEls = $$("[data-mobile-close]");
 
 function showMsg(text) {
   if (!text) {
@@ -82,282 +81,80 @@ function showMsg(text) {
   msgEl.textContent = text;
 }
 
-/* ===== Status helpers ===== */
-function normalizeStatus(value) {
-  return String(value ?? "").trim().toLowerCase();
-}
-function isAcceptedStatus(value) {
-  return normalizeStatus(value) === "accepted";
-}
-function isCancelledStatus(value) {
-  const s = normalizeStatus(value);
-  return s === "cancelled" || s === "canceled";
+function isMobileViewport() {
+  return window.matchMedia("(max-width: 980px)").matches;
 }
 
-function isSentLikeStatus(value) {
-  const s = normalizeStatus(value);
-  return s === "sent" || s === "viewed";
+function openMobileMenu() {
+  if (!mobileMenuPanel || !isMobileViewport()) return;
+  document.body.classList.add("mobile-menu-open");
+  mobileMenuBtn?.setAttribute("aria-expanded", "true");
 }
 
-function prettyStatus(value) {
-  const s = normalizeStatus(value);
-  if (s === "accepted") return "Accepted";
-  if (s === "sent") return "Sent";
-  if (s === "viewed") return "Viewed";
-  if (s === "cancelled" || s === "canceled") return "Cancelled";
-  if (!s || s === "draft") return "Draft";
-  // Fallback: Title-case the first letter
-  return s.charAt(0).toUpperCase() + s.slice(1);
+function closeMobileMenu() {
+  document.body.classList.remove("mobile-menu-open");
+  mobileMenuBtn?.setAttribute("aria-expanded", "false");
 }
 
-function syncMarkAcceptedButton(status) {
-  if (!markAcceptedBtn) return;
+function bindMirrorButton(source, mirror) {
+  if (!source || !mirror) return;
 
-  if (isCancelledStatus(status)) {
-    markAcceptedBtn.disabled = true;
-    markAcceptedBtn.textContent = "Cancelled";
-    return;
-  }
+  const sync = () => {
+    mirror.disabled = !!source.disabled;
+    mirror.textContent = source.textContent || mirror.textContent;
+    mirror.className = source.className;
+    mirror.id = mirror.id; // no-op; keeps linter happy in generated code
+  };
 
-  if (isAcceptedStatus(status)) {
-    markAcceptedBtn.disabled = true;
-    markAcceptedBtn.textContent = "✓ Accepted";
-    return;
-  }
+  sync();
 
-  markAcceptedBtn.disabled = false;
-  markAcceptedBtn.textContent = "✓ Mark as Accepted";
-}
-
-function syncCancelButton(status) {
-  if (!cancelQuoteBtn) return;
-
-  const cancelled = isCancelledStatus(status);
-  const accepted = isAcceptedStatus(status);
-
-  // Cancel button itself
-  if (cancelled) {
-    cancelQuoteBtn.disabled = true;
-    cancelQuoteBtn.textContent = "✕ Cancelled";
-    cancelQuoteBtn.title = "This quote is cancelled.";
-  } else {
-    // IMPORTANT: Quotes can be cancelled even after acceptance
-    // (jobs can still fall through after approval/deposit).
-    cancelQuoteBtn.disabled = false;
-    cancelQuoteBtn.textContent = "✕ Cancel Quote";
-    cancelQuoteBtn.title = accepted
-      ? "Cancel this accepted quote (use when the job falls through after approval/deposit)."
-      : "Mark this quote as cancelled (use when the job doesn't move forward).";
-  }
-
-  // Sending a cancelled quote should be blocked, but we do NOT use the native
-  // `disabled` attribute here because the auto-save system treats disabled
-  // buttons as "busy" and stops auto-saving.
-  if (sendBtn) {
-    if (cancelled) {
-      sendBtn.classList.add("is-disabled");
-      sendBtn.setAttribute("aria-disabled", "true");
-      sendBtn.title = "This quote is cancelled and can't be sent.";
-    } else {
-      sendBtn.classList.remove("is-disabled");
-      sendBtn.removeAttribute("aria-disabled");
-      if (sendBtn.title === "This quote is cancelled and can't be sent.") sendBtn.title = "";
-    }
-  }
-}
-
-
-function lockedQuoteTitle(status) {
-  return isAcceptedStatus(status) ? "Accepted quote — editing is locked" : "Cancelled quote — editing is locked";
-}
-
-function lockedQuoteBody(status) {
-  if (isAcceptedStatus(status)) {
-    return "This quote has been accepted, so the quote details can no longer be edited. Use New version in the top bar if you need to make changes while keeping this accepted record intact. You can still download the PDF or cancel the quote if the job falls through.";
-  }
-  return "This quote has been cancelled, so the quote details can no longer be edited. Use New version in the top bar if you need to make changes while keeping this cancelled record intact.";
-}
-
-function lockedQuoteToast(status) {
-  return isAcceptedStatus(status)
-    ? "This quote has been accepted, so it is no longer editable."
-    : "This quote has been cancelled, so it is no longer editable.";
-}
-
-let _quoteLockNoticeEl = null;
-let _quoteLockNoticeTimer = null;
-let _quoteLockShieldEl = null;
-
-function ensureQuoteLockNotice() {
-  if (_quoteLockNoticeEl) return _quoteLockNoticeEl;
-  const host = wrapEl || quotePageEl?.parentElement || document.body;
-  if (!host || !quotePageEl) return null;
-
-  const el = document.createElement("div");
-  el.className = "quote-lock-notice no-print";
-  el.hidden = true;
-  el.innerHTML = `
-    <div class="quote-lock-notice__eyebrow">Quote locked</div>
-    <div class="quote-lock-notice__title"></div>
-    <div class="quote-lock-notice__body"></div>
-  `;
-
-  host.insertBefore(el, quotePageEl);
-  _quoteLockNoticeEl = el;
-  return el;
-}
-
-function flashQuoteLockNotice() {
-  const el = ensureQuoteLockNotice();
-  if (!el || el.hidden) return;
-  el.classList.remove("is-flash");
-  void el.offsetWidth;
-  el.classList.add("is-flash");
-  clearTimeout(_quoteLockNoticeTimer);
-  _quoteLockNoticeTimer = setTimeout(() => el.classList.remove("is-flash"), 850);
-}
-
-function renderQuoteLockNotice(status) {
-  const el = ensureQuoteLockNotice();
-  if (!el) return;
-
-  if (!isAcceptedStatus(status) && !isCancelledStatus(status)) {
-    el.hidden = true;
-    el.removeAttribute("data-status");
-    el.classList.remove("is-flash");
-    return;
-  }
-
-  el.hidden = false;
-  el.dataset.status = isAcceptedStatus(status) ? "accepted" : "cancelled";
-  const titleEl = el.querySelector(".quote-lock-notice__title");
-  const bodyEl = el.querySelector(".quote-lock-notice__body");
-  if (titleEl) titleEl.textContent = lockedQuoteTitle(status);
-  if (bodyEl) bodyEl.textContent = lockedQuoteBody(status);
-}
-
-function ensureQuoteLockShield() {
-  if (_quoteLockShieldEl) return _quoteLockShieldEl;
-  if (!quotePageEl) return null;
-
-  const shield = document.createElement("button");
-  shield.type = "button";
-  shield.className = "quote-lock-shield no-print";
-  shield.hidden = true;
-  shield.setAttribute("aria-label", "This quote is locked and cannot be edited");
-  shield.innerHTML = `<span class="quote-lock-shield__badge"></span>`;
-
-  shield.addEventListener("click", () => {
-    const status = shield.dataset.status || "";
-    const text = lockedQuoteToast(status);
-    showMsg(text);
-    flashQuoteLockNotice();
-    setTimeout(() => {
-      if (msgEl && msgEl.textContent === text) showMsg("");
-    }, 2400);
+  const obs = new MutationObserver(sync);
+  obs.observe(source, {
+    attributes: true,
+    attributeFilter: ["disabled", "class", "hidden"],
+    childList: true,
+    subtree: true,
+    characterData: true,
   });
 
-  quotePageEl.appendChild(shield);
-  _quoteLockShieldEl = shield;
-  return shield;
+  mirror.addEventListener("click", () => {
+    if (source.disabled) return;
+    source.click();
+  });
 }
 
-function syncQuoteLockShield(status, locked) {
-  const shield = ensureQuoteLockShield();
-  if (!shield) return;
+function initMobileChrome(ctx) {
+  if (mobileWorkspaceNameEl) mobileWorkspaceNameEl.textContent = safeStr(ctx?.company?.name) || "Workspace";
+  if (mobileUserEmailEl) mobileUserEmailEl.textContent = safeStr(ctx?.user?.email) || "—";
 
-  if (!locked || (!isAcceptedStatus(status) && !isCancelledStatus(status))) {
-    shield.hidden = true;
-    shield.removeAttribute("data-status");
-    return;
+  if (mobileMenuBtn) {
+    mobileMenuBtn.addEventListener("click", () => {
+      if (document.body.classList.contains("mobile-menu-open")) closeMobileMenu();
+      else openMobileMenu();
+    });
   }
 
-  shield.hidden = false;
-  shield.dataset.status = isAcceptedStatus(status) ? "accepted" : "cancelled";
-  const badge = shield.querySelector(".quote-lock-shield__badge");
-  if (badge) badge.textContent = isAcceptedStatus(status) ? "Accepted — not editable" : "Cancelled — not editable";
-}
+  mobileMenuCloseBtn?.addEventListener("click", closeMobileMenu);
+  mobileMenuBackdrop?.addEventListener("click", closeMobileMenu);
+  mobileCloseEls.forEach((el) => el.addEventListener("click", closeMobileMenu));
 
-let _quoteEditingLocked = false;
-let _sentEditConfirmed = false;
-
-function setQuoteEditingLocked(locked, status) {
-  if (!quotePageEl) return;
-
-  const nextLocked = !!locked;
-  if (_quoteEditingLocked === nextLocked) {
-    quotePageEl.classList.toggle("quote-locked", nextLocked);
-    renderQuoteLockNotice(status);
-    syncQuoteLockShield(status, nextLocked);
-    if (nextLocked) {
-      setManualSaveVisible(false);
-      setSaveState(
-        "saved",
-        isAcceptedStatus(status) ? "Locked — Accepted" : "Locked — Cancelled"
-      );
-    }
-    return;
-  }
-
-  _quoteEditingLocked = nextLocked;
-  quotePageEl.classList.toggle("quote-locked", nextLocked);
-
-  const controls = $$("input, textarea, select, button", quotePageEl);
-  controls.forEach((el) => {
-    if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement || el instanceof HTMLButtonElement)) return;
-    if (el === _quoteLockShieldEl || el.classList?.contains("quote-lock-shield")) return;
-
-    if (nextLocked) {
-      if (!("lockOrigDisabled" in el.dataset)) {
-        el.dataset.lockOrigDisabled = el.disabled ? "1" : "0";
-      }
-      el.dataset.lockedByStatus = "1";
-      el.disabled = true;
-      return;
-    }
-
-    if (el.dataset.lockedByStatus === "1") {
-      el.disabled = el.dataset.lockOrigDisabled === "1";
-      delete el.dataset.lockedByStatus;
-      delete el.dataset.lockOrigDisabled;
-    }
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && document.body.classList.contains("mobile-menu-open")) closeMobileMenu();
   });
 
-  if (productsDialog && nextLocked) closeDialog(productsDialog);
+  window.addEventListener("resize", () => {
+    if (!isMobileViewport()) closeMobileMenu();
+  });
 
-  renderQuoteLockNotice(status);
-  syncQuoteLockShield(status, nextLocked);
+  mobileMenuLogoutBtn?.addEventListener("click", async () => {
+    try { await supabase.auth.signOut(); } catch {}
+    window.location.href = "../index.html";
+  });
 
-  if (nextLocked) {
-    setManualSaveVisible(false);
-    setSaveState(
-      "saved",
-      isAcceptedStatus(status) ? "Locked — Accepted" : "Locked — Cancelled"
-    );
-  }
-}
-
-function syncQuoteStatusUI(status) {
-  if (quoteStatusEl) quoteStatusEl.textContent = prettyStatus(status);
-  syncMarkAcceptedButton(status);
-  syncCancelButton(status);
-
-  const locked = isAcceptedStatus(status) || isCancelledStatus(status);
-  setQuoteEditingLocked(locked, status);
-}
-
-/* ===== Save state (auto-save UX) ===== */
-function setSaveState(state, text) {
-  if (!saveStateEl) return;
-  if (state) saveStateEl.dataset.state = state;
-  else delete saveStateEl.dataset.state;
-  if (saveStateTextEl) saveStateTextEl.textContent = text || "";
-}
-
-function setManualSaveVisible(visible, label) {
-  if (!saveBtn) return;
-  saveBtn.hidden = !visible;
-  if (label) saveBtn.textContent = label;
+  bindMirrorButton(backBtn, mobileBackBtn);
+  bindMirrorButton(saveBtn, mobileSaveBtn);
+  bindMirrorButton(pdfBtn, mobilePdfBtn);
+  bindMirrorButton(sendBtn, mobileSendBtn);
 }
 
 async function postJSON(url, body) {
@@ -462,308 +259,8 @@ function parseNum(value) {
   const n = Number.parseFloat(cleaned);
   return Number.isFinite(n) ? n : 0;
 }
-
-/* ===== Payment schedule (per quote) ===== */
-
-function defaultPaymentSchedule(ctx) {
-  // Company default schedule comes from Settings; fallback to a common 40/40/20.
-  const fromCompany = normalizePaymentSchedule(ctx?.company?.payment_schedule);
-  if (fromCompany && fromCompany.length) return fromCompany;
-
-  return [
-    { title: "Deposit", percent: 40 },
-    { title: "On material delivery", percent: 40 },
-    { title: "On completion", percent: 20 },
-  ];
-}
-
-function coercePaymentSchedule(value) {
-  if (!value) return null;
-  if (Array.isArray(value)) return value;
-
-  // In case a JSON string was stored accidentally
-  if (typeof value === "string") {
-    try {
-      const parsed = JSON.parse(value);
-      if (Array.isArray(parsed)) return parsed;
-    } catch {
-      return null;
-    }
-  }
-
-  return null;
-}
-
-function clampNumber(n, min, max) {
-  if (!Number.isFinite(n)) return min;
-  return Math.min(Math.max(n, min), max);
-}
-
-function percentToHundredths(percent) {
-  const n = Number(percent);
-  if (!Number.isFinite(n)) return 0;
-  const clamped = clampNumber(n, 0, 100);
-  return Math.round(clamped * 100);
-}
-
-function formatPercentDisplay(percent) {
-  const n = Number(percent);
-  if (!Number.isFinite(n)) return "0";
-  const fixed = n.toFixed(2);
-  if (fixed.endsWith(".00")) return String(Math.round(n));
-  return fixed.replace(/0$/, "");
-}
-
-function normalizePaymentSchedule(raw) {
-  const arr = coercePaymentSchedule(raw);
-  if (!arr || !arr.length) return null;
-
-  const out = [];
-  for (const step of arr) {
-    const title = safeStr(step?.title || step?.name || step?.label || "");
-    const percent = Number(step?.percent ?? step?.percentage ?? step?.pct ?? 0);
-    out.push({ title, percent: clampNumber(percent, 0, 100) });
-  }
-
-  return out;
-}
-
-function ensurePaymentSchedule(data, ctx) {
-  if (!data) return;
-  const existing = normalizePaymentSchedule(data.payment_schedule);
-  if (existing && existing.length) {
-    data.payment_schedule = existing;
-    return;
-  }
-  data.payment_schedule = defaultPaymentSchedule(ctx);
-}
-
-function getPaymentScheduleRows() {
-  if (!paymentScheduleBodyEl) return [];
-  return Array.from(paymentScheduleBodyEl.querySelectorAll("tr.ps-row"));
-}
-
-function readPaymentScheduleFromUI() {
-  const rows = getPaymentScheduleRows();
-  const steps = [];
-
-  for (const row of rows) {
-    const titleEl = row.querySelector(".ps-title");
-    const percentEl = row.querySelector(".ps-percent");
-
-    const title = safeStr(titleEl?.value);
-    const p = Number(percentEl?.value);
-    steps.push({ title, percent: Number.isFinite(p) ? p : 0 });
-  }
-
-  return steps;
-}
-
-function validatePaymentSchedule(steps) {
-  const schedule = Array.isArray(steps) ? steps : [];
-  if (!schedule.length) {
-    return { ok: false, totalHundredths: 0, message: "Add at least 1 payment step." };
-  }
-
-  for (const s of schedule) {
-    if (!safeStr(s?.title)) {
-      return {
-        ok: false,
-        totalHundredths: schedule.reduce((sum, x) => sum + percentToHundredths(x?.percent), 0),
-        message: "Each payment step needs a name (example: Deposit).",
-      };
-    }
-
-    const p = Number(s?.percent);
-    if (!Number.isFinite(p) || p <= 0) {
-      return {
-        ok: false,
-        totalHundredths: schedule.reduce((sum, x) => sum + percentToHundredths(x?.percent), 0),
-        message: "Each payment step needs a percent greater than 0%.",
-      };
-    }
-  }
-
-  const totalHundredths = schedule.reduce((sum, s) => sum + percentToHundredths(s?.percent), 0);
-  const ok = totalHundredths === 10000;
-  const total = totalHundredths / 100;
-
-  return {
-    ok,
-    totalHundredths,
-    message: ok ? "Total is 100%." : `Total must equal 100% (currently ${formatPercentDisplay(total)}%).`,
-  };
-}
-
-function allocateCentsByPercent(totalCents, schedule) {
-  const total = Math.max(0, Number(totalCents) || 0);
-  const steps = Array.isArray(schedule) ? schedule : [];
-  const pHund = steps.map((s) => percentToHundredths(s?.percent));
-  const base = pHund.map((p) => Math.floor((total * p) / 10000));
-  let used = base.reduce((a, b) => a + b, 0);
-
-  // Distribute remaining cents to keep totals exact when schedule sums to 100%.
-  let remainder = total - used;
-  let i = 0;
-  while (remainder > 0 && base.length) {
-    base[i % base.length] += 1;
-    remainder -= 1;
-    i += 1;
-  }
-
-  return base;
-}
-
-function syncPaymentScheduleRemoveButtons() {
-  const rows = getPaymentScheduleRows();
-  const onlyOne = rows.length <= 1;
-  for (const row of rows) {
-    const btn = row.querySelector(".ps-remove");
-    if (!btn) continue;
-    btn.disabled = onlyOne;
-  }
-}
-
-function syncPaymentScheduleUI(totalCents) {
-  if (!paymentScheduleBodyEl || !paymentScheduleTotalEl || !paymentScheduleMsgEl) return;
-
-  const schedule = readPaymentScheduleFromUI();
-  const v = validatePaymentSchedule(schedule);
-
-  // Total display
-  const total = v.totalHundredths / 100;
-  paymentScheduleTotalEl.textContent = formatPercentDisplay(total);
-
-  // Message styling
-  paymentScheduleMsgEl.textContent = v.message || "";
-  paymentScheduleMsgEl.classList.toggle("error", !v.ok);
-  paymentScheduleMsgEl.classList.toggle("ok", v.ok);
-
-  // Amounts
-  const currency = _companySnapshot?.currency || "CAD";
-  const rows = getPaymentScheduleRows();
-
-  if (rows.length) {
-    let amounts = [];
-
-    if (v.ok) {
-      amounts = allocateCentsByPercent(totalCents, schedule);
-    } else {
-      // Still show helpful amounts while editing (based on each % of total)
-      amounts = schedule.map((s) => Math.round((Math.max(0, Number(totalCents) || 0) * percentToHundredths(s?.percent)) / 10000));
-    }
-
-    for (let i = 0; i < rows.length; i++) {
-      const amtEl = rows[i].querySelector(".ps-amount");
-      if (!amtEl) continue;
-      const cents = amounts[i] ?? 0;
-      amtEl.textContent = formatCurrency(cents, currency);
-    }
-  }
-
-  syncPaymentScheduleRemoveButtons();
-
-  return v;
-}
-
-function addPaymentScheduleRow(step = {}) {
-  if (!paymentScheduleBodyEl) return null;
-
-  const tr = document.createElement("tr");
-  tr.className = "ps-row";
-
-  const tdTitle = document.createElement("td");
-  const titleInput = document.createElement("input");
-  titleInput.type = "text";
-  titleInput.className = "ps-title";
-  titleInput.placeholder = "Deposit (upon acceptance)";
-  titleInput.value = safeStr(step?.title || "");
-  tdTitle.appendChild(titleInput);
-
-  const tdPct = document.createElement("td");
-  tdPct.className = "num";
-
-  const pctWrap = document.createElement("div");
-  pctWrap.className = "ps-percent-wrap";
-
-  const pctInput = document.createElement("input");
-  pctInput.type = "number";
-  pctInput.inputMode = "decimal";
-  pctInput.step = "0.01";
-  pctInput.min = "0";
-  pctInput.max = "100";
-  pctInput.className = "ps-percent";
-  pctInput.placeholder = "40";
-  const pct = Number(step?.percent);
-  pctInput.value = Number.isFinite(pct) && pct > 0 ? String(pct) : "";
-
-  const pctSuf = document.createElement("span");
-  pctSuf.className = "ps-suf";
-  pctSuf.textContent = "%";
-
-  pctWrap.appendChild(pctInput);
-  pctWrap.appendChild(pctSuf);
-  tdPct.appendChild(pctWrap);
-
-  const tdAmt = document.createElement("td");
-  tdAmt.className = "num";
-  const amt = document.createElement("div");
-  amt.className = "ps-amount";
-  amt.textContent = "—";
-  tdAmt.appendChild(amt);
-
-  const tdAct = document.createElement("td");
-  tdAct.className = "no-print slim";
-  const rmBtn = document.createElement("button");
-  rmBtn.type = "button";
-  rmBtn.className = "btn small ps-remove";
-  rmBtn.textContent = "✕";
-  rmBtn.setAttribute("aria-label", "Remove payment step");
-  tdAct.appendChild(rmBtn);
-
-  rmBtn.addEventListener("click", () => {
-    const rows = getPaymentScheduleRows();
-    if (rows.length <= 1) return;
-    tr.remove();
-    syncPaymentScheduleUI(_lastTotals?.total_cents ?? 0);
-  });
-
-  for (const el of [titleInput, pctInput]) {
-    el.addEventListener("input", () => syncPaymentScheduleUI(_lastTotals?.total_cents ?? 0));
-    el.addEventListener("change", () => syncPaymentScheduleUI(_lastTotals?.total_cents ?? 0));
-  }
-
-  tr.appendChild(tdTitle);
-  tr.appendChild(tdPct);
-  tr.appendChild(tdAmt);
-  tr.appendChild(tdAct);
-
-  paymentScheduleBodyEl.appendChild(tr);
-  return { tr, titleInput, pctInput };
-}
-
-function renderPaymentSchedule(schedule) {
-  if (!paymentScheduleBodyEl) return;
-
-  paymentScheduleBodyEl.innerHTML = "";
-  const normalized = normalizePaymentSchedule(schedule) || defaultPaymentSchedule(_ctx);
-
-  for (const step of normalized) addPaymentScheduleRow(step);
-
-  syncPaymentScheduleUI(_lastTotals?.total_cents ?? 0);
-}
-
-function addPaymentScheduleStep() {
-  if (!paymentScheduleBodyEl) return;
-
-  const current = readPaymentScheduleFromUI();
-  const totalHundredths = current.reduce((sum, s) => sum + percentToHundredths(s?.percent), 0);
-  const remaining = Math.max(0, 10000 - totalHundredths) / 100;
-
-  const added = addPaymentScheduleRow({ title: "", percent: remaining > 0 ? remaining : "" });
-  syncPaymentScheduleUI(_lastTotals?.total_cents ?? 0);
-
-  try { added?.titleInput?.focus(); } catch {}
+function getDepositMode() {
+  return $$('input[name="deposit_mode"]').find((r) => r.checked)?.value || "auto";
 }
 
 /* ===== Autosize textareas ===== */
@@ -788,7 +285,6 @@ function autosizeAll() {
 /* ===== Tenant context (company + user) ===== */
 let _ctx = null;
 let _companySnapshot = null;
-let _lastTotals = { subtotal_cents: 0, tax_cents: 0, fees_cents: 0, total_cents: 0 };
 
 function safeStr(v) {
   return String(v ?? "").trim();
@@ -956,18 +452,11 @@ function applyCompanyToDom(company) {
     if (el && !safeStr(el.textContent)) el.remove();
   });
 
-  // Keep BOTH the document letterhead logo and the app topbar logo in sync.
-  const logoSrc =
-    safeStr(company.logo_url) ||
-    safeStr(companyLogoEl?.getAttribute("src")) ||
-    safeStr(appLogoEl?.getAttribute("src"));
-
-  if (companyLogoEl && logoSrc) companyLogoEl.src = logoSrc;
-  if (appLogoEl && logoSrc) appLogoEl.src = logoSrc;
-
-  const alt = company.name ? `${company.name} logo` : "Company logo";
-  if (companyLogoEl) companyLogoEl.alt = alt;
-  if (appLogoEl) appLogoEl.alt = alt;
+  if (companyLogoEl) {
+    const src = company.logo_url || companyLogoEl.getAttribute("src");
+    if (src) companyLogoEl.src = src;
+    companyLogoEl.alt = company.name ? `${company.name} logo` : "Company logo";
+  }
 }
 
 function ensurePreparedBy(data, ctx) {
@@ -1139,16 +628,14 @@ function renderClientAcceptance(data, qRow) {
       clientSigImg.src = src;
       clientSigImg.hidden = false;
     } else {
-      // Avoid showing a broken image icon/alt text when there's no signature.
-      clientSigImg.removeAttribute("src");
+      clientSigImg.src = "";
       clientSigImg.hidden = true;
     }
 
     clientSignedNameEl.textContent = name;
     clientSignedDateEl.textContent = formatDateDisplay(dateIso);
   } else {
-    // Avoid showing a broken image icon/alt text when the customer hasn't signed yet.
-    clientSigImg.removeAttribute("src");
+    clientSigImg.src = "";
     clientSigImg.hidden = true;
     clientSignedNameEl.textContent = "";
     clientSignedDateEl.textContent = "";
@@ -1177,26 +664,6 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
-
-function syncCustomerViewUI(row) {
-  if (!row) return;
-
-  const show = row.dataset.showQtyUnitPrice !== "0";
-
-  const detailsBtn = row.querySelector('[data-action="custview-details"]');
-  const totalBtn = row.querySelector('[data-action="custview-total"]');
-
-  if (detailsBtn) {
-    detailsBtn.classList.toggle("active", show);
-    detailsBtn.setAttribute("aria-pressed", show ? "true" : "false");
-  }
-
-  if (totalBtn) {
-    totalBtn.classList.toggle("active", !show);
-    totalBtn.setAttribute("aria-pressed", !show ? "true" : "false");
-  }
-}
-
 function buildItemRow(item = {}) {
   const tr = document.createElement("tr");
   tr.className = "item-row avoid-break";
@@ -1220,85 +687,22 @@ function buildItemRow(item = {}) {
   const lineCents = Math.round((qty || 0) * (unitPriceCents || 0));
 
   tr.innerHTML = `
-    <td>
-      <div class="i-head">
-        <input type="text" class="i-name" placeholder="Item name" value="${escapeHtml(name)}" />
-      </div>
-
-      <div class="i-view no-print" title="Controls what the customer sees on the quote link + PDF.">
-        <span class="i-view-label">Customer sees</span>
-        <div class="i-view-seg" role="group" aria-label="Customer sees">
-          <button type="button" class="i-view-btn" data-action="custview-details">Qty &amp; Unit Price</button>
-          <button type="button" class="i-view-btn" data-action="custview-total">Total only</button>
-        </div>
-      </div>
-
+    <td data-label="Item">
+      <input type="text" class="i-name" placeholder="Item name" value="${escapeHtml(name)}" />
       <textarea rows="2" class="i-desc" placeholder="Description">${escapeHtml(description)}</textarea>
     </td>
-    <td class="num"><input type="text" class="i-qty" inputmode="decimal" value="${qty || 0}" /></td>
-    <td class="center">
-      <input
-        type="text"
-        class="i-unit-input"
-        placeholder="Each"
-        value="${escapeHtml(unitType)}"
-        aria-label="Unit type"
-        title="Unit type (eg. Each, sqft, lf)"
-      />
-    </td>
-    <td class="num"><input type="text" class="i-price" inputmode="decimal" value="${centsToMoney(unitPriceCents)}" /></td>
-    <td class="center"><input type="checkbox" class="i-tax" ${taxable ? "checked" : ""} /></td>
-    <td class="line-total"><span>$${centsToMoney(lineCents)}</span></td>
-    <td class="no-print slim">
-      <button
-        class="btn small"
-        type="button"
-        data-action="remove"
-        title="Remove line"
-        aria-label="Remove line"
-      >✕</button>
-    </td>
+    <td class="num" data-label="Qty"><input type="text" class="i-qty" inputmode="decimal" value="${qty || 0}" /></td>
+    <td class="center" data-label="Unit"><div class="i-unit">${escapeHtml(unitType)}</div></td>
+    <td class="num" data-label="Unit Price"><input type="text" class="i-price" inputmode="decimal" value="${centsToMoney(unitPriceCents)}" /></td>
+    <td class="center" data-label="Tax"><input type="checkbox" class="i-tax" ${taxable ? "checked" : ""} /></td>
+    <td class="line-total" data-label="Line Total"><span>$${centsToMoney(lineCents)}</span></td>
+    <td class="no-print slim" data-label=""><button class="btn small" type="button" data-action="remove">✕</button></td>
   `;
 
   tr.querySelectorAll("input, textarea").forEach((el) => {
     el.addEventListener("input", () => recalcTotals());
     el.addEventListener("change", () => recalcTotals());
   });
-
-  // Per-line customer visibility (controls what the customer sees on the quote link + PDF)
-  const detailsBtn = tr.querySelector('[data-action="custview-details"]');
-  const totalBtn = tr.querySelector('[data-action="custview-total"]');
-
-  if (detailsBtn) {
-    detailsBtn.addEventListener("click", () => {
-      tr.dataset.showQtyUnitPrice = "1";
-      syncCustomerViewUI(tr);
-      // Buttons don't fire input/change, so we manually mark the quote as dirty.
-      try { markDirty(); } catch {}
-    });
-  }
-
-  if (totalBtn) {
-    totalBtn.addEventListener("click", () => {
-      tr.dataset.showQtyUnitPrice = "0";
-      syncCustomerViewUI(tr);
-      try { markDirty(); } catch {}
-    });
-  }
-
-  syncCustomerViewUI(tr);
-
-
-  // Unit type is now editable per-quote (so you can override catalog defaults when needed)
-  const unitInput = tr.querySelector(".i-unit-input");
-  if (unitInput) {
-    const sync = () => {
-      tr.dataset.unitType = safeStr(unitInput.value) || "Each";
-    };
-    unitInput.addEventListener("input", sync);
-    unitInput.addEventListener("change", sync);
-    sync();
-  }
 
   // Money tidy-up (keeps PDFs clean too)
   const priceInput = tr.querySelector(".i-price");
@@ -1315,19 +719,6 @@ function buildItemRow(item = {}) {
     if (!itemRowsEl.children.length) itemRowsEl.appendChild(buildItemRow());
     recalcTotals();
   });
-
-  // Auto-grow item description so it never scrolls (premium + easier to read)
-  const descEl = tr.querySelector(".i-desc");
-  if (descEl) {
-    const resize = () => {
-      descEl.style.height = "auto";
-      descEl.style.height = `${descEl.scrollHeight + 2}px`;
-    };
-    descEl.addEventListener("input", resize);
-    descEl.addEventListener("change", resize);
-    // Run after insertion (so scrollHeight is correct)
-    requestAnimationFrame(resize);
-  }
 
   return tr;
 }
@@ -1355,10 +746,7 @@ function getItemsFromUI() {
   return rows.map((row) => {
     const show_qty_unit_price = row.dataset.showQtyUnitPrice !== "0";
     const product_id = safeStr(row.dataset.productId) || null;
-    const unit_type =
-      safeStr($(".i-unit-input", row)?.value) ||
-      safeStr(row.dataset.unitType) ||
-      "Each";
+    const unit_type = safeStr(row.dataset.unitType) || "Each";
 
     const name = safeStr($(".i-name", row)?.value);
     const description = safeStr($(".i-desc", row)?.value);
@@ -1391,41 +779,16 @@ function formatCurrency(cents, currency = "CAD") {
   }
 }
 
-
-function getProductTitle(p) {
-  return (
-    safeStr(p?.name) ||
-    safeStr(p?.title) ||
-    safeStr(p?.product_name) ||
-    safeStr(p?.service_name) ||
-    "Unnamed"
-  );
-}
-
-function getProductDescription(p) {
-  return safeStr(p?.description) || safeStr(p?.desc) || "";
-}
-
-function getProductUnitType(p) {
-  return safeStr(p?.unit_type) || safeStr(p?.unit) || "Each";
-}
-
-function getProductPriceCents(p) {
-  const v = p?.price_per_unit_cents ?? p?.unit_price_cents ?? p?.price_cents ?? p?.price ?? 0;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
-}
-
 function productToItem(product) {
   return {
     product_id: product.id,
-    name: getProductTitle(product),
-    description: getProductDescription(product),
-    unit_type: getProductUnitType(product),
+    name: product.name || "",
+    description: product.description || "",
+    unit_type: product.unit_type || "Each",
     // Default to showing breakdown unless explicitly turned off
     show_qty_unit_price: product.show_qty_unit_price !== false,
     qty: 1,
-    unit_price_cents: getProductPriceCents(product),
+    unit_price_cents: Number(product.price_per_unit_cents || 0),
     taxable: true,
   };
 }
@@ -1443,11 +806,11 @@ function renderProductsList(products, currency) {
 
     const name = document.createElement("div");
     name.className = "product-name";
-    name.textContent = getProductTitle(p);
+    name.textContent = p.name || "Unnamed";
 
     const desc = document.createElement("div");
     desc.className = "product-desc";
-    desc.textContent = getProductDescription(p);
+    desc.textContent = p.description || "";
     if (!safeStr(desc.textContent)) desc.style.display = "none";
 
     const meta = document.createElement("div");
@@ -1455,19 +818,16 @@ function renderProductsList(products, currency) {
 
     const priceTag = document.createElement("span");
     priceTag.className = "tag";
-    priceTag.textContent = formatCurrency(getProductPriceCents(p), currency);
+    priceTag.textContent = formatCurrency(p.price_per_unit_cents || 0, currency);
 
     const unitTag = document.createElement("span");
     unitTag.className = "tag";
-    unitTag.textContent = getProductUnitType(p);
+    unitTag.textContent = p.unit_type || "Each";
 
     const modeTag = document.createElement("span");
     modeTag.className = "tag";
     const breakdown = p.show_qty_unit_price !== false;
-    modeTag.textContent = breakdown ? "Qty & Unit Price" : "Total only";
-    modeTag.title = breakdown
-      ? "Customer will see qty + unit price"
-      : "Customer will see a single total (no qty/unit/unit price)";
+    modeTag.textContent = breakdown ? "Breakdown" : "Total only";
 
     meta.appendChild(priceTag);
     meta.appendChild(unitTag);
@@ -1552,14 +912,17 @@ function recalcTotals() {
   taxAmountEl.textContent = centsToMoney(tax);
   grandTotalEl.textContent = centsToMoney(grand);
 
-  _lastTotals = { subtotal_cents: subtotal, tax_cents: tax, fees_cents: fees, total_cents: grand };
+  const mode = getDepositMode();
+  if (mode === "auto") {
+    const dep = Math.round(grand * 0.4);
+    depositDueEl.value = `$${centsToMoney(dep)}`;
+    depositDueEl.setAttribute("readonly", "readonly");
+  } else {
+    depositDueEl.removeAttribute("readonly");
+  }
 
-  // Keep payment schedule amounts in sync with the current quote total
-  syncPaymentScheduleUI(grand);
-
-  return _lastTotals;
+  return { subtotal_cents: subtotal, tax_cents: tax, fees_cents: fees, total_cents: grand };
 }
-
 
 /* ===== Merge defaults ===== */
 function mergeDefaults(existing, fallback) {
@@ -1619,7 +982,7 @@ function fillUIFromData(qRow, data, ctx) {
   quoteCodeEl.textContent = quoteCode;
   if (docQuoteCodeEl) docQuoteCodeEl.textContent = quoteCode;
 
-  syncQuoteStatusUI(qRow.status);
+  quoteStatusEl.textContent = qRow.status || "Draft";
 
   setBoundValue("quote_no", quoteCode);
   setBoundValue("quote_date", data.meta.quote_date);
@@ -1639,9 +1002,12 @@ function fillUIFromData(qRow, data, ctx) {
   taxRateEl.value = String(data.tax_rate ?? 13);
   feesEl.value = centsToMoney(data.fees_cents ?? 0);
 
-  // Payment schedule (per-quote override). If missing, seed from Company Settings.
-  ensurePaymentSchedule(data, ctx);
-  renderPaymentSchedule(data.payment_schedule);
+  const mode = data.deposit_mode || "auto";
+  $$('input[name="deposit_mode"]').forEach((r) => (r.checked = r.value === mode));
+  if (mode === "custom") {
+    depositDueEl.value = `$${centsToMoney(data.deposit_cents ?? 0)}`;
+    depositDueEl.removeAttribute("readonly");
+  }
 
   itemRowsEl.innerHTML = "";
   const items = Array.isArray(data.items) && data.items.length
@@ -1682,8 +1048,9 @@ function collectDataFromUI(qRow, existingAcceptance = null) {
     (it) => safeStr(it?.name) || safeStr(it?.description) || (it?.unit_price_cents || 0) > 0
   );
 
-    const payment_schedule = readPaymentScheduleFromUI();
-
+  const mode = getDepositMode();
+  let deposit_cents = 0;
+  if (mode === "custom") deposit_cents = parseMoneyToCents(depositDueEl.value);
 
   return {
     // Keep the customer linkage in json so customer pages can query reliably
@@ -1695,128 +1062,14 @@ function collectDataFromUI(qRow, existingAcceptance = null) {
     items: itemsForSave,
     tax_rate: parseNum(taxRateEl.value) || 13,
     fees_cents: totals.fees_cents,
-    payment_schedule,
+    deposit_mode: mode,
+    deposit_cents,
     terms: getBoundValue("terms"),
     notes: getBoundValue("notes"),
     acceptance: existingAcceptance || undefined,
     computed: totals,
     quote_code: formatQuoteCode(qRow.quote_no, meta.quote_date),
   };
-}
-
-
-function ensureNewVersionButton() {
-  if (newVersionBtn) return newVersionBtn;
-
-  const actionsEl = backBtn?.closest(".actions") || document.querySelector(".topbar .actions");
-  if (!actionsEl) return null;
-
-  const btn = document.createElement("button");
-  btn.type = "button";
-  btn.id = "new-version-btn";
-  btn.className = "btn";
-  btn.textContent = "New version";
-  btn.title = "Create a separate draft copy so you can make changes without overwriting this quote.";
-
-  const insertBeforeEl = markAcceptedBtn || cancelQuoteBtn || pdfBtn || sendBtn || null;
-  if (insertBeforeEl && insertBeforeEl.parentElement === actionsEl) {
-    actionsEl.insertBefore(btn, insertBeforeEl);
-  } else {
-    actionsEl.appendChild(btn);
-  }
-
-  newVersionBtn = btn;
-  return btn;
-}
-
-function scrubForNewVersion(data) {
-  if (!data || typeof data !== "object") return data;
-
-  const clone = JSON.parse(JSON.stringify(data));
-
-  const kill = [
-    "accepted",
-    "accepted_at",
-    "acceptedAt",
-    "accepted_date",
-    "accepted_date_local",
-    "signed",
-    "signed_at",
-    "signedAt",
-    "signature",
-    "signatureDataUrl",
-    "signature_data_url",
-    "signature_image_data_url",
-    "signatureSvg",
-    "signature_svg",
-    "signer_email",
-    "signerEmail",
-    "signer_name",
-    "signerName",
-    "printed_name",
-    "printedName",
-    "public_id",
-    "publicId",
-    "public_token",
-    "publicToken",
-    "manual_accepted_at",
-    "manual_accepted_by",
-    "manual_cancelled_at",
-    "manual_cancelled_by",
-    "manual_cancelled_previous_status",
-    "manual_cancelled_after_acceptance",
-  ];
-
-  for (const k of kill) {
-    if (k in clone) delete clone[k];
-    if (clone.meta && k in clone.meta) delete clone.meta[k];
-  }
-
-  if (clone.acceptance) delete clone.acceptance;
-  if (clone.signing) delete clone.signing;
-  if ("quote_code" in clone) delete clone.quote_code;
-
-  clone.meta = clone.meta || {};
-  delete clone.meta.version_of_quote_id;
-  delete clone.meta.version_of_quote_no;
-  delete clone.meta.version_created_at;
-  delete clone.meta.version_type;
-  clone.meta.version_type = "new_version";
-  clone.meta.version_created_at = new Date().toISOString();
-
-  return clone;
-}
-
-async function createQuoteVersionFromPayload(sourceQuote, payload, ctx) {
-  const copiedData = scrubForNewVersion(payload);
-  copiedData.meta = copiedData.meta || {};
-  copiedData.meta.version_of_quote_id = sourceQuote?.id || null;
-  copiedData.meta.version_of_quote_no = sourceQuote?.quote_no ?? null;
-
-  const customerName = safeStr(payload?.bill_to?.client_name) || safeStr(sourceQuote?.customer_name) || null;
-  const customerEmail = safeStr(payload?.bill_to?.client_email) || safeStr(sourceQuote?.customer_email) || null;
-  const totalCents = Number(payload?.computed?.total_cents ?? sourceQuote?.total_cents ?? 0) || 0;
-  const currency = safeStr(sourceQuote?.currency) || safeStr(payload?.company?.currency) || "CAD";
-
-  const insertPayload = {
-    customer_name: customerName,
-    customer_email: customerEmail || null,
-    total_cents: totalCents,
-    currency,
-    status: "draft",
-    data: copiedData,
-    company_id: ctx?.companyId || sourceQuote?.company_id || null,
-    created_by: ctx?.userId || null,
-  };
-
-  const { data: inserted, error } = await supabase
-    .from("quotes")
-    .insert(insertPayload)
-    .select("id, quote_no")
-    .single();
-
-  if (error) throw error;
-  return inserted;
 }
 
 /* =========================================================
@@ -2024,12 +1277,6 @@ function buildPdfClone() {
     out.textContent = value;
     out.style.whiteSpace = "pre-wrap";
     out.style.display = "block";
-
-    // Prevent long unbroken strings (eg. pasted model numbers / notes) from
-    // bleeding outside the PDF table/page.
-    out.style.overflowWrap = "anywhere";
-    out.style.wordBreak = "break-word";
-    out.style.maxWidth = "100%";
 
     // Base typography for PDF text replacements
     out.style.border = "0";
@@ -2310,140 +1557,10 @@ if (!safeStr(data.terms) && safeStr(ctx?.company?.payment_terms)) {
   await hydrateBillToFromCustomer(data, qRow);
 
   fillUIFromData(qRow, data, ctx);
-  syncQuoteStatusUI(qRow.status);
-  ensureNewVersionButton();
-
-  function confirmEditOfSentQuote() {
-    if (!isSentLikeStatus(qRow?.status) || _sentEditConfirmed) return true;
-
-    const ok = window.confirm(
-      "This quote has already been sent to the customer.\n\nIf you make changes now, the customer-facing quote will update.\n\nAre you sure you want to make changes?"
-    );
-
-    if (ok) {
-      _sentEditConfirmed = true;
-      showMsg("Editing enabled. Changes will update the sent quote.");
-      setTimeout(() => {
-        if (msgEl && msgEl.textContent === "Editing enabled. Changes will update the sent quote.") {
-          showMsg("");
-        }
-      }, 2200);
-    }
-
-    return ok;
-  }
-
-  function allowEditAttempt() {
-    if (isAcceptedStatus(qRow?.status)) {
-      showMsg(lockedQuoteToast(qRow?.status));
-      setTimeout(() => {
-        if (msgEl && msgEl.textContent === lockedQuoteToast(qRow?.status)) showMsg("");
-      }, 1800);
-      return false;
-    }
-
-    if (isCancelledStatus(qRow?.status)) {
-      showMsg(lockedQuoteToast(qRow?.status));
-      setTimeout(() => {
-        if (msgEl && msgEl.textContent === lockedQuoteToast(qRow?.status)) showMsg("");
-      }, 1800);
-      return false;
-    }
-
-    if (isSentLikeStatus(qRow?.status)) return confirmEditOfSentQuote();
-    return true;
-  }
-
-  function getEditAttemptControl(target) {
-    if (!(target instanceof Element) || !quotePageEl) return null;
-    const el = target.closest("input, textarea, select, button");
-    if (!el || !quotePageEl.contains(el) || el.disabled) return null;
-
-    if ((el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) && el.readOnly) {
-      return null;
-    }
-
-    return el;
-  }
-
-  function interceptEditAttempt(e) {
-    const control = getEditAttemptControl(e.target);
-    if (!control) return;
-
-    const status = qRow?.status;
-    if (!isSentLikeStatus(status) && !isAcceptedStatus(status) && !isCancelledStatus(status)) return;
-
-    const ok = allowEditAttempt();
-    if (ok) return;
-
-    e.preventDefault();
-    e.stopPropagation();
-    if (typeof e.stopImmediatePropagation === "function") e.stopImmediatePropagation();
-
-    if (e.type === "focusin" && typeof control.blur === "function") {
-      setTimeout(() => control.blur(), 0);
-    }
-  }
-
-  if (quotePageEl) {
-    quotePageEl.addEventListener("pointerdown", interceptEditAttempt, true);
-    quotePageEl.addEventListener("click", interceptEditAttempt, true);
-    quotePageEl.addEventListener("focusin", interceptEditAttempt, true);
-    quotePageEl.addEventListener("beforeinput", interceptEditAttempt, true);
-    quotePageEl.addEventListener(
-      "keydown",
-      (e) => {
-        const key = String(e.key || "");
-        const maybeEditKey =
-          key === "Enter" ||
-          key === " " ||
-          key === "Spacebar" ||
-          key === "Backspace" ||
-          key === "Delete" ||
-          key.length === 1;
-
-        if (maybeEditKey) interceptEditAttempt(e);
-      },
-      true
-    );
-  }
+  initMobileChrome(ctx);
 
   backBtn.addEventListener("click", () => {
     window.location.href = "./dashboard.html";
-  });
-
-  newVersionBtn?.addEventListener("click", async () => {
-    const originalDirty = _autoDirty;
-    try {
-      const code = safeStr(quoteCodeEl?.textContent) || (qRow?.quote_no ? `Q-${qRow.quote_no}` : "this quote");
-      const ok = window.confirm(
-        `Create a new draft version from ${code}?
-
-This will open a separate draft copy so you can make changes without overwriting the current quote.`
-      );
-      if (!ok) return;
-
-      newVersionBtn.disabled = true;
-      showMsg("Creating new version…");
-
-      await flushAutoSave();
-
-      const existingAcceptance = qRow?.data?.acceptance || null;
-      const payload = collectDataFromUI(qRow, existingAcceptance);
-
-      const inserted = await createQuoteVersionFromPayload(qRow, payload, ctx);
-      window.location.href = `./quote.html?id=${inserted.id}`;
-    } catch (e) {
-      console.error(e);
-      if (originalDirty && !isAcceptedStatus(qRow?.status) && !isCancelledStatus(qRow?.status)) {
-        _autoDirty = true;
-        scheduleAutoSave();
-      }
-      showMsg(e?.message || "Failed to create new version.");
-      setTimeout(() => showMsg(""), 2200);
-    } finally {
-      if (newVersionBtn) newVersionBtn.disabled = false;
-    }
   });
 
   addItemBtn.addEventListener("click", () => {
@@ -2467,199 +1584,13 @@ This will open a separate draft copy so you can make changes without overwriting
 
   taxRateEl.addEventListener("input", recalcTotals);
   feesEl.addEventListener("input", recalcTotals);
-
-  // Payment schedule controls
-  addPaymentStepBtn?.addEventListener("click", addPaymentScheduleStep);
-  useDefaultScheduleBtn?.addEventListener("click", () => {
-    renderPaymentSchedule(defaultPaymentSchedule(ctx));
-    showMsg("Payment schedule reset to your company default.");
-    syncPaymentScheduleUI(_lastTotals?.total_cents ?? 0);
-  });
+  $$('input[name="deposit_mode"]').forEach((r) => r.addEventListener("change", recalcTotals));
 
   quoteDateInput?.addEventListener("change", () => {
     syncRepDateFromQuoteDate();
   });
 
-/* =======================
-   AUTO-SAVE (admin)
-   - Saves after changes with a short debounce so users don't lose work.
-   - Replaces the always-visible "Save" button with a clear status pill.
-   - If auto-save fails (network), we reveal a "Retry Save" button.
-   ======================= */
-const AUTO_SAVE_DELAY_MS = 900;
-
-let _autoDirty = false;
-let _autoTimer = null;
-let _autoInFlight = null;
-let _lastAutoErrorAt = 0;
-
-function setStateSaved() {
-  setSaveState("saved", "All changes saved");
-  setManualSaveVisible(false);
-}
-
-function setStateSaving() {
-  setSaveState("saving", "Saving…");
-  // If the user previously had an error, hide the retry button as soon as they edit again.
-  setManualSaveVisible(false);
-}
-
-function setStateAttention(message) {
-  setSaveState("attention", message || "Needs info to save");
-  setManualSaveVisible(false);
-}
-
-function setStateError(message) {
-  setSaveState("error", message || "Not saved");
-  setManualSaveVisible(true, "Retry Save");
-}
-
-// We just loaded the quote from the server, so we're in a "saved" state.
-setStateSaved();
-
-function scheduleAutoSave() {
-  clearTimeout(_autoTimer);
-  _autoTimer = setTimeout(() => runAutoSave(), AUTO_SAVE_DELAY_MS);
-}
-
-function markDirty() {
-  _autoDirty = true;
-
-  // Update the status immediately so the user understands they don't need a Save button.
-  if (canAutoSaveNow()) {
-    setStateSaving();
-  }
-  // If canAutoSaveNow() returns false, it already set a helpful status message.
-
-  scheduleAutoSave();
-}
-
-async function flushAutoSave() {
-  clearTimeout(_autoTimer);
-  if (_autoInFlight) {
-    try { await _autoInFlight; } catch {}
-  }
-}
-
-function canAutoSaveNow() {
-  if (isAcceptedStatus(qRow?.status) || isCancelledStatus(qRow?.status)) {
-    setSaveState(
-      "saved",
-      isAcceptedStatus(qRow?.status) ? "Locked — Accepted" : "Locked — Cancelled"
-    );
-    return false;
-  }
-
-  // Match the same validation rules as manual Save/Send/PDF
-  const name = safeStr(getBoundValue("client_name"));
-  if (!name) {
-    setStateAttention("Add customer name to save");
-    return false;
-  }
-
-  if (paymentScheduleBodyEl) {
-    const v = validatePaymentSchedule(readPaymentScheduleFromUI());
-    if (!v.ok) {
-      setStateAttention(v.message || "Fix payment schedule to save");
-      return false;
-    }
-  }
-
-  return true;
-}
-
-function runAutoSave() {
-  if (!_autoDirty) return;
-  if (_autoInFlight) return;
-
-  // If a manual action is running, try again shortly.
-  if (saveBtn?.disabled || sendBtn?.disabled || pdfBtn?.disabled) {
-    scheduleAutoSave();
-    return;
-  }
-
-  if (!canAutoSaveNow()) return;
-
-  setStateSaving();
-
-  _autoInFlight = (async () => {
-    try {
-      const saved = await saveNow({ quiet: true });
-      if (saved) {
-        _autoDirty = false;
-        setStateSaved();
-      }
-    } catch (e) {
-      console.error("Auto-save failed:", e);
-      setStateError("Not saved");
-
-      const now = Date.now();
-      if (now - _lastAutoErrorAt > 12000) {
-        _lastAutoErrorAt = now;
-        showMsg("Auto-save failed. Please click Retry Save.");
-        setTimeout(() => showMsg(""), 2600);
-      }
-    } finally {
-      _autoInFlight = null;
-    }
-  })();
-
-  return _autoInFlight;
-}
-
-function wireAutoSaveListeners() {
-  if (!quotePageEl) return;
-
-  // Typing/changes anywhere inside the quote triggers autosave.
-  quotePageEl.addEventListener("input", (e) => {
-    const t = e.target;
-    if (!(t instanceof HTMLElement)) return;
-    if (t.matches("input, textarea, select")) markDirty();
-  });
-
-  quotePageEl.addEventListener("change", (e) => {
-    const t = e.target;
-    if (!(t instanceof HTMLElement)) return;
-    if (t.matches("input, textarea, select")) markDirty();
-  });
-
-  // Click actions that mutate the quote but don't fire input/change.
-  quotePageEl.addEventListener("click", (e) => {
-    const el = e.target instanceof Element ? e.target : null;
-    if (!el) return;
-
-    if (
-      el.closest('[data-action="remove"]') ||
-      el.closest('[data-action="custview-details"]') ||
-      el.closest('[data-action="custview-total"]') ||
-      el.closest(".ps-remove") ||
-      el.closest("#add-item") ||
-      el.closest("#btn-add-payment-step") ||
-      el.closest("#btn-use-default-schedule")
-    ) {
-      markDirty();
-    }
-  });
-
-  // Adding a product from the dialog (Add button).
-  productsDialog?.addEventListener("click", (e) => {
-    const el = e.target instanceof Element ? e.target : null;
-    if (!el) return;
-
-    const row = el.closest(".product-row");
-    const btn = el.closest("button");
-    if (!row || !btn) return;
-
-    if (safeStr(btn.textContent).toLowerCase() === "add") {
-      markDirty();
-    }
-  });
-}
-
-wireAutoSaveListeners();
-
-
-  async function saveNow({ quiet = false } = {}) {
+  async function saveNow() {
     // Preserve any customer acceptance signature so admin saves don't wipe it
     let existingAcceptance = qRow?.data?.acceptance || null;
     try {
@@ -2669,25 +1600,15 @@ wireAutoSaveListeners();
 
     const payload = collectDataFromUI(qRow, existingAcceptance);
 
-    // Payment schedule must be valid before saving/sending
-    const schedV = validatePaymentSchedule(payload.payment_schedule);
-    if (!schedV.ok) {
-      setStateAttention(schedV.message || "Fix payment schedule to save");
-      if (!quiet) showMsg(schedV.message || "Payment schedule must total 100%.");
-      return null;
-    }
-
     // Ensure acceptance (if present) is visible in the UI (so PDF includes it too)
     renderClientAcceptance(payload, qRow);
 
     if (!payload.bill_to.client_name) {
-      setStateAttention("Add customer name to save");
-      if (!quiet) showMsg("Customer name is required (Bill To).");
+      showMsg("Customer name is required (Bill To).");
       return null;
     }
 
-    setStateSaving();
-    if (!quiet) showMsg("Saving…");
+    showMsg("Saving…");
 
     const updated = await updateQuote(quoteId, {
       customer_name: payload.bill_to.client_name,
@@ -2697,51 +1618,30 @@ wireAutoSaveListeners();
     });
 
     qRow = updated;
-    syncQuoteStatusUI(qRow.status);
+    quoteStatusEl.textContent = qRow.status || "Draft";
 
     quoteCodeEl.textContent = payload.quote_code;
     if (docQuoteCodeEl) docQuoteCodeEl.textContent = payload.quote_code;
 
-    // Any successful save means there are no pending unsaved changes.
-    _autoDirty = false;
-    setStateSaved();
-
-    if (!quiet) {
-      showMsg("Saved.");
-      setTimeout(() => showMsg(""), 800);
-    }
+    showMsg("Saved.");
+    setTimeout(() => showMsg(""), 800);
 
     return { qRow, payload };
   }
 
-  saveBtn?.addEventListener("click", async () => {
+  saveBtn.addEventListener("click", async () => {
     try {
-      await flushAutoSave();
       saveBtn.disabled = true;
-
-      const saved = await saveNow({ quiet: true });
-      if (!saved) return;
-
-      showMsg("Saved.");
-      setTimeout(() => showMsg(""), 900);
+      await saveNow();
     } catch (e) {
-      console.error(e);
-      setStateError("Not saved");
       showMsg(e?.message || "Save failed.");
     } finally {
-      if (saveBtn) saveBtn.disabled = false;
+      saveBtn.disabled = false;
     }
   });
   sendBtn?.addEventListener("click", async () => {
     try {
-      if (isCancelledStatus(qRow?.status)) {
-        showMsg("This quote is cancelled and can't be sent.");
-        return;
-      }
-
       sendBtn.disabled = true;
-
-      await flushAutoSave();
 
       const saved = await saveNow();
       if (!saved) return;
@@ -2760,11 +1660,7 @@ wireAutoSaveListeners();
       });
 
       // Update UI if API returns status
-      if (result?.status) {
-        qRow = { ...qRow, status: result.status };
-        _sentEditConfirmed = false;
-        syncQuoteStatusUI(result.status);
-      }
+      if (result?.status) quoteStatusEl.textContent = result.status;
 
       // Copy link (nice touch)
       if (result?.view_url && navigator.clipboard?.writeText) {
@@ -2780,109 +1676,11 @@ wireAutoSaveListeners();
     }
   });
 
-  // Manual: Cancel quote (for jobs that don't move forward)
-  cancelQuoteBtn?.addEventListener("click", async () => {
-    try {
-      if (isCancelledStatus(qRow?.status)) {
-        showMsg("This quote is already cancelled.");
-        return;
-      }
-
-      const wasAccepted = isAcceptedStatus(qRow?.status);
-      const ok = window.confirm(
-        wasAccepted
-          ? "Cancel this accepted quote?\n\nUse this when a job falls through after approval/deposit.\n\n• Status will change to Cancelled\n• The customer link can no longer be accepted/signed\n• Any existing signature stays saved for your records\n\nYou can still download the PDF."
-          : "Cancel this quote?\n\nThis will mark it as Cancelled in your dashboard and disable sending.\nYou can still download the PDF for records."
-      );
-      if (!ok) return;
-
-      cancelQuoteBtn.disabled = true;
-
-      await flushAutoSave();
-      const saved = await saveNow();
-      if (!saved) return;
-
-      const { payload } = saved;
-
-      const nowIso = new Date().toISOString();
-      const data = (payload && typeof payload === "object") ? { ...payload } : {};
-      data.meta = (data.meta && typeof data.meta === "object") ? { ...data.meta } : {};
-      data.meta.manual_cancelled_at = nowIso;
-      data.meta.manual_cancelled_by = String(ctx?.userName || ctx?.user?.email || "").trim();
-      data.meta.manual_cancelled_previous_status = String(qRow?.status || "");
-      data.meta.manual_cancelled_after_acceptance = wasAccepted ? true : false;
-
-      const updated = await updateQuote(quoteId, { status: "cancelled", data });
-      qRow = updated;
-      _sentEditConfirmed = false;
-
-      syncQuoteStatusUI(qRow.status);
-
-      showMsg("Quote cancelled.");
-      setTimeout(() => showMsg(""), 1200);
-    } catch (e) {
-      console.error(e);
-      showMsg(e?.message || "Failed to cancel quote.");
-      setTimeout(() => showMsg(""), 2400);
-    } finally {
-      syncQuoteStatusUI(qRow?.status);
-    }
-  });
-
-  // Manual: Mark quote as Accepted (without a customer signature)
-  markAcceptedBtn?.addEventListener("click", async () => {
-    try {
-      if (isCancelledStatus(qRow?.status)) {
-        showMsg("This quote is cancelled.");
-        return;
-      }
-      if (isAcceptedStatus(qRow?.status)) return;
-
-      const ok = window.confirm(
-        "Mark this quote as Accepted?\n\nUse this when a customer approves without signing online (eg. deposit received).\nThis does NOT add a customer signature."
-      );
-      if (!ok) return;
-
-      markAcceptedBtn.disabled = true;
-
-      await flushAutoSave();
-      const saved = await saveNow();
-      if (!saved) return;
-
-      const { payload } = saved;
-
-      // Record internal audit info (customer can still sign later)
-      const nowIso = new Date().toISOString();
-      const data = (payload && typeof payload === "object") ? { ...payload } : {};
-      data.meta = (data.meta && typeof data.meta === "object") ? { ...data.meta } : {};
-      data.meta.manual_accepted_at = nowIso;
-      data.meta.manual_accepted_by = String(ctx?.userName || ctx?.user?.email || "").trim();
-
-      // Status drives dashboards + filtering. We intentionally do NOT create data.acceptance here.
-      const updated = await updateQuote(quoteId, { status: "accepted", data });
-      qRow = updated;
-      _sentEditConfirmed = false;
-
-      syncQuoteStatusUI(qRow.status);
-
-      showMsg("Marked as accepted.");
-      setTimeout(() => showMsg(""), 1200);
-    } catch (e) {
-      console.error(e);
-      showMsg(e?.message || "Failed to mark as accepted.");
-      setTimeout(() => showMsg(""), 2200);
-    } finally {
-      syncQuoteStatusUI(qRow?.status);
-    }
-  });
-
 
 
   pdfBtn.addEventListener("click", async () => {
     try {
       pdfBtn.disabled = true;
-
-      await flushAutoSave();
 
       const saved = await saveNow();
       if (!saved) return;
