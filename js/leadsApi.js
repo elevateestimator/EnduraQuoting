@@ -49,13 +49,25 @@ function normalizeSource(source) {
   return s || "manual";
 }
 
+function mapCustomer(row) {
+  if (!row) return row;
+  return {
+    ...row,
+    address: row.billing_address ?? null,
+    status: row.pipeline_status ?? "new",
+    source: row.lead_source ?? "manual",
+    notes: row.lead_notes ?? null,
+  };
+}
+
 export async function listLeads({ search = "", status = "", limit = 200 } = {}) {
   const { companyId } = await getCompanyContext();
 
   let q = supabase
-    .from("leads")
-    .select("id, company_id, first_name, last_name, company_name, email, phone, address, notes, status, source, payload, created_at, updated_at")
+    .from("customers")
+    .select("id, company_id, first_name, last_name, company_name, email, phone, billing_address, pipeline_status, lead_source, lead_notes, created_at, updated_at")
     .eq("company_id", companyId)
+    .not("pipeline_status", "is", null)
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -69,21 +81,20 @@ export async function listLeads({ search = "", status = "", limit = 200 } = {}) 
         `company_name.ilike.${like}`,
         `email.ilike.${like}`,
         `phone.ilike.${like}`,
-        `address.ilike.${like}`,
-        `notes.ilike.${like}`,
-        `source.ilike.${like}`,
+        `billing_address.ilike.${like}`,
+        `lead_notes.ilike.${like}`,
+        `lead_source.ilike.${like}`,
       ].join(",")
     );
   }
 
-  const normalizedStatus = normalizeStatus(status);
   if (String(status || "").trim()) {
-    q = q.eq("status", normalizedStatus);
+    q = q.eq("pipeline_status", normalizeStatus(status));
   }
 
   const { data, error } = await q;
   if (error) throw new Error(error.message);
-  return data || [];
+  return (data || []).map(mapCustomer);
 }
 
 export async function createLead(payload) {
@@ -96,21 +107,21 @@ export async function createLead(payload) {
     company_name: payload.company_name ?? null,
     email: payload.email ?? null,
     phone: payload.phone ?? null,
-    address: payload.address ?? null,
-    notes: payload.notes ?? null,
-    status: normalizeStatus(payload.status),
-    source: normalizeSource(payload.source),
-    payload: payload.payload ?? null,
+    billing_address: payload.address ?? null,
+    lead_notes: payload.notes ?? null,
+    pipeline_status: normalizeStatus(payload.status),
+    lead_source: normalizeSource(payload.source),
+    updated_at: new Date().toISOString(),
   };
 
   const { data, error } = await supabase
-    .from("leads")
+    .from("customers")
     .insert(row)
-    .select("id, company_id, first_name, last_name, company_name, email, phone, address, notes, status, source, payload, created_at, updated_at")
+    .select("id, company_id, first_name, last_name, company_name, email, phone, billing_address, pipeline_status, lead_source, lead_notes, created_at, updated_at")
     .single();
 
   if (error) throw new Error(error.message);
-  return data;
+  return mapCustomer(data);
 }
 
 export async function updateLead(leadId, payload) {
@@ -120,29 +131,25 @@ export async function updateLead(leadId, payload) {
     company_name: payload.company_name ?? null,
     email: payload.email ?? null,
     phone: payload.phone ?? null,
-    address: payload.address ?? null,
-    notes: payload.notes ?? null,
-    status: normalizeStatus(payload.status),
-    source: normalizeSource(payload.source),
+    billing_address: payload.address ?? null,
+    lead_notes: payload.notes ?? null,
+    pipeline_status: normalizeStatus(payload.status),
+    lead_source: normalizeSource(payload.source),
     updated_at: new Date().toISOString(),
   };
 
-  if (Object.prototype.hasOwnProperty.call(payload, "payload")) {
-    updates.payload = payload.payload ?? null;
-  }
-
   const { data, error } = await supabase
-    .from("leads")
+    .from("customers")
     .update(updates)
     .eq("id", leadId)
-    .select("id, company_id, first_name, last_name, company_name, email, phone, address, notes, status, source, payload, created_at, updated_at")
+    .select("id, company_id, first_name, last_name, company_name, email, phone, billing_address, pipeline_status, lead_source, lead_notes, created_at, updated_at")
     .single();
 
   if (error) throw new Error(error.message);
-  return data;
+  return mapCustomer(data);
 }
 
 export async function deleteLead(leadId) {
-  const { error } = await supabase.from("leads").delete().eq("id", leadId);
+  const { error } = await supabase.from("customers").delete().eq("id", leadId);
   if (error) throw new Error(error.message);
 }

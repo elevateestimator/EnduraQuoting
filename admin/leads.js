@@ -160,7 +160,7 @@ function leadDisplayName(lead) {
   const first = sanitizeString(lead?.first_name);
   const last = sanitizeString(lead?.last_name);
   const full = [first, last].filter(Boolean).join(" ").trim();
-  return full || sanitizeString(lead?.company_name) || sanitizeString(lead?.email) || "(Unnamed lead)";
+  return full || sanitizeString(lead?.company_name) || sanitizeString(lead?.email) || "(Unnamed customer)";
 }
 
 function normalizeStatus(status) {
@@ -279,17 +279,17 @@ function renderRow(lead) {
   delBtn.textContent = "Delete";
   delBtn.addEventListener("click", async (e) => {
     e.stopPropagation();
-    const ok = window.confirm(`Delete ${leadDisplayName(lead)}?\n\nThis permanently removes the lead.`);
+    const ok = window.confirm(`Delete ${leadDisplayName(lead)}?\n\nThis permanently removes the customer record.`);
     if (!ok) return;
 
     try {
       setError("");
       delBtn.disabled = true;
       await deleteLead(lead.id);
-      toast("Lead deleted.");
+      toast("Customer deleted.");
       await loadLeads({ search: searchEl?.value || "", status: statusFilterEl?.value || "" });
     } catch (err) {
-      setError(err?.message || "Failed to delete lead.");
+      setError(err?.message || "Failed to delete customer.");
     } finally {
       delBtn.disabled = false;
     }
@@ -321,9 +321,9 @@ function openCreate() {
   mode = "create";
   editingId = null;
   resetForm();
-  dialogTitle.textContent = "New lead";
-  dialogSub.textContent = "Add a new opportunity to your workspace.";
-  submitBtn.textContent = "Create lead";
+  dialogTitle.textContent = "New customer";
+  dialogSub.textContent = "Add a new customer to your workspace and track them in pipeline.";
+  submitBtn.textContent = "Create customer";
   openDialog(dialog);
   firstNameEl.focus();
 }
@@ -344,8 +344,8 @@ function openEdit(lead) {
   sourceEl.value = normalizeSource(lead.source);
   notesEl.value = sanitizeString(lead.notes);
 
-  dialogTitle.textContent = "Lead";
-  dialogSub.textContent = "Update status, contact details, or notes without leaving the page.";
+  dialogTitle.textContent = "Customer";
+  dialogSub.textContent = "Update pipeline status, contact details, or notes without leaving the page.";
   submitBtn.textContent = "Save changes";
   setMeta(`Created: ${formatDateTimeShort(lead.created_at)}  •  Updated: ${formatDateTimeShort(lead.updated_at || lead.created_at)}`);
 
@@ -390,12 +390,14 @@ function wireSearch() {
 function maybeMissingTableMessage(err) {
   const msg = String(err?.message || "").toLowerCase();
   if (
-    msg.includes("leads") &&
-    (msg.includes("does not exist") || msg.includes("schema cache") || msg.includes("relation"))
+    msg.includes("pipeline_status") ||
+    msg.includes("lead_source") ||
+    msg.includes("lead_notes") ||
+    (msg.includes("customers") && (msg.includes("does not exist") || msg.includes("schema cache") || msg.includes("relation")))
   ) {
-    return "Leads table not found yet. Run the leads_table.sql file from this patch in Supabase, then refresh.";
+    return "Customer pipeline columns not found yet. Run the customers_pipeline_columns.sql file from this patch in Supabase, then refresh.";
   }
-  return err?.message || "Failed to load leads.";
+  return err?.message || "Failed to load customers.";
 }
 
 async function loadLeads({ search = "", status = "" } = {}) {
@@ -443,13 +445,13 @@ function validateLeadPayload(payload) {
   const hasIdentity = [payload.first_name, payload.last_name, payload.company_name, payload.email, payload.phone]
     .some(Boolean);
   if (!hasIdentity) {
-    return "Add at least a name, company, email, or phone so the lead is identifiable.";
+    return "Add at least a name, company, email, or phone so the customer is identifiable.";
   }
   return "";
 }
 
 async function copyFutureEndpoint() {
-  const url = `${window.location.origin}/api/leads-inbox`;
+  const url = `${window.location.origin}/api/customers-inbox`;
   try {
     await navigator.clipboard.writeText(url);
     toast("Future endpoint copied.");
@@ -474,7 +476,7 @@ async function init() {
 
   if (userEmailEl) userEmailEl.textContent = session.user.email || "";
   if (workspaceNameEl) workspaceNameEl.textContent = inferWorkspaceName(session);
-  if (endpointUrlEl) endpointUrlEl.textContent = `${window.location.origin}/api/leads-inbox`;
+  if (endpointUrlEl) endpointUrlEl.textContent = `${window.location.origin}/api/customers-inbox`;
 
   if (form) {
     form.addEventListener("submit", async (e) => {
@@ -495,10 +497,10 @@ async function init() {
 
         if (mode === "edit" && editingId) {
           await updateLead(editingId, payload);
-          toast("Lead updated.");
+          toast("Customer updated.");
         } else {
           await createLead(payload);
-          toast("Lead created.");
+          toast("Customer created.");
         }
 
         closeDialog(dialog);
@@ -507,7 +509,7 @@ async function init() {
         setFormMsg(maybeMissingTableMessage(err));
       } finally {
         submitBtn.disabled = false;
-        submitBtn.textContent = mode === "edit" ? "Save changes" : "Create lead";
+        submitBtn.textContent = mode === "edit" ? "Save changes" : "Create customer";
       }
     });
   }
