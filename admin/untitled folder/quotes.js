@@ -4,15 +4,6 @@ import { makeDefaultQuoteData } from "../js/quoteDefaults.js";
 const userEmailEl = document.getElementById("user-email");
 
 const logoutBtn = document.getElementById("logout-btn");
-const mobileMenuBtn = document.getElementById("mobile-menu-btn");
-const mobileMenuCloseBtn = document.getElementById("mobile-menu-close");
-const mobileMenuBackdrop = document.getElementById("mobile-menu-backdrop");
-const mobileMenuPanel = document.getElementById("mobile-menu-panel");
-const mobileCreateBtn = document.getElementById("mobile-create-btn");
-const mobileLogoutBtn = document.getElementById("mobile-logout-btn");
-const mobileWorkspaceNameEl = document.getElementById("mobile-workspace-name");
-const mobileUserEmailEl = document.getElementById("mobile-user-email");
-const mobileCloseEls = Array.from(document.querySelectorAll("[data-mobile-close]"));
 const createBtn = document.getElementById("create-btn");
 const emptyCreateBtn = document.getElementById("empty-create");
 const refreshBtn = document.getElementById("refresh-btn");
@@ -67,82 +58,6 @@ function closeDialog(d) {
   if (typeof d.close === "function") d.close();
   else d.removeAttribute("open");
 }
-
-
-function inferWorkspaceName(session) {
-  const md = session?.user?.user_metadata || {};
-  const name =
-    md.company_name ||
-    md.company ||
-    md.workspace ||
-    md.business_name ||
-    md.org ||
-    md.organization ||
-    "";
-  if (name) return String(name);
-
-  const email = session?.user?.email || "";
-  const domain = email.includes("@") ? email.split("@")[1] : "";
-  if (domain) return domain.replace(/^www\./, "");
-  return "Workspace";
-}
-
-function isMobileViewport() {
-  return window.matchMedia("(max-width: 980px)").matches;
-}
-
-function openMobileMenu() {
-  if (!mobileMenuPanel || !isMobileViewport()) return;
-  document.body.classList.add("mobile-menu-open");
-  mobileMenuBtn?.setAttribute("aria-expanded", "true");
-}
-
-function closeMobileMenu() {
-  document.body.classList.remove("mobile-menu-open");
-  mobileMenuBtn?.setAttribute("aria-expanded", "false");
-}
-
-function wireMobileMenu() {
-  if (!mobileMenuBtn) return;
-
-  mobileMenuBtn.addEventListener("click", () => {
-    if (document.body.classList.contains("mobile-menu-open")) closeMobileMenu();
-    else openMobileMenu();
-  });
-
-  mobileMenuCloseBtn?.addEventListener("click", closeMobileMenu);
-  mobileMenuBackdrop?.addEventListener("click", closeMobileMenu);
-
-  mobileCloseEls.forEach((el) => {
-    el.addEventListener("click", () => {
-      if (isMobileViewport()) closeMobileMenu();
-    });
-  });
-
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeMobileMenu();
-  });
-
-  window.addEventListener("resize", () => {
-    if (!isMobileViewport()) closeMobileMenu();
-  });
-}
-
-async function loadCompanyName(companyId) {
-  if (!companyId) return null;
-  try {
-    const { data, error } = await supabase
-      .from("companies")
-      .select("name")
-      .eq("id", companyId)
-      .single();
-    if (error) return null;
-    return data?.name || null;
-  } catch {
-    return null;
-  }
-}
-
 
 function formatMoney(cents = 0, currency = "CAD") {
   const dollars = (Number(cents) || 0) / 100;
@@ -523,7 +438,6 @@ function wireComingSoon() {
 
 function wireEvents() {
   wireComingSoon();
-  wireMobileMenu();
 
   btnDashboard.addEventListener("click", () => {
     window.location.href = "./dashboard.html";
@@ -547,11 +461,6 @@ function wireEvents() {
 
   createBtn.addEventListener("click", openCreate);
   emptyCreateBtn.addEventListener("click", openCreate);
-  mobileCreateBtn?.addEventListener("click", () => {
-    closeMobileMenu();
-    openCreate();
-  });
-  mobileLogoutBtn?.addEventListener("click", logout);
 
   createCancelBtn.addEventListener("click", () => closeDialog(createDialog));
 
@@ -596,15 +505,11 @@ async function init() {
 
   userId = session.user.id;
   userEmailEl.textContent = session.user.email || "";
-  if (mobileUserEmailEl) mobileUserEmailEl.textContent = session.user.email || "";
 
   // Get company_id so inserts/duplicates work under RLS
   try {
     const membership = await getCompanyContext(userId);
     companyId = membership?.company_id || null;
-
-    const workspaceName = (await loadCompanyName(companyId)) || inferWorkspaceName(session);
-    if (mobileWorkspaceNameEl) mobileWorkspaceNameEl.textContent = workspaceName;
 
     if (!companyId) {
       setError(
