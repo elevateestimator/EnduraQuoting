@@ -276,6 +276,37 @@ function quoteStatusClass(status) {
   return "draft";
 }
 
+function parseLeadNotes(notes) {
+  const raw = sanitizeString(notes);
+  if (!raw) return { intro: "", details: [] };
+
+  const lines = raw
+    .split(/\r?\n+/)
+    .map((line) => sanitizeString(line))
+    .filter(Boolean);
+
+  const introParts = [];
+  const details = [];
+
+  for (const line of lines) {
+    const idx = line.indexOf(":");
+    if (idx > 0 && idx < line.length - 1) {
+      const label = sanitizeString(line.slice(0, idx));
+      const value = sanitizeString(line.slice(idx + 1));
+      if (label && value) {
+        details.push({ label, value });
+        continue;
+      }
+    }
+    introParts.push(line);
+  }
+
+  return {
+    intro: introParts.join("\n").trim(),
+    details,
+  };
+}
+
 function getLeadQuotes(leadId) {
   return quotesByLeadId.get(leadId) || [];
 }
@@ -742,15 +773,55 @@ function renderLeadCard(lead) {
   contactEl.className = "lead-contact-inline";
   contactEl.textContent = contactBits.length ? contactBits.join(" • ") : "No contact info yet";
 
-  const notesValue = sanitizeString(lead.notes);
-  const notesPreview = notesValue.length > 220 ? `${notesValue.slice(0, 220).trim()}…` : notesValue;
-  const noteEl = document.createElement("div");
-  noteEl.className = "lead-notes";
-  noteEl.textContent = notesPreview || "No notes yet. Add what came in, timing, job details, objections, or follow-up reminders.";
+  const noteState = parseLeadNotes(lead.notes);
 
   main.appendChild(nameRow);
   main.appendChild(contactEl);
-  main.appendChild(noteEl);
+
+  if (noteState.intro) {
+    const introEl = document.createElement("div");
+    introEl.className = "lead-notes";
+    introEl.textContent = noteState.intro.length > 280 ? `${noteState.intro.slice(0, 280).trim()}…` : noteState.intro;
+    main.appendChild(introEl);
+  }
+
+  if (noteState.details.length) {
+    const detailWrap = document.createElement("div");
+    detailWrap.className = "lead-detail-list";
+
+    noteState.details.slice(0, 6).forEach((detail) => {
+      const row = document.createElement("div");
+      row.className = "lead-detail-row";
+
+      const labelEl = document.createElement("div");
+      labelEl.className = "lead-detail-label";
+      labelEl.textContent = detail.label;
+
+      const valueEl = document.createElement("div");
+      valueEl.className = "lead-detail-value";
+      valueEl.textContent = detail.value;
+
+      row.appendChild(labelEl);
+      row.appendChild(valueEl);
+      detailWrap.appendChild(row);
+    });
+
+    if (noteState.details.length > 6) {
+      const moreEl = document.createElement("div");
+      moreEl.className = "lead-detail-more";
+      moreEl.textContent = `+${noteState.details.length - 6} more detail${noteState.details.length - 6 === 1 ? "" : "s"} in customer view`;
+      detailWrap.appendChild(moreEl);
+    }
+
+    main.appendChild(detailWrap);
+  }
+
+  if (!noteState.intro && !noteState.details.length) {
+    const noteEl = document.createElement("div");
+    noteEl.className = "lead-notes";
+    noteEl.textContent = "No notes yet. Add what came in, timing, job details, objections, or follow-up reminders.";
+    main.appendChild(noteEl);
+  }
 
   const meta = document.createElement("div");
   meta.className = "lead-meta-stack";

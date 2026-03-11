@@ -150,6 +150,43 @@ function compactWhitespace(v) {
   return safeStr(v).replace(/\s+/g, " ");
 }
 
+function humanizeFieldLabel(label) {
+  const raw = safeStr(label);
+  if (!raw) return "";
+
+  const normalized = raw
+    .replace(/[._-]+/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+
+  if (!normalized) return "";
+
+  const small = new Set(["a", "an", "and", "as", "at", "by", "for", "from", "in", "of", "on", "or", "the", "to", "with"]);
+  return normalized
+    .split(" ")
+    .map((word, idx) => {
+      if (!word) return word;
+      if (idx > 0 && small.has(word)) return word;
+      if (["id", "url", "crm", "api", "zip", "ip"].includes(word)) return word.toUpperCase();
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    })
+    .join(" ");
+}
+
+function humanizeFieldValue(value) {
+  const raw = compactWhitespace(value);
+  if (!raw) return "";
+
+  // Keep emails, URLs, and phone-like strings intact.
+  if (/@/.test(raw) || /^https?:\/\//i.test(raw) || /^[+()0-9 .-]{7,}$/.test(raw)) {
+    return raw;
+  }
+
+  return raw.replace(/[_]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
 function normalizeKey(key) {
   return safeStr(key).toLowerCase().replace(/[^a-z0-9]/g, "");
 }
@@ -341,15 +378,28 @@ function buildExtraFieldLines(map, usedKeys) {
   ]);
 
   const lines = [];
+  let totalChars = 0;
+
   for (const [key, entry] of map.entries()) {
     if (ignore.has(key)) continue;
-    const value = safeStr(entry?.values?.[0]);
+    const rawValue = safeStr(entry?.values?.[0]);
+    if (!rawValue) continue;
+
+    const labelRaw = safeStr(entry?.label) || key;
+    const label = humanizeFieldLabel(labelRaw);
+    if (!label || safeStr(label).toLowerCase() === "name") continue;
+
+    const value = humanizeFieldValue(rawValue);
     if (!value) continue;
-    const label = safeStr(entry?.label) || key;
-    if (label.toLowerCase() === "name") continue;
-    lines.push(`${label}: ${value}`);
-    if (lines.length >= 8) break;
+
+    const line = `${label}: ${value}`;
+    if (lines.includes(line)) continue;
+
+    if (totalChars + line.length > 3200) break;
+    lines.push(line);
+    totalChars += line.length + 1;
   }
+
   return lines;
 }
 
@@ -511,7 +561,7 @@ function extractLeadFromPayload(raw, opts = {}) {
   const viaTool = transport === "make" || transport === "zapier" ? transport : "";
 
   const noteParts = [];
-  if (explicitNotes) noteParts.push(explicitNotes);
+  if (explicitNotes) noteParts.push(humanizeFieldValue(explicitNotes));
 
   const contextLines = [];
   if (source === "meta") {
@@ -519,15 +569,16 @@ function extractLeadFromPayload(raw, opts = {}) {
   } else if (viaTool) {
     contextLines.push(`Received via ${viaTool === "make" ? "Make" : "Zapier"}.`);
   }
-  if (requestedService) contextLines.push(`Service requested: ${requestedService}`);
-  if (campaignName) contextLines.push(`Campaign: ${campaignName}`);
-  if (adName) contextLines.push(`Ad: ${adName}`);
-  if (formName) contextLines.push(`Form: ${formName}`);
-  if (pageName) contextLines.push(`Page: ${pageName}`);
+  if (requestedService) contextLines.push(`Service requested: ${humanizeFieldValue(requestedService)}`);
+  if (campaignName) contextLines.push(`Campaign: ${humanizeFieldValue(campaignName)}`);
+  if (adName) contextLines.push(`Ad: ${humanizeFieldValue(adName)}`);
+  if (formName) contextLines.push(`Form: ${humanizeFieldValue(formName)}`);
+  if (pageName) contextLines.push(`Page: ${humanizeFieldValue(pageName)}`);
   if (contextLines.length) noteParts.push(contextLines.join("\n"));
 
   const extraLines = buildExtraFieldLines(map, usedKeys);
-  if (extraLines.length) noteParts.push(extraLines.join("\n"));
+  if (extraLines.length) noteParts.push(`Lead form details:
+${extraLines.join("\n")}`);
 
   return {
     first_name: compactWhitespace(firstName),
