@@ -54,6 +54,15 @@
               </span>
               <span>Customers</span>
             </a>
+
+            <a id="nav-leads" class="nav-item" href="./leads.html">
+              <span class="nav-ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M4 6h16l-6 7v5l-4 2v-7L4 6Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span>Leads</span>
+            </a>
           </div>
 
           <div class="nav-group">
@@ -249,6 +258,22 @@
                     </div>
                   </div>
                 </div>
+              </div>
+
+              <div class="panel">
+                <div class="section-head">
+                  <h2>Recent leads</h2>
+                  <button id="btn-view-all-leads" class="link" type="button">View more →</button>
+                </div>
+
+                <div id="leads-loading" class="loading">Loading…</div>
+
+                <div id="leads-empty" class="empty" hidden>
+                  <div class="empty-title">No leads yet</div>
+                  <div class="empty-sub">New inbound and manual leads will appear here.</div>
+                </div>
+
+                <div id="leads-list" class="lead-snippet-list"></div>
               </div>
 
               <div class="panel">

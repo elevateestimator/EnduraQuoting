@@ -31,6 +31,12 @@ const recentLoading = document.getElementById("recent-loading");
 const recentEmpty = document.getElementById("recent-empty");
 const recentList = document.getElementById("recent-list");
 
+// Leads snippet
+const leadsLoading = document.getElementById("leads-loading");
+const leadsEmpty = document.getElementById("leads-empty");
+const leadsList = document.getElementById("leads-list");
+const btnViewAllLeads = document.getElementById("btn-view-all-leads");
+
 // KPIs
 const kpiDraft = document.getElementById("kpi-draft");
 const kpiSent = document.getElementById("kpi-sent");
@@ -156,6 +162,100 @@ function customerSearchText(c) {
     safeStr(c?.phone),
     safeStr(c?.billing_address),
   ].join(" ").toLowerCase();
+}
+
+function chooseLeadDisplayName(lead) {
+  const first = safeStr(lead?.first_name);
+  const last = safeStr(lead?.last_name);
+  const full = [first, last].filter(Boolean).join(" ").trim();
+  const company = safeStr(lead?.company_name);
+  if (company && full) return `${full} (${company})`;
+  return full || company || safeStr(lead?.email) || "Unnamed lead";
+}
+
+function chooseLeadSecondary(lead) {
+  const email = safeStr(lead?.email);
+  const phone = safeStr(lead?.phone);
+  const company = safeStr(lead?.company_name);
+  return company || [email, phone].filter(Boolean).join(" • ") || "No contact info yet";
+}
+
+function normalizeLeadStatus(status) {
+  const s = safeStr(status).toLowerCase();
+  return ["new", "contacted", "qualified", "won", "lost"].includes(s) ? s : "new";
+}
+
+function prettyLeadStatus(status) {
+  const s = normalizeLeadStatus(status);
+  if (s === "contacted") return "Contacted";
+  if (s === "qualified") return "Qualified";
+  if (s === "won") return "Won";
+  if (s === "lost") return "Lost";
+  return "New";
+}
+
+function normalizeLeadSource(source) {
+  return safeStr(source).toLowerCase() || "manual";
+}
+
+function prettyLeadSource(source) {
+  const s = normalizeLeadSource(source);
+  if (s === "meta" || s === "meta lead ad" || s === "meta lead ads") return "Meta";
+  if (s === "make") return "Make";
+  if (s === "zapier") return "Zapier";
+  if (s === "website") return "Website";
+  if (s === "phone") return "Phone";
+  if (s === "referral") return "Referral";
+  if (s === "other") return "Other";
+  return s ? s.replace(/(^|\s)\S/g, (m) => m.toUpperCase()) : "Manual";
+}
+
+function renderLeadSnippet(lead) {
+  const item = document.createElement("div");
+  item.className = "lead-snippet-item";
+  item.addEventListener("click", () => {
+    if (lead?.id) goTo(`./customer.html?id=${encodeURIComponent(lead.id)}`);
+  });
+
+  const main = document.createElement("div");
+  main.className = "lead-snippet-main";
+
+  const name = document.createElement("div");
+  name.className = "lead-snippet-name";
+  name.textContent = chooseLeadDisplayName(lead);
+
+  const sub = document.createElement("div");
+  sub.className = "lead-snippet-sub";
+  sub.textContent = chooseLeadSecondary(lead);
+
+  const meta = document.createElement("div");
+  meta.className = "lead-snippet-meta";
+  const source = document.createElement("span");
+  source.className = "lead-source-pill";
+  source.textContent = prettyLeadSource(lead?.lead_source);
+  meta.appendChild(source);
+
+  main.appendChild(name);
+  main.appendChild(sub);
+  main.appendChild(meta);
+
+  const right = document.createElement("div");
+  right.className = "lead-snippet-right";
+
+  const status = document.createElement("span");
+  status.className = `lead-status-badge ${normalizeLeadStatus(lead?.pipeline_status)}`;
+  status.textContent = prettyLeadStatus(lead?.pipeline_status);
+
+  const date = document.createElement("div");
+  date.className = "lead-snippet-date";
+  date.textContent = formatDateShort(lead?.created_at);
+
+  right.appendChild(status);
+  right.appendChild(date);
+
+  item.appendChild(main);
+  item.appendChild(right);
+  return item;
 }
 
 function escapeHtml(value) {
@@ -961,6 +1061,10 @@ function wireRealNav() {
     el.addEventListener("click", () => goTo("./quotes.html"));
   });
 
+  if (btnViewAllLeads) {
+    btnViewAllLeads.addEventListener("click", () => goTo("./leads.html"));
+  }
+
   if (qaCustomers) {
     qaCustomers.addEventListener("click", () => goTo("./customers.html"));
   }
@@ -1009,6 +1113,54 @@ async function loadDashboardQuotes() {
   } catch (e) {
     if (recentLoading) recentLoading.hidden = true;
     setError(e?.message || "Failed to load dashboard data.");
+  }
+}
+
+async function loadRecentLeads() {
+  if (!leadsList) return;
+
+  if (leadsEmpty) leadsEmpty.hidden = true;
+  leadsList.innerHTML = "";
+  if (leadsLoading) leadsLoading.hidden = false;
+
+  if (!companyId) {
+    if (leadsLoading) leadsLoading.hidden = true;
+    if (leadsEmpty) leadsEmpty.hidden = false;
+    return;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("customers")
+      .select("id, first_name, last_name, company_name, email, phone, pipeline_status, lead_source, created_at")
+      .eq("company_id", companyId)
+      .not("pipeline_status", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    if (error) throw error;
+
+    const leads = data || [];
+
+    if (leadsLoading) leadsLoading.hidden = true;
+
+    if (!leads.length) {
+      if (leadsEmpty) leadsEmpty.hidden = false;
+      return;
+    }
+
+    for (const lead of leads) {
+      leadsList.appendChild(renderLeadSnippet(lead));
+    }
+  } catch (e) {
+    if (leadsLoading) leadsLoading.hidden = true;
+    if (leadsEmpty) {
+      leadsEmpty.hidden = false;
+      const title = leadsEmpty.querySelector('.empty-title');
+      const sub = leadsEmpty.querySelector('.empty-sub');
+      if (title) title.textContent = 'Could not load leads';
+      if (sub) sub.textContent = e?.message || 'Check your leads setup and try again.';
+    }
   }
 }
 
@@ -1088,7 +1240,7 @@ async function init() {
     });
   }
 
-  await loadDashboardQuotes();
+  await Promise.all([loadDashboardQuotes(), loadRecentLeads()]);
 }
 
 init();
