@@ -1,0 +1,429 @@
+/* =========================================================
+   Dashboard mobile-only polish
+   Append this to the BOTTOM of your current dashboard.css
+   Desktop is untouched.
+   ========================================================= */
+
+@media (max-width: 980px) {
+  .app {
+    display: block;
+    min-height: 100vh;
+  }
+
+  .sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    row-gap: 10px;
+    column-gap: 10px;
+    padding: 10px 12px 12px;
+    border-right: 0;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.10);
+    background: rgba(241, 244, 248, 0.96);
+    backdrop-filter: blur(10px);
+  }
+
+  .brand {
+    grid-column: 1;
+    padding: 6px 6px 8px;
+    margin: 0;
+  }
+
+  .brand-logo {
+    height: 34px;
+  }
+
+  .side-nav {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    padding: 2px 0 2px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+  }
+
+  .side-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .nav-group {
+    display: contents;
+  }
+
+  .nav-group-label {
+    display: none;
+  }
+
+  .nav-item {
+    width: auto;
+    flex: 0 0 auto;
+    white-space: nowrap;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.78);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    box-shadow: 0 1px 0 rgba(15, 23, 42, 0.03);
+    scroll-snap-align: start;
+  }
+
+  .nav-item.active {
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: inset 3px 0 0 var(--brand), 0 1px 2px rgba(15, 23, 42, 0.04);
+  }
+
+  .sidebar-foot {
+    grid-column: 3;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    align-self: center;
+  }
+
+  .workspace {
+    display: none;
+  }
+
+  .userline {
+    padding: 8px 10px;
+    max-width: 42vw;
+    min-width: 0;
+    gap: 8px;
+  }
+
+  .userline-email {
+    max-width: 100%;
+  }
+
+  .topbar {
+    position: static;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px 14px 12px;
+    backdrop-filter: none;
+  }
+
+  .page-title h1 {
+    font-size: 24px;
+  }
+
+  .subtitle {
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .topbar-right {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    align-items: stretch;
+  }
+
+  .topbar-right .btn,
+  .topbar-right .range-pill {
+    width: 100%;
+    justify-content: center;
+    min-width: 0;
+  }
+
+  .topbar-right .range-pill {
+    grid-column: 1 / -1;
+  }
+
+  .content {
+    padding: 16px 12px 30px;
+    max-width: none;
+  }
+
+  .canvas,
+  .recent,
+  .panel {
+    border-radius: 16px;
+  }
+
+  .canvas-top {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    padding: 18px 16px 14px;
+  }
+
+  .dominant-value {
+    font-size: clamp(38px, 11vw, 56px);
+    line-height: 1;
+    word-break: break-word;
+  }
+
+  .dominant-sub {
+    margin-top: 8px;
+    line-height: 1.45;
+  }
+
+  .rail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .rail-item {
+    padding: 10px 0 0;
+    border-left: 0;
+    border-top: 1px solid rgba(15, 23, 42, 0.10);
+  }
+
+  .rail-item:nth-child(-n+2) {
+    border-top: 0;
+    padding-top: 0;
+  }
+
+  .canvas-chart {
+    border-top: 1px solid rgba(15, 23, 42, 0.10);
+  }
+
+  .chart-stage {
+    grid-template-columns: 46px 1fr;
+    grid-template-rows: 228px 34px;
+    padding: 10px 10px 0 8px;
+  }
+
+  .chart-y-axis,
+  .chart-plot-wrap {
+    height: 228px;
+  }
+
+  .chart-axis-spacer,
+  .chart-x-axis {
+    height: 34px;
+  }
+
+  .chart-y-label,
+  .chart-x-label {
+    font-size: 10px;
+  }
+
+  .chart-foot {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px 14px;
+  }
+
+  .legend {
+    flex-wrap: wrap;
+  }
+
+  .below {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .section-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .section-actions {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .recent-item,
+  .lead-snippet-item {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 12px 4px;
+  }
+
+  .recent-right,
+  .lead-snippet-right {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .customer,
+  .lead-snippet-sub,
+  .lead-snippet-name,
+  .team-sub {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: initial;
+  }
+
+  .team-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .team-right {
+    width: 100%;
+    min-width: 0;
+    text-align: left;
+  }
+
+  .action-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .action-grid .btn {
+    width: 100%;
+  }
+
+  .dialog {
+    width: min(640px, calc(100% - 16px));
+    max-height: calc(100dvh - 24px);
+    padding: 14px;
+    overflow: auto;
+  }
+
+  .quote-create-form {
+    gap: 10px;
+  }
+
+  .customer-list {
+    max-height: min(34vh, 260px);
+  }
+}
+
+@media (max-width: 680px) {
+  .topbar-right {
+    grid-template-columns: 1fr;
+  }
+
+  .rail {
+    grid-template-columns: 1fr;
+  }
+
+  .rail-item {
+    border-top: 1px solid rgba(15, 23, 42, 0.10);
+    padding-top: 10px;
+  }
+
+  .rail-item:first-child {
+    border-top: 0;
+    padding-top: 0;
+  }
+
+  .chart-stage {
+    grid-template-columns: 40px 1fr;
+    grid-template-rows: 204px 30px;
+    padding: 8px 8px 0 6px;
+  }
+
+  .chart-y-axis,
+  .chart-plot-wrap {
+    height: 204px;
+  }
+
+  .chart-axis-spacer,
+  .chart-x-axis {
+    height: 30px;
+  }
+
+  .chart-y-label,
+  .chart-x-label {
+    font-size: 9px;
+  }
+
+  .section-actions .btn,
+  .section-actions .link {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .action-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dialog-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .dialog-actions .btn {
+    width: 100%;
+  }
+
+  .create-divider {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .create-divider .btn {
+    width: 100%;
+  }
+
+  .customer-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .sidebar {
+    padding: 10px 10px 12px;
+    row-gap: 8px;
+  }
+
+  .brand-logo {
+    height: 32px;
+  }
+
+  .userline {
+    max-width: none;
+    padding: 8px 9px;
+  }
+
+  .userline-email {
+    max-width: 44vw;
+  }
+
+  .nav-item {
+    padding: 9px 11px;
+    font-size: 13px;
+  }
+
+  .page-title h1 {
+    font-size: 22px;
+  }
+
+  .content {
+    padding: 14px 10px 26px;
+  }
+
+  .canvas-top {
+    padding: 16px 14px 12px;
+  }
+
+  .dominant-value {
+    font-size: clamp(34px, 13vw, 48px);
+  }
+
+  .chart-stage {
+    grid-template-columns: 36px 1fr;
+    padding-left: 4px;
+  }
+
+  .chart-foot {
+    padding: 10px 10px 14px;
+  }
+
+  .recent,
+  .panel {
+    padding: 14px;
+  }
+
+  .recent-item,
+  .lead-snippet-item {
+    padding-inline: 0;
+  }
+}
