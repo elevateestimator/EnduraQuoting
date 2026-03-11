@@ -182,7 +182,7 @@
                 <div class="muted small">Manual entry works now. Automation intake is staged so Make or Zapier can create customer records next.</div>
               </div>
               <div class="section-actions">
-                <button id="btn-copy-endpoint" class="btn btn-secondary" type="button">Copy future endpoint</button>
+                <button id="btn-copy-endpoint" class="btn btn-secondary" type="button">Copy webhook URL</button>
               </div>
             </div>
 
@@ -195,8 +195,8 @@
 
               <div class="intake-card">
                 <div class="intake-label">Make / Zapier</div>
-                <div class="intake-title">Future webhook path</div>
-                <code id="endpoint-url" class="endpoint-code">/api/customers-inbox</code>
+                <div class="intake-title">Webhook URL</div>
+                <code id="endpoint-url" class="endpoint-code">/api/customers-inbox/<company-webhook-id>?secret=<company-secret></code>
                 <div class="intake-copy">We will wire auth, secret checking, and field mapping next. This page is already shaped for that intake flow.</div>
               </div>
 
@@ -373,6 +373,7 @@
               <option value="referral">Referral</option>
               <option value="zapier">Zapier</option>
               <option value="make">Make</option>
+              <option value="meta">Meta</option>
               <option value="other">Other</option>
             </select>
           </label>

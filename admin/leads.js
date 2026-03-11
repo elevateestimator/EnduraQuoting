@@ -66,6 +66,7 @@ let editingId = null;
 let allLeads = [];
 let quotesByLeadId = new Map();
 let _companyContext = null;
+let _webhookUrl = "";
 
 function toast(msg) {
   if (!toastEl) return;
@@ -224,6 +225,7 @@ function normalizeSource(source) {
 
 function prettySource(source) {
   const s = normalizeSource(source);
+  if (s === "meta") return "Meta";
   if (s === "zapier") return "Zapier";
   if (s === "make") return "Make";
   if (s === "website") return "Website";
@@ -231,6 +233,19 @@ function prettySource(source) {
   if (s === "referral") return "Referral";
   if (s === "other") return "Other";
   return "Manual";
+}
+
+function ensureSourceOption(value, label = null) {
+  if (!sourceEl) return;
+  const normalized = normalizeSource(value);
+  if (!normalized) return;
+  const exists = Array.from(sourceEl.options || []).some((opt) => opt.value === normalized);
+  if (exists) return;
+
+  const opt = document.createElement("option");
+  opt.value = normalized;
+  opt.textContent = label || prettySource(normalized);
+  sourceEl.appendChild(opt);
 }
 
 function isOpenQuoteStatus(status) {
@@ -350,6 +365,7 @@ function openEdit(lead) {
   phoneEl.value = sanitizeString(lead.phone);
   addressEl.value = sanitizeString(lead.address);
   statusEl.value = normalizeStatus(lead.status);
+  ensureSourceOption(lead.source);
   sourceEl.value = normalizeSource(lead.source);
   notesEl.value = sanitizeString(lead.notes);
 
@@ -413,11 +429,23 @@ function maybeMissingTableMessage(err) {
   return err?.message || "Failed to load customers.";
 }
 
+function buildWebhookUrl(webhookId, secret) {
+  const url = new URL(`${window.location.origin}/api/customers-inbox/${encodeURIComponent(webhookId)}`);
+  const s = sanitizeString(secret);
+  if (s) url.searchParams.set("secret", s);
+  return url.toString();
+}
+
 async function copyFutureEndpoint() {
-  const url = `${window.location.origin}/api/customers-inbox`;
+  const fallback = `${window.location.origin}/api/customers-inbox/<company-webhook-id>?secret=<company-secret>`;
+  const url = _webhookUrl || sanitizeString(endpointUrlEl?.textContent) || fallback;
+  if (!url || url.includes("<company-webhook-id>") || url.includes("Run the webhook SQL patch first")) {
+    toast("Run the webhook SQL patch first.");
+    return;
+  }
   try {
     await navigator.clipboard.writeText(url);
-    toast("Future endpoint copied.");
+    toast("Webhook URL copied.");
   } catch {
     toast("Copy failed.");
   }
@@ -427,6 +455,36 @@ async function ensureCompanyContext() {
   if (_companyContext) return _companyContext;
   _companyContext = await getCompanyContext();
   return _companyContext;
+}
+
+async function loadWebhookEndpoint() {
+  const fallback = `${window.location.origin}/api/customers-inbox/<company-webhook-id>?secret=<company-secret>`;
+  if (btnCopyEndpoint) btnCopyEndpoint.textContent = "Copy webhook URL";
+  if (endpointUrlEl) endpointUrlEl.textContent = fallback;
+
+  try {
+    const { companyId } = await ensureCompanyContext();
+    const { data, error } = await supabase
+      .from("companies")
+      .select("lead_webhook_id, lead_webhook_secret")
+      .eq("id", companyId)
+      .single();
+
+    if (error) throw error;
+
+    const webhookId = sanitizeString(data?.lead_webhook_id);
+    if (!webhookId) throw new Error("Missing lead_webhook_id");
+
+    _webhookUrl = buildWebhookUrl(webhookId, data?.lead_webhook_secret);
+    if (endpointUrlEl) endpointUrlEl.textContent = _webhookUrl;
+  } catch (err) {
+    const msg = String(err?.message || "").toLowerCase();
+    if (msg.includes("lead_webhook_id") || msg.includes("lead_webhook_secret")) {
+      if (endpointUrlEl) endpointUrlEl.textContent = "Run the webhook SQL patch first";
+    } else if (endpointUrlEl) {
+      endpointUrlEl.textContent = fallback;
+    }
+  }
 }
 
 async function fetchQuotesIndex(leads) {
@@ -888,12 +946,13 @@ async function init() {
   if (btnCopyEndpoint) btnCopyEndpoint.addEventListener("click", copyFutureEndpoint);
   [btnNew, btnNewInline].filter(Boolean).forEach((btn) => btn.addEventListener("click", openCreate));
   wireSearch();
+  ensureSourceOption("meta", "Meta");
 
   const session = await requireSessionOrRedirect();
   if (!session) return;
   if (userEmailEl) userEmailEl.textContent = session.user.email || "";
   if (workspaceNameEl) workspaceNameEl.textContent = inferWorkspaceName(session);
-  if (endpointUrlEl) endpointUrlEl.textContent = `${window.location.origin}/api/customers-inbox`;
+  await loadWebhookEndpoint();
 
   if (form) {
     form.addEventListener("submit", async (e) => {
