@@ -1411,3 +1411,723 @@ textarea.autogrow{
   overflow-wrap: anywhere;
   word-break: break-word;
 }
+
+
+/* =========================================================
+   Mobile-only quote builder polish
+   Keeps desktop exactly as-is.
+   Adds compact header + slide-out menu and removes horizontal scrolling.
+   ========================================================= */
+.mobile-menu-btn,
+.mobile-menu-panel,
+.mobile-menu-backdrop{
+  display:none;
+}
+
+@media (max-width: 1040px){
+  body{
+    overflow-x:hidden;
+  }
+
+  body.mobile-menu-open{
+    overflow:hidden;
+  }
+
+  body.mobile-editor-focused .topbar .actions{
+    opacity:0;
+    transform: translateY(140%);
+    pointer-events:none;
+  }
+
+  .mobile-menu-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    flex-direction:column;
+    gap:4px;
+    width:42px;
+    height:42px;
+    padding:0;
+    border-radius:12px;
+    border:1px solid rgba(15,23,42,0.12);
+    background: rgba(255,255,255,0.92);
+    box-shadow: 0 6px 18px rgba(15,23,42,0.08);
+    cursor:pointer;
+    flex: 0 0 42px;
+  }
+
+  .mobile-menu-btn span{
+    display:block;
+    width:18px;
+    height:2px;
+    border-radius:999px;
+    background: rgba(11,15,20,0.78);
+  }
+
+  .topbar{
+    position: sticky;
+    top: 0;
+    z-index: 60;
+    display:grid;
+    grid-template-columns: auto minmax(0,1fr);
+    align-items:center;
+    gap: 12px;
+    padding: 12px 14px;
+    background: rgba(245,247,251,0.94);
+    backdrop-filter: blur(10px);
+  }
+
+  .brand{
+    min-width:0;
+    gap:10px;
+  }
+
+  .brand .logo{
+    width:40px;
+    height:40px;
+  }
+
+  .brand-text{
+    min-width:0;
+  }
+
+  .brand-title{
+    font-size: 15px;
+    line-height: 1.1;
+  }
+
+  .brand-sub{
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Turn the existing desktop action group into a floating mobile action tray.
+     Reuses the same buttons so functionality stays identical. */
+  .topbar .actions{
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+    z-index: 58;
+    display:grid;
+    grid-template-columns: repeat(2, minmax(0,1fr));
+    gap: 10px;
+    padding: 10px;
+    border: 1px solid rgba(15,23,42,0.12);
+    border-radius: 16px;
+    background: rgba(245,247,251,0.92);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 16px 34px rgba(15,23,42,0.14);
+  }
+
+  .topbar .actions .save-state{
+    grid-column: 1 / -1;
+    width:100%;
+    justify-content:center;
+    border-radius: 14px;
+    white-space: normal;
+    text-align:center;
+    order: 0;
+  }
+
+  .topbar .actions #back-btn{ order: 1; }
+  .topbar .actions #pdf-btn{ order: 2; }
+  .topbar .actions #send-btn{ order: 3; }
+  .topbar .actions #new-version-btn{ order: 4; }
+  .topbar .actions #mark-accepted-btn{ order: 5; }
+  .topbar .actions #cancel-quote-btn{ order: 6; }
+  .topbar .actions #save-btn{ order: 7; }
+
+  .topbar .actions [hidden]{
+    display:none !important;
+  }
+
+  .topbar .actions .btn{
+    width:100%;
+    min-height: 46px;
+    padding: 10px 12px;
+    font-size: 12px;
+    line-height: 1.15;
+    white-space: normal;
+  }
+
+  .wrap{
+    max-width: none;
+    padding: 14px 12px calc(164px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .page{
+    width: 100%;
+    min-height: 0;
+    margin: 0;
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: 0 12px 34px rgba(2,6,23,0.12);
+  }
+
+  .page > * + *{
+    margin-top: 12px;
+  }
+
+  .letterhead{
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .logo-col,
+  .logo-box{
+    justify-content:center;
+    align-items:center;
+  }
+
+  .logo-box{
+    width: 100%;
+    max-width: 220px;
+    height: 84px;
+    margin: 0 auto;
+  }
+
+  .doc-logo{
+    height: 84px;
+    max-width: 100%;
+    transform: scale(1.02);
+    top: 0;
+  }
+
+  .company-row{
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .company-contact{
+    display:grid;
+    gap: 4px;
+    margin-top: 8px;
+  }
+
+  .company-contact span{
+    white-space: normal;
+  }
+
+  .company-contact span + span::before{
+    content:none;
+    margin:0;
+  }
+
+  .doc-block{
+    align-items: flex-start;
+  }
+
+  .meta-strip{
+    grid-template-columns: repeat(2, minmax(0,1fr));
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .grid-2,
+  .two-col,
+  .signatures,
+  .sig-inline.two{
+    grid-template-columns: 1fr;
+  }
+
+  .card,
+  .sig-block{
+    padding: 14px;
+  }
+
+  .row-between{
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .row-actions{
+    width:100%;
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .row-actions .btn{
+    width:100%;
+  }
+
+  .table-wrap{
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+  }
+
+  /* ===== Items table to cards ===== */
+  .items-table{
+    table-layout: auto;
+  }
+
+  .items-table colgroup,
+  .items-table thead{
+    display:none;
+  }
+
+  .items-table,
+  .items-table tbody,
+  .items-table tr,
+  .items-table td{
+    display:block;
+    width:100%;
+  }
+
+  .items-table tbody{
+    display:grid;
+    gap: 12px;
+  }
+
+  .items-table tbody tr.item-row{
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 6px 18px rgba(15,23,42,0.05);
+  }
+
+  .items-table tbody td{
+    padding: 0 !important;
+    border: 0;
+    background: transparent !important;
+  }
+
+  .items-table tbody td + td{
+    margin-top: 10px;
+  }
+
+  .items-table tbody td:first-child{
+    margin-top: 0;
+  }
+
+  .items-table tbody td:first-child::before{
+    content:"Item";
+    display:block;
+    margin-bottom: 6px;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color:#6b7280;
+  }
+
+  .items-table tbody td:nth-child(2),
+  .items-table tbody td:nth-child(3),
+  .items-table tbody td:nth-child(4),
+  .items-table tbody td:nth-child(5),
+  .items-table tbody td:nth-child(6){
+    display:grid;
+    grid-template-columns: 96px minmax(0,1fr);
+    gap: 12px;
+    align-items:center;
+  }
+
+  .items-table tbody td:nth-child(2)::before,
+  .items-table tbody td:nth-child(3)::before,
+  .items-table tbody td:nth-child(4)::before,
+  .items-table tbody td:nth-child(5)::before,
+  .items-table tbody td:nth-child(6)::before{
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color:#6b7280;
+  }
+
+  .items-table tbody td:nth-child(2)::before{ content:"Qty"; }
+  .items-table tbody td:nth-child(3)::before{ content:"Unit"; }
+  .items-table tbody td:nth-child(4)::before{ content:"Price"; }
+  .items-table tbody td:nth-child(5)::before{ content:"Tax"; }
+  .items-table tbody td:nth-child(6)::before{ content:"Total"; }
+
+  .items-table .i-name,
+  .items-table .i-desc,
+  .items-table .i-qty,
+  .items-table .i-price{
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: #fff;
+    padding: 10px 12px;
+  }
+
+  .items-table .i-name{
+    margin-bottom: 8px;
+  }
+
+  .items-table .i-desc{
+    min-height: 92px;
+    height: auto;
+  }
+
+  .items-table .i-unit{
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: #fff;
+    padding: 10px 12px;
+    text-align: left;
+    font-size: 13px;
+  }
+
+  .items-table .num input{
+    text-align: right;
+  }
+
+  .items-table .line-total{
+    text-align: left;
+  }
+
+  .items-table .line-total span{
+    padding: 0;
+    font-size: 14px;
+    font-weight: 950;
+  }
+
+  .items-table tbody td:nth-child(7){
+    display:flex;
+    justify-content:flex-end;
+    margin-top: 12px;
+  }
+
+  .items-table tbody td:nth-child(7) .btn{
+    min-width: 46px;
+    min-height: 46px;
+    border-radius: 14px;
+  }
+
+  /* ===== Payment schedule to cards ===== */
+  .ps-table colgroup,
+  .ps-table thead{
+    display:none;
+  }
+
+  .ps-table,
+  .ps-table tbody,
+  .ps-table tr,
+  .ps-table td{
+    display:block;
+    width:100%;
+  }
+
+  .ps-table tbody{
+    display:grid;
+    gap: 12px;
+  }
+
+  .ps-table tbody tr{
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background:#fff;
+    box-shadow: 0 6px 18px rgba(15,23,42,0.05);
+  }
+
+  .ps-table tbody td{
+    padding: 0 !important;
+    border: 0;
+    background: transparent !important;
+  }
+
+  .ps-table tbody td + td{
+    margin-top: 10px;
+  }
+
+  .ps-table tbody td:nth-child(1),
+  .ps-table tbody td:nth-child(2),
+  .ps-table tbody td:nth-child(3){
+    display:grid;
+    grid-template-columns: 110px minmax(0,1fr);
+    gap: 12px;
+    align-items:center;
+  }
+
+  .ps-table tbody td:nth-child(1)::before,
+  .ps-table tbody td:nth-child(2)::before,
+  .ps-table tbody td:nth-child(3)::before{
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color:#6b7280;
+  }
+
+  .ps-table tbody td:nth-child(1)::before{ content:"Step"; }
+  .ps-table tbody td:nth-child(2)::before{ content:"Percent"; }
+  .ps-table tbody td:nth-child(3)::before{ content:"Amount"; }
+
+  .ps-footer{
+    margin-top: 10px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .totals-grid{
+    grid-template-columns: auto 1fr minmax(96px, 34vw);
+    column-gap: 10px;
+    row-gap: 10px;
+  }
+
+  .totals-grid .label{
+    font-size: 13px;
+  }
+
+  .totals-grid .row.total .amt{
+    font-size: 16px;
+  }
+
+  .signatures{
+    gap: 12px;
+  }
+
+  .sig-line{
+    min-height: 40px;
+  }
+
+  .dialog{
+    width: calc(100vw - 16px);
+    max-width: none;
+    padding: 14px;
+    margin: 0 auto;
+  }
+
+  .dialog-head{
+    align-items: flex-start;
+  }
+
+  .product-row{
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .product-row .btn{
+    width:100%;
+  }
+
+  .mobile-menu-backdrop{
+    display:block;
+    position:fixed;
+    inset:0;
+    background: rgba(11,15,20,0.42);
+    opacity:0;
+    pointer-events:none;
+    transition: opacity .18s ease;
+    z-index: 79;
+    border:0;
+    padding:0;
+  }
+
+  .mobile-menu-panel{
+    display:flex;
+    flex-direction:column;
+    position:fixed;
+    top:0;
+    left:0;
+    bottom:0;
+    width:min(320px, 86vw);
+    padding:16px 14px 18px;
+    background:#f1f4f8;
+    border-right:1px solid rgba(15,23,42,0.10);
+    box-shadow: 0 24px 60px rgba(15,23,42,0.22);
+    transform: translateX(-104%);
+    transition: transform .22s ease;
+    z-index:80;
+    overflow-y:auto;
+  }
+
+  body.mobile-menu-open .mobile-menu-panel{
+    transform: translateX(0);
+  }
+
+  body.mobile-menu-open .mobile-menu-backdrop{
+    opacity:1;
+    pointer-events:auto;
+  }
+
+  .mobile-menu-head{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:12px;
+    padding:4px 4px 14px;
+    border-bottom:1px solid rgba(15,23,42,0.08);
+    margin-bottom:12px;
+  }
+
+  .mobile-menu-brand{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    min-width:0;
+  }
+
+  .mobile-menu-logo{
+    width:40px;
+    height:40px;
+    object-fit:contain;
+    flex: 0 0 40px;
+    border-radius: 10px;
+    border: 1px solid rgba(15,23,42,0.10);
+    background:#fff;
+  }
+
+  .mobile-workspace-name{
+    font-weight:950;
+    letter-spacing:-0.01em;
+    font-size:15px;
+    color:var(--text);
+  }
+
+  .mobile-user-email{
+    margin-top:2px;
+    font-size:12px;
+    color: rgba(11,15,20,0.68);
+    font-weight:700;
+    overflow-wrap:anywhere;
+  }
+
+  .mobile-menu-close{
+    appearance:none;
+    border:1px solid rgba(15,23,42,0.12);
+    background: rgba(255,255,255,0.86);
+    color: rgba(11,15,20,0.82);
+    width:38px;
+    height:38px;
+    border-radius:12px;
+    font-size:18px;
+    font-weight:900;
+    line-height:1;
+    cursor:pointer;
+    flex:0 0 38px;
+  }
+
+  .mobile-menu-nav{
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+    padding:4px 2px 0;
+  }
+
+  .mobile-menu-panel .nav-group{
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+  }
+
+  .mobile-menu-panel .nav-group-label{
+    display:block;
+    padding:10px 12px 6px;
+    font-size:10px;
+    letter-spacing:.18em;
+    text-transform: uppercase;
+    color: rgba(11,15,20,0.52);
+    font-weight:950;
+  }
+
+  .mobile-menu-panel .nav-item{
+    width:100%;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:11px 12px;
+    border-radius:11px;
+    text-decoration:none;
+    color: rgba(11,15,20,0.76);
+    font-weight:780;
+    background: transparent;
+  }
+
+  .mobile-menu-panel .nav-item.active{
+    box-shadow: inset 3px 0 0 var(--brand);
+    background: rgba(255,255,255,0.92);
+    color: var(--text);
+    font-weight: 920;
+  }
+
+  .mobile-menu-panel .nav-ico{
+    width:18px;
+    height:18px;
+    display:grid;
+    place-items:center;
+    color: rgba(11,15,20,0.62);
+  }
+
+  .mobile-menu-panel .nav-item.active .nav-ico{
+    color: var(--brand);
+  }
+
+  .mobile-menu-panel .nav-ico svg{
+    width:18px;
+    height:18px;
+    display:block;
+  }
+
+  .mobile-menu-actions{
+    margin-top:auto;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    padding:16px 4px 0;
+    border-top:1px solid rgba(15,23,42,0.08);
+  }
+
+  .mobile-menu-actions .btn{
+    width:100%;
+    justify-content:center;
+  }
+}
+
+@media (max-width: 640px){
+  .topbar{
+    padding: 10px 12px;
+  }
+
+  .meta-strip{
+    grid-template-columns: 1fr;
+  }
+
+  .row-actions{
+    grid-template-columns: 1fr;
+  }
+
+  .items-table tbody td:nth-child(2),
+  .items-table tbody td:nth-child(3),
+  .items-table tbody td:nth-child(4),
+  .items-table tbody td:nth-child(5),
+  .items-table tbody td:nth-child(6),
+  .ps-table tbody td:nth-child(1),
+  .ps-table tbody td:nth-child(2),
+  .ps-table tbody td:nth-child(3){
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .topbar .actions{
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    left: 10px;
+    right: 10px;
+  }
+
+  .topbar .actions .btn{
+    min-height: 44px;
+    padding: 9px 10px;
+    font-size: 12px;
+  }
+
+  .wrap{
+    padding: 12px 10px calc(154px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .page{
+    padding: 14px;
+  }
+
+  .mobile-menu-panel{
+    width:min(320px, 92vw);
+    padding:14px 12px 16px;
+  }
+}

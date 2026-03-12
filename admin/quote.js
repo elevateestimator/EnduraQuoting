@@ -70,6 +70,16 @@ const clientSignedDateEl = $("#client-signed-date");
 const quoteDateInput = $('[data-bind="quote_date"]');
 
 const quotePageEl = $("#quote-page");
+const mobileMenuBtn = $("#mobile-menu-btn");
+const mobileMenuCloseBtn = $("#mobile-menu-close");
+const mobileMenuBackdrop = $("#mobile-menu-backdrop");
+const mobileMenuPanel = $("#mobile-menu-panel");
+const mobileLogoutBtn = $("#mobile-logout-btn");
+const mobileMenuLogoEl = $("#mobile-menu-logo");
+const mobileWorkspaceNameEl = $("#mobile-workspace-name");
+const mobileUserEmailEl = $("#mobile-user-email");
+const mobileCloseEls = $$("[data-mobile-close]");
+
 const wrapEl = $(".wrap");
 
 function showMsg(text) {
@@ -373,6 +383,67 @@ async function postJSON(url, body) {
     throw new Error(msg);
   }
   return data;
+}
+
+
+function isMobileViewport() {
+  return window.matchMedia("(max-width: 1040px)").matches;
+}
+
+function openMobileMenu() {
+  if (!mobileMenuPanel || !isMobileViewport()) return;
+  document.body.classList.add("mobile-menu-open");
+  mobileMenuBtn?.setAttribute("aria-expanded", "true");
+}
+
+function closeMobileMenu() {
+  document.body.classList.remove("mobile-menu-open");
+  mobileMenuBtn?.setAttribute("aria-expanded", "false");
+}
+
+function wireMobileMenu() {
+  mobileMenuBtn?.addEventListener("click", () => {
+    if (document.body.classList.contains("mobile-menu-open")) closeMobileMenu();
+    else openMobileMenu();
+  });
+  mobileMenuCloseBtn?.addEventListener("click", closeMobileMenu);
+  mobileMenuBackdrop?.addEventListener("click", closeMobileMenu);
+  mobileCloseEls.forEach((el) => el.addEventListener("click", closeMobileMenu));
+
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeMobileMenu();
+  });
+
+  window.addEventListener("resize", () => {
+    if (!isMobileViewport()) closeMobileMenu();
+  });
+
+  document.addEventListener("focusin", (e) => {
+    if (!isMobileViewport()) return;
+    const tag = e.target?.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
+      document.body.classList.add("mobile-editor-focused");
+    }
+  });
+
+  document.addEventListener("focusout", () => {
+    if (!isMobileViewport()) return;
+    setTimeout(() => {
+      const el = document.activeElement;
+      const tag = el?.tagName;
+      if (tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT") {
+        document.body.classList.remove("mobile-editor-focused");
+      }
+    }, 0);
+  });
+
+  mobileLogoutBtn?.addEventListener("click", async () => {
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      window.location.href = "../index.html";
+    }
+  });
 }
 
 function openDialog(dialog) {
@@ -2265,6 +2336,8 @@ async function exportPdfManual({ filename }) {
 async function main() {
   await requireAdminOrRedirect({ redirectTo: "../index.html" });
 
+  wireMobileMenu();
+
   // Company + user context (letterhead + prepared-by)
   let ctx;
   try {
@@ -2273,6 +2346,9 @@ async function main() {
     showMsg(e?.message || "Failed to load company context.");
     return;
   }
+
+  if (mobileUserEmailEl) mobileUserEmailEl.textContent = safeStr(ctx?.user?.email) || "—";
+  if (mobileWorkspaceNameEl) mobileWorkspaceNameEl.textContent = safeStr(ctx?.company?.name) || "Workspace";
 
   const quoteId = new URLSearchParams(window.location.search).get("id");
   if (!quoteId) {
