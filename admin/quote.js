@@ -77,23 +77,114 @@ const actionsEl = $(".topbar .actions");
 let mobileActionsToggleBtn = null;
 let mobileActionsBackdropEl = null;
 let mobileActionsCloseBtn = null;
+let mobileActionsMountedToBody = false;
 
 function isMobileActionsViewport() {
   return window.matchMedia("(max-width: 860px)").matches;
 }
 
+function setMobileActionChildWidths(mobile) {
+  if (!actionsEl) return;
+  const directKids = Array.from(actionsEl.children || []);
+  for (const kid of directKids) {
+    if (kid.classList?.contains('mobile-actions-header')) continue;
+    if (mobile) {
+      kid.style.width = '100%';
+      if (kid.classList?.contains('save-state')) {
+        kid.style.justifyContent = 'flex-start';
+        kid.style.padding = '12px 14px';
+      }
+    } else {
+      kid.style.removeProperty('width');
+      if (kid.classList?.contains('save-state')) {
+        kid.style.removeProperty('justify-content');
+        kid.style.removeProperty('padding');
+      }
+    }
+  }
+}
+
+function mountMobileActionsPanel() {
+  if (!topbarEl || !actionsEl) return;
+
+  if (isMobileActionsViewport()) {
+    if (!mobileActionsMountedToBody) {
+      document.body.appendChild(actionsEl);
+      actionsEl.classList.add('mobile-actions-panel');
+      mobileActionsMountedToBody = true;
+    }
+    return;
+  }
+
+  if (mobileActionsMountedToBody) {
+    if (mobileActionsToggleBtn && mobileActionsToggleBtn.parentElement === topbarEl) {
+      topbarEl.insertBefore(actionsEl, mobileActionsToggleBtn);
+    } else {
+      topbarEl.appendChild(actionsEl);
+    }
+    actionsEl.classList.remove('mobile-actions-panel');
+    mobileActionsMountedToBody = false;
+  }
+}
+
+function syncMobileActionsPanelStyles() {
+  if (!topbarEl || !actionsEl) return;
+
+  const mobile = isMobileActionsViewport();
+  const open = mobile && document.body.classList.contains('quote-mobile-actions-open');
+  mountMobileActionsPanel();
+
+  if (mobile) {
+    Object.assign(actionsEl.style, {
+      position: 'fixed',
+      left: '12px',
+      right: '12px',
+      bottom: '12px',
+      zIndex: '10002',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'stretch',
+      justifyContent: 'flex-start',
+      gap: '10px',
+      flexWrap: 'nowrap',
+      padding: '14px',
+      border: '1px solid rgba(15,23,42,0.12)',
+      borderRadius: '18px',
+      background: 'rgba(255,255,255,0.98)',
+      boxShadow: '0 28px 80px rgba(15,23,42,0.24)',
+      maxHeight: 'min(78vh, 620px)',
+      overflow: 'auto',
+      transform: open ? 'translateY(0)' : 'translateY(calc(100% + 26px))',
+      opacity: open ? '1' : '0',
+      pointerEvents: open ? 'auto' : 'none',
+      margin: '0'
+    });
+    topbarEl.style.zIndex = '10003';
+    setMobileActionChildWidths(true);
+    if (mobileActionsBackdropEl) {
+      mobileActionsBackdropEl.hidden = !open;
+      mobileActionsBackdropEl.style.zIndex = '10001';
+    }
+  } else {
+    actionsEl.removeAttribute('style');
+    topbarEl.style.removeProperty('z-index');
+    setMobileActionChildWidths(false);
+    if (mobileActionsBackdropEl) {
+      mobileActionsBackdropEl.hidden = true;
+      mobileActionsBackdropEl.style.removeProperty('z-index');
+    }
+  }
+
+  if (mobileActionsToggleBtn) {
+    mobileActionsToggleBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    mobileActionsToggleBtn.setAttribute('aria-label', open ? 'Close actions menu' : 'Open actions menu');
+  }
+}
+
 function setMobileActionsOpen(open) {
   const next = !!open && isMobileActionsViewport();
   document.body.classList.toggle("quote-mobile-actions-open", next);
-
-  if (mobileActionsToggleBtn) {
-    mobileActionsToggleBtn.setAttribute("aria-expanded", next ? "true" : "false");
-    mobileActionsToggleBtn.setAttribute("aria-label", next ? "Close actions menu" : "Open actions menu");
-  }
-
-  if (mobileActionsBackdropEl) {
-    mobileActionsBackdropEl.hidden = !next;
-  }
+  syncMobileActionsPanelStyles();
 }
 
 function ensureMobileActionsMenu() {
@@ -174,11 +265,16 @@ function ensureMobileActionsMenu() {
     });
 
     window.addEventListener("resize", () => {
-      if (!isMobileActionsViewport()) setMobileActionsOpen(false);
+      if (!isMobileActionsViewport()) {
+        document.body.classList.remove('quote-mobile-actions-open');
+      }
+      syncMobileActionsPanelStyles();
     });
 
     window.__quoteMobileMenuBound = true;
   }
+
+  syncMobileActionsPanelStyles();
 }
 
 
