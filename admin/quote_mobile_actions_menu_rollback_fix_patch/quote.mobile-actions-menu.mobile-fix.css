@@ -1,0 +1,20 @@
+/* Mobile actions menu fix
+   Use with quote.mobile-actions-menu.rollback.js
+   - removes the topbar backdrop-filter on mobile so the fixed menu panel can render correctly
+   - keeps desktop untouched
+*/
+@media (max-width: 860px){
+  .topbar{
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background: rgba(245,247,251,0.98) !important;
+  }
+
+  .mobile-actions-backdrop{
+    z-index: 10001 !important;
+  }
+
+  .topbar .actions{
+    z-index: 10002 !important;
+  }
+}
