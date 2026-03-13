@@ -1,0 +1,341 @@
+/* =========================================================
+   Quote Builder — MOBILE ONLY
+   Append to the BOTTOM of the CURRENT quote.css
+   Desktop is untouched.
+   No HTML or JS changes required.
+   ========================================================= */
+
+@media (max-width: 980px){
+  .topbar{
+    padding: 12px;
+    gap: 10px;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .brand{
+    width: 100%;
+    min-width: 0;
+  }
+
+  .brand-text{
+    min-width: 0;
+  }
+
+  .brand-title,
+  .brand-sub{
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .logo{
+    width: 40px;
+    height: 40px;
+  }
+
+  .actions{
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    align-items: stretch;
+  }
+
+  .actions .btn{
+    width: 100%;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .wrap{
+    max-width: none;
+    padding: 12px;
+  }
+
+  .page{
+    width: auto;
+    min-height: 0;
+    margin: 0 auto 18px;
+    padding: 16px;
+    border-radius: 16px;
+    box-shadow: 0 12px 34px rgba(2,6,23,0.10);
+  }
+
+  .page > * + *{
+    margin-top: 12px;
+  }
+
+  .letterhead{
+    grid-template-columns: 1fr;
+    gap: 12px;
+    align-items: start;
+  }
+
+  .logo-col{
+    justify-content: flex-start;
+  }
+
+  .logo-box{
+    width: auto;
+    max-width: 190px;
+    height: 72px;
+  }
+
+  .doc-logo{
+    height: 72px;
+    max-width: 100%;
+    transform: none;
+    top: 0;
+  }
+
+  .company-row{
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .doc-block{
+    align-items: flex-start;
+  }
+
+  .doc-code{
+    text-align: left;
+  }
+
+  .company-contact{
+    gap: 4px 8px;
+  }
+
+  .company-contact span{
+    white-space: normal;
+  }
+
+  .company-contact span + span::before{
+    margin: 0 6px;
+  }
+
+  .meta-strip{
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .grid-2,
+  .signatures,
+  .two-col,
+  .sig-inline.two{
+    grid-template-columns: 1fr;
+  }
+
+  .row-between{
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .row-between h3{
+    margin-bottom: 0;
+  }
+
+  .row-actions{
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .row-actions .btn{
+    width: 100%;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .table-wrap{
+    overflow: visible;
+  }
+
+  .items-table thead{
+    display: none;
+  }
+
+  .items-table,
+  .items-table tbody,
+  .items-table tr,
+  .items-table td{
+    display: block;
+    width: 100%;
+  }
+
+  .items-table colgroup{
+    display: none;
+  }
+
+  .items-table tbody tr{
+    border-top: 1px solid var(--border);
+    background: #ffffff;
+  }
+
+  .items-table tbody tr:first-child{
+    border-top: 0;
+  }
+
+  .items-table tbody td{
+    border-bottom: 0;
+    background: transparent !important;
+    padding: 10px 12px;
+  }
+
+  .items-table tbody td:first-child{
+    padding-top: 14px;
+  }
+
+  .items-table tbody td:not(:first-child){
+    display: grid;
+    grid-template-columns: 96px 1fr;
+    gap: 12px;
+    align-items: center;
+    border-top: 1px solid var(--border-soft);
+  }
+
+  .items-table tbody td:not(:first-child)::before{
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: #6b7280;
+  }
+
+  .items-table tbody td:nth-child(2)::before{ content: "Qty"; }
+  .items-table tbody td:nth-child(3)::before{ content: "Unit"; }
+  .items-table tbody td:nth-child(4)::before{ content: "Unit Price"; }
+  .items-table tbody td:nth-child(5)::before{ content: "Tax"; }
+  .items-table tbody td:nth-child(6)::before{ content: "Line Total"; }
+  .items-table tbody td:nth-child(7)::before{ content: "Remove"; }
+
+  .items-table .num,
+  .items-table .center,
+  .items-table .line-total{
+    text-align: left;
+  }
+
+  .items-table input[type="text"],
+  .items-table textarea{
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .items-table .i-name{
+    font-size: 16px;
+    padding-bottom: 6px;
+  }
+
+  .items-table .i-desc{
+    min-height: 56px;
+  }
+
+  .items-table .line-total span{
+    padding: 0;
+    text-align: right;
+    font-size: 15px;
+  }
+
+  .items-table .slim{
+    width: auto;
+  }
+
+  .items-table td.no-print.slim .btn{
+    justify-self: end;
+  }
+
+  .totals-grid{
+    grid-template-columns: auto 1fr 128px;
+    column-gap: 10px;
+  }
+
+  .inline-controls{
+    flex-wrap: wrap;
+  }
+
+  .inline{
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    align-items: start;
+  }
+
+  .inline input{
+    width: 100%;
+  }
+
+  .dialog{
+    width: min(100vw - 16px, 860px);
+    max-height: calc(100dvh - 16px);
+    padding: 14px;
+    overflow: auto;
+  }
+
+  .dialog-head{
+    align-items: flex-start;
+  }
+
+  .product-row{
+    flex-direction: column;
+  }
+
+  .products-list{
+    max-height: 48vh;
+  }
+}
+
+@media (max-width: 560px){
+  .topbar{
+    padding: 10px;
+  }
+
+  .actions{
+    grid-template-columns: 1fr;
+  }
+
+  .meta-strip{
+    grid-template-columns: 1fr;
+  }
+
+  .page{
+    padding: 14px;
+    border-radius: 14px;
+  }
+
+  .company-name{
+    font-size: 22px;
+  }
+
+  .doc-pill{
+    padding: 7px 11px;
+  }
+
+  .row-actions{
+    grid-template-columns: 1fr;
+  }
+
+  .items-table tbody td:not(:first-child){
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .items-table tbody td:not(:first-child)::before{
+    margin-bottom: 2px;
+  }
+
+  .totals-grid{
+    grid-template-columns: auto 1fr 112px;
+  }
+
+  .sig-signature{
+    font-size: 24px;
+  }
+}
