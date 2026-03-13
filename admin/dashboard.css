@@ -1891,3 +1891,29 @@ textarea.autogrow{
     grid-column: 1 / -1;
   }
 }
+
+/* Mobile actions menu visibility fix
+   Append to the bottom of the current quote.css */
+@media (max-width: 860px){
+  /* The topbar creates its own stacking context, so when the backdrop
+     sits above it the page blurs but the menu appears hidden.
+     Lift the whole topbar above the backdrop while the menu is open. */
+  body.quote-mobile-actions-open .topbar{
+    z-index: 90 !important;
+    isolation: isolate;
+  }
+
+  .mobile-actions-backdrop{
+    z-index: 80 !important;
+  }
+
+  body.quote-mobile-actions-open .topbar .actions{
+    z-index: 91 !important;
+  }
+
+  .mobile-actions-toggle,
+  .mobile-actions-close{
+    position: relative;
+    z-index: 92;
+  }
+}
