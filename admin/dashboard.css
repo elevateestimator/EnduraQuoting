@@ -1528,7 +1528,6 @@ input:focus{
   }
 }
 
-
 /* =========================================================
    Dashboard mobile-only polish
    Append this to the BOTTOM of your current dashboard.css
@@ -1959,243 +1958,437 @@ input:focus{
   }
 }
 
+/*
+  Mobile-only quote builder patch.
+  Append this to the END of the current quote.css.
+  It does not change desktop styles.
+*/
 
-
-/* =========================================================
-   Mobile menu + compact mobile dashboard header
-   Desktop remains untouched.
-   ========================================================= */
-.mobile-menu-btn,
-.mobile-menu-panel,
-.mobile-menu-backdrop{
-  display:none;
-}
-
-@media (max-width: 1040px){
-  body.mobile-menu-open{
-    overflow:hidden;
-  }
-
-  .app{
-    grid-template-columns: 1fr;
-  }
-
-  .sidebar{
-    display:none;
-  }
-
-  .mobile-menu-btn{
-    display:inline-flex;
-    align-items:center;
-    justify-content:center;
-    flex-direction:column;
-    gap:4px;
-    width:42px;
-    height:42px;
-    padding:0;
-    border-radius:12px;
-    border:1px solid rgba(15, 23, 42, 0.12);
-    background: rgba(255,255,255,0.92);
-    box-shadow: var(--shadow-1);
-    cursor:pointer;
-    flex: 0 0 42px;
-  }
-
-  .mobile-menu-btn span{
-    display:block;
-    width:18px;
-    height:2px;
-    border-radius:999px;
-    background: rgba(11, 15, 20, 0.78);
+@media (max-width: 980px){
+  html, body{
+    overflow-x: hidden;
   }
 
   .topbar{
-    position: sticky;
-    top: 0;
-    z-index: 60;
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
     padding: 12px 14px;
-    background: rgba(246, 247, 250, 0.94);
-    backdrop-filter: blur(10px);
+    gap: 12px;
+    align-items: flex-start;
   }
 
-  .topbar-left{
-    display:flex;
-    align-items:center;
-    gap: 12px;
+  .brand{
+    width: 100%;
     min-width: 0;
   }
 
-  .page-title{
-    min-width:0;
+  .brand-text{
+    min-width: 0;
   }
 
-  .page-title h1{
-    font-size: 20px;
-    line-height: 1.15;
+  .brand-title,
+  .brand-sub{
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
-  .subtitle{
-    display:none;
+  .actions{
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    align-items: stretch;
+    justify-content: stretch;
   }
 
-  .topbar-right{
-    display:none;
+  .actions > *{
+    min-width: 0;
   }
 
-  .mobile-menu-backdrop{
-    display:block;
-    position:fixed;
-    inset:0;
-    background: rgba(11, 15, 20, 0.42);
-    opacity:0;
-    pointer-events:none;
-    transition: opacity .18s ease;
-    z-index: 79;
-    border:0;
-    padding:0;
+  .actions .btn,
+  .actions .save-state{
+    width: 100%;
+    justify-content: center;
   }
 
-  .mobile-menu-panel{
-    display:flex;
-    flex-direction:column;
-    position:fixed;
-    top:0;
-    left:0;
-    bottom:0;
-    width:min(320px, 86vw);
-    padding: 16px 14px 18px;
-    background: #f1f4f8;
-    border-right: 1px solid rgba(15, 23, 42, 0.10);
-    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
-    transform: translateX(-104%);
-    transition: transform .22s ease;
-    z-index: 80;
-    overflow-y:auto;
+  #save-state{
+    grid-column: 1 / -1;
   }
 
-  body.mobile-menu-open .mobile-menu-panel{
-    transform: translateX(0);
+  #save-btn[hidden]{
+    display: none !important;
   }
 
-  body.mobile-menu-open .mobile-menu-backdrop{
-    opacity:1;
-    pointer-events:auto;
+  .wrap{
+    padding: 12px;
   }
 
-  .mobile-menu-head{
-    display:flex;
-    align-items:flex-start;
-    justify-content:space-between;
+  .page:not(.pdf-export){
+    width: 100%;
+    min-height: auto;
+    margin: 0 auto 18px;
+    padding: 16px;
+    border-radius: 16px;
+  }
+
+  .page:not(.pdf-export) > * + *{
+    margin-top: 12px;
+  }
+
+  .page:not(.pdf-export) .letterhead{
+    grid-template-columns: 1fr;
     gap: 12px;
-    padding: 4px 4px 14px;
-    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-    margin-bottom: 12px;
   }
 
-  .mobile-menu-brand{
-    display:flex;
-    align-items:center;
-    gap: 12px;
-    min-width:0;
+  .page:not(.pdf-export) .logo-col{
+    justify-content: flex-start;
   }
 
-  .mobile-menu-logo{
-    width: 40px;
-    height: 40px;
-    object-fit: contain;
-    flex: 0 0 40px;
+  .page:not(.pdf-export) .logo-box{
+    width: 132px;
+    height: 72px;
   }
 
-  .mobile-workspace-name{
-    font-weight: 950;
-    letter-spacing: -0.01em;
-    font-size: 15px;
-    color: var(--text);
+  .page:not(.pdf-export) .company-row{
+    flex-direction: column;
+    align-items: flex-start;
   }
 
-  .mobile-user-email{
-    margin-top: 2px;
-    font-size: 12px;
-    color: rgba(11, 15, 20, 0.68);
-    font-weight: 700;
-    overflow-wrap:anywhere;
+  .page:not(.pdf-export) .doc-block{
+    align-items: flex-start;
   }
 
-  .mobile-menu-close{
-    appearance:none;
-    border: 1px solid rgba(15, 23, 42, 0.12);
-    background: rgba(255,255,255,0.86);
-    color: rgba(11, 15, 20, 0.82);
-    width: 38px;
-    height: 38px;
-    border-radius: 12px;
-    font-size: 18px;
-    font-weight: 900;
-    line-height: 1;
-    cursor:pointer;
-    flex: 0 0 38px;
-  }
-
-  .mobile-menu-nav{
-    display:flex;
-    flex-direction:column;
-    gap: 14px;
-    padding: 4px 2px 0;
-  }
-
-  .mobile-menu-panel .nav-group{
-    display:flex;
-    flex-direction:column;
+  .page:not(.pdf-export) .company-contact{
+    display: grid;
     gap: 4px;
   }
 
-  .mobile-menu-panel .nav-group-label{
-    display:block;
-    padding: 10px 12px 6px;
+  .page:not(.pdf-export) .company-contact span{
+    white-space: normal;
   }
 
-  .mobile-menu-panel .nav-item{
-    width:100%;
-    white-space:normal;
-    padding: 11px 12px;
-    border-radius: 11px;
+  .page:not(.pdf-export) .company-contact span + span::before{
+    content: none;
+    margin: 0;
   }
 
-  .mobile-menu-panel .nav-item.active{
-    box-shadow: inset 3px 0 0 var(--brand);
-    background: rgba(255,255,255,0.92);
+  .page:not(.pdf-export) .meta-strip{
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .mobile-menu-actions{
-    margin-top:auto;
-    display:flex;
-    flex-direction:column;
+  .page:not(.pdf-export) .grid-2,
+  .page:not(.pdf-export) .signatures,
+  .page:not(.pdf-export) .two-col,
+  .page:not(.pdf-export) .sig-inline.two{
+    grid-template-columns: 1fr;
+  }
+
+  .page:not(.pdf-export) .row-between{
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .page:not(.pdf-export) .row-actions{
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .page:not(.pdf-export) .row-actions .btn{
+    width: 100%;
+  }
+
+  .page:not(.pdf-export) .totals-grid{
+    grid-template-columns: auto 1fr minmax(108px, 40vw);
+    column-gap: 8px;
+  }
+
+  .page:not(.pdf-export) .table-wrap{
+    border: none;
+    box-shadow: none;
+    background: transparent;
+    overflow: visible;
+  }
+
+  /* Items table -> stacked cards (screen only) */
+  .page:not(.pdf-export) .items-table,
+  .page:not(.pdf-export) .items-table thead,
+  .page:not(.pdf-export) .items-table tbody,
+  .page:not(.pdf-export) .items-table tr,
+  .page:not(.pdf-export) .items-table th,
+  .page:not(.pdf-export) .items-table td{
+    display: block;
+    width: 100%;
+  }
+
+  .page:not(.pdf-export) .items-table colgroup,
+  .page:not(.pdf-export) .items-table thead{
+    display: none;
+  }
+
+  .page:not(.pdf-export) .items-table tbody{
+    display: grid;
+    gap: 12px;
+  }
+
+  .page:not(.pdf-export) .items-table tbody tr.item-row{
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
-    padding: 16px 4px 0;
-    border-top: 1px solid rgba(15, 23, 42, 0.08);
+    position: relative;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 1px 0 rgba(2, 6, 23, 0.05);
   }
 
-  .mobile-menu-actions .btn{
-    width:100%;
-    justify-content:center;
+  .page:not(.pdf-export) .items-table tbody td{
+    padding: 0;
+    border: 0 !important;
+    background: transparent !important;
+    min-width: 0;
+  }
+
+  .page:not(.pdf-export) .items-table tbody td:nth-child(1),
+  .page:not(.pdf-export) .items-table tbody td:nth-child(6){
+    grid-column: 1 / -1;
+  }
+
+  .page:not(.pdf-export) .items-table tbody td:nth-child(7){
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: auto;
+  }
+
+  .page:not(.pdf-export) .items-table tbody td:nth-child(2)::before,
+  .page:not(.pdf-export) .items-table tbody td:nth-child(3)::before,
+  .page:not(.pdf-export) .items-table tbody td:nth-child(4)::before,
+  .page:not(.pdf-export) .items-table tbody td:nth-child(5)::before,
+  .page:not(.pdf-export) .items-table tbody td:nth-child(6)::before{
+    display: block;
+    margin-bottom: 6px;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: #6b7280;
+  }
+
+  .page:not(.pdf-export) .items-table tbody td:nth-child(2)::before{ content: "Qty"; }
+  .page:not(.pdf-export) .items-table tbody td:nth-child(3)::before{ content: "Unit"; }
+  .page:not(.pdf-export) .items-table tbody td:nth-child(4)::before{ content: "Unit Price"; }
+  .page:not(.pdf-export) .items-table tbody td:nth-child(5)::before{ content: "Tax"; }
+  .page:not(.pdf-export) .items-table tbody td:nth-child(6)::before{ content: "Line Total"; }
+
+  .page:not(.pdf-export) .items-table .i-head{
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .page:not(.pdf-export) .items-table .i-view{
+    padding: 0 10px 10px;
+  }
+
+  .page:not(.pdf-export) .items-table .i-view-label{
+    width: 100%;
+  }
+
+  .page:not(.pdf-export) .items-table .i-view-seg{
+    width: 100%;
+  }
+
+  .page:not(.pdf-export) .items-table .i-view-btn{
+    flex: 1 1 50%;
+    text-align: center;
+  }
+
+  .page:not(.pdf-export) .items-table td.center{
+    text-align: left;
+  }
+
+  .page:not(.pdf-export) .items-table td.center .i-unit,
+  .page:not(.pdf-export) .items-table td.center .i-unit-input{
+    text-align: left;
+  }
+
+  .page:not(.pdf-export) .items-table td:nth-child(5){
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .page:not(.pdf-export) .items-table td:nth-child(5)::before{
+    margin-bottom: 0;
+  }
+
+  .page:not(.pdf-export) .items-table td:nth-child(5) input[type="checkbox"]{
+    width: 18px;
+    height: 18px;
+  }
+
+  .page:not(.pdf-export) .items-table .line-total{
+    text-align: left;
+  }
+
+  .page:not(.pdf-export) .items-table .line-total span{
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: #f8fafc;
+  }
+
+  /* Payment schedule -> stacked cards (screen only) */
+  .page:not(.pdf-export) .ps-table,
+  .page:not(.pdf-export) .ps-table thead,
+  .page:not(.pdf-export) .ps-table tbody,
+  .page:not(.pdf-export) .ps-table tr,
+  .page:not(.pdf-export) .ps-table th,
+  .page:not(.pdf-export) .ps-table td{
+    display: block;
+    width: 100%;
+  }
+
+  .page:not(.pdf-export) .ps-table colgroup,
+  .page:not(.pdf-export) .ps-table thead{
+    display: none;
+  }
+
+  .page:not(.pdf-export) .ps-table tbody{
+    display: grid;
+    gap: 12px;
+  }
+
+  .page:not(.pdf-export) .ps-table tbody tr.ps-row{
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    position: relative;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: #fff;
+  }
+
+  .page:not(.pdf-export) .ps-table tbody td{
+    padding: 0;
+    border: 0 !important;
+    background: transparent !important;
+    min-width: 0;
+  }
+
+  .page:not(.pdf-export) .ps-table tbody td:nth-child(1){
+    grid-column: 1 / -1;
+  }
+
+  .page:not(.pdf-export) .ps-table tbody td:nth-child(4){
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: auto;
+  }
+
+  .page:not(.pdf-export) .ps-table tbody td:nth-child(2)::before,
+  .page:not(.pdf-export) .ps-table tbody td:nth-child(3)::before{
+    display: block;
+    margin-bottom: 6px;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: #6b7280;
+  }
+
+  .page:not(.pdf-export) .ps-table tbody td:nth-child(2)::before{ content: "Percent"; }
+  .page:not(.pdf-export) .ps-table tbody td:nth-child(3)::before{ content: "Amount"; }
+
+  .page:not(.pdf-export) .ps-footer{
+    align-items: flex-start;
+  }
+
+  .page:not(.pdf-export) .sig-signature{
+    white-space: normal;
+    max-width: 100%;
+  }
+
+  .dialog{
+    width: min(calc(100vw - 16px), 860px);
+    padding: 12px;
+  }
+
+  .product-row{
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .products-list{
+    max-height: 50vh;
   }
 }
 
-@media (max-width: 520px){
+@media (max-width: 560px){
   .topbar{
     padding: 10px 12px;
   }
 
-  .mobile-menu-panel{
-    width:min(320px, 92vw);
-    padding: 14px 12px 16px;
+  .actions{
+    grid-template-columns: 1fr;
   }
 
-  .page-title h1{
-    font-size: 18px;
+  #save-state{
+    grid-column: auto;
+  }
+
+  .page:not(.pdf-export){
+    padding: 14px;
+  }
+
+  .page:not(.pdf-export) .meta-strip{
+    grid-template-columns: 1fr;
+  }
+
+  .page:not(.pdf-export) .row-actions{
+    grid-template-columns: 1fr;
+  }
+
+  .page:not(.pdf-export) .items-table tbody tr.item-row,
+  .page:not(.pdf-export) .ps-table tbody tr.ps-row{
+    grid-template-columns: 1fr;
+  }
+
+  .page:not(.pdf-export) .items-table tbody td:nth-child(7),
+  .page:not(.pdf-export) .ps-table tbody td:nth-child(4){
+    position: static;
+    width: 100%;
+  }
+
+  .page:not(.pdf-export) .items-table td:nth-child(5){
+    display: grid;
+    gap: 6px;
+  }
+
+  .page:not(.pdf-export) .items-table td:nth-child(5)::before{
+    margin-bottom: 6px;
+  }
+
+  .page:not(.pdf-export) .totals-grid{
+    grid-template-columns: 1fr;
+  }
+
+  .page:not(.pdf-export) .totals-grid .row{
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .page:not(.pdf-export) .totals-grid .spacer{
+    min-width: 0;
+  }
+
+  .page:not(.pdf-export) .totals-grid .value{
+    justify-self: end;
+    grid-template-columns: auto auto;
   }
 }
