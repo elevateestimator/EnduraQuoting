@@ -71,6 +71,116 @@ const quoteDateInput = $('[data-bind="quote_date"]');
 
 const quotePageEl = $("#quote-page");
 const wrapEl = $(".wrap");
+const topbarEl = $(".topbar");
+const actionsEl = $(".topbar .actions");
+
+let mobileActionsToggleBtn = null;
+let mobileActionsBackdropEl = null;
+let mobileActionsCloseBtn = null;
+
+function isMobileActionsViewport() {
+  return window.matchMedia("(max-width: 860px)").matches;
+}
+
+function setMobileActionsOpen(open) {
+  const next = !!open && isMobileActionsViewport();
+  document.body.classList.toggle("quote-mobile-actions-open", next);
+
+  if (mobileActionsToggleBtn) {
+    mobileActionsToggleBtn.setAttribute("aria-expanded", next ? "true" : "false");
+    mobileActionsToggleBtn.setAttribute("aria-label", next ? "Close actions menu" : "Open actions menu");
+  }
+
+  if (mobileActionsBackdropEl) {
+    mobileActionsBackdropEl.hidden = !next;
+  }
+}
+
+function ensureMobileActionsMenu() {
+  if (!topbarEl || !actionsEl) return;
+
+  if (!mobileActionsToggleBtn) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.id = "mobile-actions-toggle";
+    btn.className = "mobile-actions-toggle no-print";
+    btn.setAttribute("aria-label", "Open actions menu");
+    btn.setAttribute("aria-expanded", "false");
+    btn.setAttribute("aria-controls", "mobile-actions-panel");
+    btn.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M4 7h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M4 12h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>`;
+
+    btn.addEventListener("click", () => {
+      setMobileActionsOpen(!document.body.classList.contains("quote-mobile-actions-open"));
+    });
+
+    topbarEl.appendChild(btn);
+    mobileActionsToggleBtn = btn;
+  }
+
+  if (!mobileActionsBackdropEl) {
+    const backdrop = document.createElement("button");
+    backdrop.type = "button";
+    backdrop.className = "mobile-actions-backdrop no-print";
+    backdrop.hidden = true;
+    backdrop.setAttribute("aria-label", "Close actions menu");
+    backdrop.addEventListener("click", () => setMobileActionsOpen(false));
+    document.body.appendChild(backdrop);
+    mobileActionsBackdropEl = backdrop;
+  }
+
+  if (!actionsEl.id) actionsEl.id = "mobile-actions-panel";
+
+  if (!actionsEl.querySelector(".mobile-actions-header")) {
+    const header = document.createElement("div");
+    header.className = "mobile-actions-header";
+
+    const title = document.createElement("div");
+    title.className = "mobile-actions-title";
+    title.textContent = "Quote actions";
+
+    const closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className = "mobile-actions-close";
+    closeBtn.setAttribute("aria-label", "Close actions menu");
+    closeBtn.textContent = "✕";
+    closeBtn.addEventListener("click", () => setMobileActionsOpen(false));
+
+    header.appendChild(title);
+    header.appendChild(closeBtn);
+    actionsEl.insertBefore(header, actionsEl.firstChild);
+    mobileActionsCloseBtn = closeBtn;
+  }
+
+  if (!actionsEl.dataset.mobileMenuBound) {
+    actionsEl.addEventListener("click", (e) => {
+      if (!isMobileActionsViewport()) return;
+      const target = e.target.closest("button");
+      if (!target) return;
+      if (target === mobileActionsCloseBtn) return;
+      if (target.disabled || target.getAttribute("aria-disabled") === "true") return;
+      setTimeout(() => setMobileActionsOpen(false), 0);
+    });
+    actionsEl.dataset.mobileMenuBound = "1";
+  }
+
+  if (!window.__quoteMobileMenuBound) {
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") setMobileActionsOpen(false);
+    });
+
+    window.addEventListener("resize", () => {
+      if (!isMobileActionsViewport()) setMobileActionsOpen(false);
+    });
+
+    window.__quoteMobileMenuBound = true;
+  }
+}
+
 
 function showMsg(text) {
   if (!text) {
@@ -2312,6 +2422,7 @@ if (!safeStr(data.terms) && safeStr(ctx?.company?.payment_terms)) {
   fillUIFromData(qRow, data, ctx);
   syncQuoteStatusUI(qRow.status);
   ensureNewVersionButton();
+  ensureMobileActionsMenu();
 
   function confirmEditOfSentQuote() {
     if (!isSentLikeStatus(qRow?.status) || _sentEditConfirmed) return true;

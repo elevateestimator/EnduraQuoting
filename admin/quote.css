@@ -1411,3 +1411,383 @@ textarea.autogrow{
   overflow-wrap: anywhere;
   word-break: break-word;
 }
+
+
+/* =========================================================
+   Mobile-only quote builder polish
+   - Desktop stays exactly the same
+   - Topbar actions move into a mobile menu sheet
+   - Quote content becomes stacked / touch-friendly
+   ========================================================= */
+.mobile-actions-toggle,
+.mobile-actions-backdrop,
+.mobile-actions-header,
+.mobile-actions-close{
+  display:none;
+}
+
+@media (max-width: 860px){
+  body.quote-mobile-actions-open{
+    overflow: hidden;
+  }
+
+  .topbar{
+    align-items:center;
+    padding: 12px 14px;
+    gap: 12px;
+  }
+
+  .brand{
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .brand-title{
+    font-size: 18px;
+    line-height: 1.05;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .brand-sub{
+    font-size: 12px;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mobile-actions-toggle{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    flex: 0 0 auto;
+    width: 42px;
+    height: 42px;
+    border: 1px solid var(--border-ui);
+    border-radius: 12px;
+    background: rgba(255,255,255,0.94);
+    color: var(--text);
+    box-shadow: 0 6px 18px rgba(15,23,42,0.08);
+    cursor: pointer;
+  }
+
+  .mobile-actions-toggle svg{
+    width: 18px;
+    height: 18px;
+    display: block;
+  }
+
+  .mobile-actions-backdrop{
+    display:block;
+    position: fixed;
+    inset: 0;
+    z-index: 79;
+    border: 0;
+    padding: 0;
+    background: rgba(15,23,42,0.42);
+    backdrop-filter: blur(4px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease;
+  }
+
+  body.quote-mobile-actions-open .mobile-actions-backdrop{
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .topbar .actions{
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    z-index: 80;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 10px;
+    flex-wrap: nowrap;
+    padding: 14px;
+    border: 1px solid var(--border-ui);
+    border-radius: 18px;
+    background: rgba(255,255,255,0.98);
+    box-shadow: 0 28px 80px rgba(15,23,42,0.24);
+    transform: translateY(calc(100% + 26px));
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.22s ease, opacity 0.18s ease;
+    max-height: min(78vh, 620px);
+    overflow: auto;
+  }
+
+  body.quote-mobile-actions-open .topbar .actions{
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .mobile-actions-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap: 10px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(15,23,42,0.08);
+    margin-bottom: 2px;
+  }
+
+  .mobile-actions-title{
+    font-size: 14px;
+    font-weight: 950;
+    letter-spacing: 0.01em;
+    color: var(--text);
+  }
+
+  .mobile-actions-close{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--border-ui);
+    border-radius: 12px;
+    background: #ffffff;
+    color: var(--text);
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 950;
+    box-shadow: 0 6px 18px rgba(15,23,42,0.06);
+  }
+
+  .topbar .actions > .btn,
+  .topbar .actions > .save-state{
+    width: 100%;
+  }
+
+  .topbar .actions > .save-state{
+    justify-content: flex-start;
+    padding: 12px 14px;
+  }
+
+  .wrap{
+    padding: 12px;
+  }
+
+  .msg{
+    margin-bottom: 10px;
+  }
+
+  .page{
+    width: 100%;
+    min-height: auto;
+    margin: 0 auto 16px;
+    padding: 18px 16px;
+    border-radius: 16px;
+    box-shadow: 0 14px 40px rgba(2,6,23,0.14);
+  }
+
+  .page > * + *{
+    margin-top: 12px;
+  }
+
+  .letterhead{
+    grid-template-columns: 1fr;
+    gap: 14px;
+    align-items: start;
+  }
+
+  .logo-col{
+    justify-content: flex-start;
+  }
+
+  .logo-box{
+    width: 128px;
+    height: 74px;
+  }
+
+  .company-row{
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .doc-block{
+    align-items: flex-start;
+  }
+
+  .meta-strip{
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .grid-2,
+  .signatures,
+  .sig-inline.two,
+  .two-col{
+    grid-template-columns: 1fr;
+  }
+
+  .row-between{
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .row-actions{
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .card{
+    padding: 14px;
+  }
+
+  .table-wrap{
+    overflow: visible;
+  }
+
+  .items-table colgroup,
+  .items-table thead,
+  .ps-table colgroup,
+  .ps-table thead{
+    display: none;
+  }
+
+  .items-table,
+  .items-table tbody,
+  .items-table tr,
+  .items-table td,
+  .ps-table,
+  .ps-table tbody,
+  .ps-table tr,
+  .ps-table td{
+    display: block;
+    width: 100%;
+  }
+
+  .items-table tbody tr,
+  .ps-table tbody tr{
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: #ffffff;
+    box-shadow: 0 1px 0 rgba(2,6,23,0.05);
+    overflow: hidden;
+    margin-top: 10px;
+  }
+
+  .items-table tbody tr:first-child,
+  .ps-table tbody tr:first-child{
+    margin-top: 0;
+  }
+
+  .items-table tbody td,
+  .ps-table tbody td{
+    border-top: 0;
+    border-bottom: 0;
+    padding: 10px 12px;
+  }
+
+  .items-table tbody td:first-child,
+  .ps-table tbody td:first-child{
+    padding-bottom: 8px;
+  }
+
+  .items-table tbody td:nth-child(2),
+  .items-table tbody td:nth-child(3),
+  .items-table tbody td:nth-child(4),
+  .items-table tbody td:nth-child(5),
+  .items-table tbody td:nth-child(6),
+  .ps-table tbody td:nth-child(2),
+  .ps-table tbody td:nth-child(3){
+    display: grid;
+    grid-template-columns: 96px 1fr;
+    align-items: center;
+    gap: 10px;
+    padding-top: 0;
+  }
+
+  .items-table tbody td:nth-child(2)::before,
+  .items-table tbody td:nth-child(3)::before,
+  .items-table tbody td:nth-child(4)::before,
+  .items-table tbody td:nth-child(5)::before,
+  .items-table tbody td:nth-child(6)::before,
+  .ps-table tbody td:nth-child(2)::before,
+  .ps-table tbody td:nth-child(3)::before{
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: #6b7280;
+  }
+
+  .items-table tbody td:nth-child(2)::before{ content: "Qty"; }
+  .items-table tbody td:nth-child(3)::before{ content: "Unit"; }
+  .items-table tbody td:nth-child(4)::before{ content: "Unit price"; }
+  .items-table tbody td:nth-child(5)::before{ content: "Tax"; }
+  .items-table tbody td:nth-child(6)::before{ content: "Line total"; }
+  .ps-table tbody td:nth-child(2)::before{ content: "Percent"; }
+  .ps-table tbody td:nth-child(3)::before{ content: "Amount"; }
+
+  .items-table td.num,
+  .items-table td.center,
+  .ps-table td.num{
+    text-align: left;
+  }
+
+  .items-table .line-total,
+  .items-table .line-total span,
+  .ps-amount{
+    text-align: left !important;
+  }
+
+  .items-table td.slim,
+  .ps-table td.slim{
+    padding-top: 0;
+    text-align: right;
+  }
+
+  .items-table button[data-action="remove"],
+  .ps-remove{
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .items-table .i-view{
+    margin-top: 10px;
+  }
+
+  .items-table .i-view-seg{
+    width: 100%;
+  }
+
+  .items-table .i-view-btn{
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .ps-footer{
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .totals-grid .row{
+    grid-template-columns: auto 1fr minmax(120px, 14ch);
+  }
+
+  .dialog{
+    width: min(100%, calc(100vw - 16px));
+    max-width: none;
+    border-radius: 16px;
+    padding: 14px;
+  }
+
+  .products-list{
+    max-height: min(52vh, 420px);
+  }
+}
