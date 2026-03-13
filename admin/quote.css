@@ -1812,3 +1812,50 @@ textarea.autogrow{
     z-index: 10002 !important;
   }
 }
+
+/* =========================================================
+   Mobile quote actions menu fix
+   - no blur
+   - menu opens from the top (under the top bar), not the bottom
+   - desktop unchanged
+   Append to the bottom of the current quote.css
+   ========================================================= */
+@media (max-width: 860px){
+  .topbar{
+    overflow: visible;
+  }
+
+  body.quote-mobile-actions-open .topbar{
+    z-index: 90;
+  }
+
+  .mobile-actions-backdrop{
+    z-index: 80 !important;
+    background: rgba(15,23,42,0.22) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  .topbar .actions{
+    position: absolute !important;
+    top: calc(100% + 10px) !important;
+    left: 12px !important;
+    right: 12px !important;
+    bottom: auto !important;
+    z-index: 91 !important;
+    max-height: min(72svh, calc(100svh - 96px)) !important;
+    transform: translateY(-8px) scale(0.98) !important;
+    transform-origin: top center !important;
+  }
+
+  body.quote-mobile-actions-open .topbar .actions{
+    transform: translateY(0) scale(1) !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+
+  .mobile-actions-header{
+    padding-bottom: 8px;
+    margin-bottom: 4px;
+  }
+}
