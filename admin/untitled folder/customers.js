@@ -18,16 +18,6 @@ let toastTimer = null;
 
 const logoutBtn = document.getElementById("logout-btn");
 
-const mobileMenuBtn = document.getElementById("mobile-menu-btn");
-const mobileMenuCloseBtn = document.getElementById("mobile-menu-close");
-const mobileMenuBackdrop = document.getElementById("mobile-menu-backdrop");
-const mobileMenuPanel = document.getElementById("mobile-menu-panel");
-const mobileNewBtn = document.getElementById("mobile-new-btn");
-const mobileLogoutBtn = document.getElementById("mobile-logout-btn");
-const mobileWorkspaceNameEl = document.getElementById("mobile-workspace-name");
-const mobileUserEmailEl = document.getElementById("mobile-user-email");
-const mobileCloseEls = Array.from(document.querySelectorAll("[data-mobile-close]"));
-
 const btnNew = document.getElementById("btn-new");
 const btnNewInline = document.getElementById("btn-new-inline");
 
@@ -89,60 +79,6 @@ function closeDialog(d) {
   if (!d) return;
   if (typeof d.close === "function") d.close();
   else d.removeAttribute("open");
-}
-
-function isMobileViewport() {
-  return window.matchMedia("(max-width: 1040px)").matches;
-}
-
-function openMobileMenu() {
-  if (!mobileMenuPanel || !isMobileViewport()) return;
-  document.body.classList.add("mobile-menu-open");
-  mobileMenuBtn?.setAttribute("aria-expanded", "true");
-}
-
-function closeMobileMenu() {
-  document.body.classList.remove("mobile-menu-open");
-  mobileMenuBtn?.setAttribute("aria-expanded", "false");
-}
-
-function wireMobileMenu() {
-  if (!mobileMenuBtn) return;
-
-  mobileMenuBtn.addEventListener("click", () => {
-    if (document.body.classList.contains("mobile-menu-open")) closeMobileMenu();
-    else openMobileMenu();
-  });
-
-  mobileMenuCloseBtn?.addEventListener("click", closeMobileMenu);
-  mobileMenuBackdrop?.addEventListener("click", closeMobileMenu);
-
-  mobileCloseEls.forEach((el) => {
-    el.addEventListener("click", () => {
-      if (isMobileViewport()) closeMobileMenu();
-    });
-  });
-
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeMobileMenu();
-  });
-
-  window.addEventListener("resize", () => {
-    if (!isMobileViewport()) closeMobileMenu();
-  });
-}
-
-function applyMobileTableLabels() {
-  const table = document.querySelector(".table");
-  if (!table || !tbody) return;
-  const headers = Array.from(table.querySelectorAll("thead th")).map((th) =>
-    String(th.textContent || "").trim()
-  );
-  tbody.querySelectorAll("tr").forEach((tr) => {
-    Array.from(tr.children).forEach((td, idx) => {
-      td.setAttribute("data-label", headers[idx] || "");
-    });
-  });
 }
 
 function inferWorkspaceName(session) {
@@ -312,7 +248,6 @@ async function loadCustomers({ search = "" } = {}) {
     }
 
     for (const c of customers) tbody.appendChild(renderRow(c));
-    applyMobileTableLabels();
   } catch (err) {
     setError(err?.message || "Failed to load customers.");
     setEmpty(true);
@@ -331,17 +266,15 @@ function resetForm() {
   phoneEl.value = "";
 }
 
-function openCreateCustomerDialog() {
-  resetForm();
-  setError("");
-  openDialog(dialog);
-  firstNameEl.focus();
-  if (isMobileViewport()) closeMobileMenu();
-}
-
 function wireCreateButtons() {
-  const opens = [btnNew, btnNewInline, mobileNewBtn].filter(Boolean);
-  for (const b of opens) b.addEventListener("click", openCreateCustomerDialog);
+  const opens = [btnNew, btnNewInline].filter(Boolean);
+  for (const b of opens) {
+    b.addEventListener("click", () => {
+      resetForm();
+      openDialog(dialog);
+      firstNameEl.focus();
+    });
+  }
 }
 
 function sanitizeString(s) {
@@ -368,20 +301,15 @@ async function init() {
   wireComingSoon();
   wireCreateButtons();
   wireSearch();
-  wireMobileMenu();
 
   if (logoutBtn) logoutBtn.addEventListener("click", logout);
-  if (mobileLogoutBtn) mobileLogoutBtn.addEventListener("click", logout);
   if (cancelBtn) cancelBtn.addEventListener("click", () => closeDialog(dialog));
 
   const session = await requireSessionOrRedirect();
   if (!session) return;
 
   if (userEmailEl) userEmailEl.textContent = session.user.email || "";
-  if (mobileUserEmailEl) mobileUserEmailEl.textContent = session.user.email || "";
-  const workspaceName = inferWorkspaceName(session);
-  if (workspaceNameEl) workspaceNameEl.textContent = workspaceName;
-  if (mobileWorkspaceNameEl) mobileWorkspaceNameEl.textContent = workspaceName;
+  if (workspaceNameEl) workspaceNameEl.textContent = inferWorkspaceName(session);
 
   if (form) {
     form.addEventListener("submit", async (e) => {
