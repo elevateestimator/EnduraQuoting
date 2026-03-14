@@ -867,3 +867,196 @@ async function init() {
 }
 
 init();
+
+/* =========================================================
+   Customer detail page mobile menu
+   Append this to the BOTTOM of your current customer.js
+   Preserves current page logic and only adds the mobile drawer.
+   ========================================================= */
+(function initCustomerMobileMenu(){
+  if (typeof document === "undefined") return;
+  if (document.getElementById("mobile-menu-panel")) return;
+
+  const topbarLeft = document.querySelector(".topbar-left") || document.querySelector(".topbar .page-title")?.parentElement;
+  const appRoot = document.querySelector(".app");
+  if (!topbarLeft || !appRoot) return;
+
+  const workspaceNameEl = document.getElementById("workspace-name");
+  const userEmailEl = document.getElementById("user-email");
+  const editCustomerBtn = document.getElementById("btn-edit-customer");
+  const createQuoteBtn = document.getElementById("btn-create-quote");
+  const logoutBtn = document.getElementById("logout-btn");
+
+  const menuBtn = document.createElement("button");
+  menuBtn.id = "mobile-menu-btn";
+  menuBtn.className = "mobile-menu-btn";
+  menuBtn.type = "button";
+  menuBtn.setAttribute("aria-label", "Open menu");
+  menuBtn.setAttribute("aria-expanded", "false");
+  menuBtn.setAttribute("aria-controls", "mobile-menu-panel");
+  menuBtn.innerHTML = "<span></span><span></span><span></span>";
+  topbarLeft.insertBefore(menuBtn, topbarLeft.firstChild || null);
+
+  const backdrop = document.createElement("button");
+  backdrop.id = "mobile-menu-backdrop";
+  backdrop.className = "mobile-menu-backdrop";
+  backdrop.type = "button";
+  backdrop.setAttribute("aria-label", "Close menu");
+
+  const panel = document.createElement("aside");
+  panel.id = "mobile-menu-panel";
+  panel.className = "mobile-menu-panel";
+  panel.setAttribute("aria-label", "Mobile menu");
+  panel.innerHTML = `
+    <div class="mobile-menu-head">
+      <div class="mobile-menu-brand">
+        <img class="mobile-menu-logo" src="../assets/elevate-estimator-logo-light.png" alt="Elevate Estimator" />
+        <div class="mobile-menu-meta">
+          <div id="mobile-workspace-name" class="mobile-workspace-name">${(workspaceNameEl?.textContent || "Workspace")}</div>
+          <div id="mobile-user-email" class="mobile-user-email">${(userEmailEl?.textContent || "")}</div>
+        </div>
+      </div>
+      <button id="mobile-menu-close" class="mobile-menu-close" type="button" aria-label="Close menu">✕</button>
+    </div>
+
+    <nav class="mobile-menu-nav" aria-label="Mobile primary">
+      <div class="nav-group">
+        <div class="nav-group-label">Overview</div>
+        <a class="nav-item" href="./dashboard.html" data-mobile-close>
+          <span class="nav-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          <span>Dashboard</span>
+        </a>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-group-label">Sales</div>
+        <a class="nav-item" href="./quotes.html" data-mobile-close>
+          <span class="nav-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M7 3h8l4 4v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="2"/>
+              <path d="M15 3v5h5" stroke="currentColor" stroke-width="2"/>
+              <path d="M8 12h8M8 16h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <span>Quotes</span>
+        </a>
+
+        <a class="nav-item active" href="./customers.html" aria-current="page" data-mobile-close>
+          <span class="nav-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0Z" stroke="currentColor" stroke-width="2"/>
+              <path d="M4 21a8 8 0 0 1 16 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <span>Customers</span>
+        </a>
+
+        <a class="nav-item" href="./leads.html" data-mobile-close>
+          <span class="nav-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M12 3 3 7.5l9 4.5 9-4.5L12 3Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+              <path d="M5 11.5v4.8c0 .5.2 1 .6 1.3 1.4 1.2 3.9 2.9 6.4 2.9 2.5 0 5-1.7 6.4-2.9.4-.3.6-.8.6-1.3v-4.8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          <span>Leads</span>
+        </a>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-group-label">Catalog</div>
+        <a class="nav-item" href="./products.html" data-mobile-close>
+          <span class="nav-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M20 7 12 3 4 7v10l8 4 8-4V7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+              <path d="M12 7v14" stroke="currentColor" stroke-width="2" opacity=".55"/>
+              <path d="M4 7l8 4 8-4" stroke="currentColor" stroke-width="2" opacity=".55"/>
+            </svg>
+          </span>
+          <span>Products</span>
+        </a>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-group-label">Admin</div>
+        <a class="nav-item" href="./settings.html" data-mobile-close>
+          <span class="nav-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" stroke="currentColor" stroke-width="2"/>
+              <path d="M19.4 15a7.7 7.7 0 0 0 .1-1 7.7 7.7 0 0 0-.1-1l2-1.5-2-3.5-2.4.6a7.8 7.8 0 0 0-1.7-1L13.8 3h-3.6L8.7 6.6a7.8 7.8 0 0 0-1.7 1L4.6 7l-2 3.5 2 1.5a7.7 7.7 0 0 0-.1 1 7.7 7.7 0 0 0 .1 1l-2 1.5 2 3.5 2.4-.6a7.8 7.8 0 0 0 1.7 1L10.2 21h3.6l1.5-3.6a7.8 7.8 0 0 0 1.7-1l2.4.6 2-3.5-2-1.5Z" stroke="currentColor" stroke-width="2" opacity=".55" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          <span>Settings</span>
+        </a>
+      </div>
+    </nav>
+
+    <div class="mobile-menu-actions">
+      ${editCustomerBtn ? '<button id="mobile-edit-customer-btn" class="btn btn-secondary" type="button">Edit customer</button>' : ''}
+      <button id="mobile-create-quote-btn" class="btn btn-primary" type="button">Create quote</button>
+      <button id="mobile-logout-btn" class="btn btn-quiet" type="button">Log out</button>
+    </div>
+  `;
+
+  appRoot.parentNode.insertBefore(backdrop, appRoot.nextSibling);
+  appRoot.parentNode.insertBefore(panel, backdrop.nextSibling);
+
+  const closeBtn = panel.querySelector("#mobile-menu-close");
+  const mobileEditBtn = panel.querySelector("#mobile-edit-customer-btn");
+  const mobileCreateBtn = panel.querySelector("#mobile-create-quote-btn");
+  const mobileLogoutBtn = panel.querySelector("#mobile-logout-btn");
+  const mobileCloseEls = Array.from(panel.querySelectorAll("[data-mobile-close]"));
+
+  const isMobileViewport = () => window.matchMedia("(max-width: 1040px)").matches;
+
+  function openMobileMenu() {
+    if (!isMobileViewport()) return;
+    document.body.classList.add("mobile-menu-open");
+    menuBtn.setAttribute("aria-expanded", "true");
+  }
+
+  function closeMobileMenu() {
+    document.body.classList.remove("mobile-menu-open");
+    menuBtn.setAttribute("aria-expanded", "false");
+  }
+
+  menuBtn.addEventListener("click", () => {
+    if (document.body.classList.contains("mobile-menu-open")) closeMobileMenu();
+    else openMobileMenu();
+  });
+
+  closeBtn?.addEventListener("click", closeMobileMenu);
+  backdrop?.addEventListener("click", closeMobileMenu);
+
+  mobileCloseEls.forEach((el) => {
+    el.addEventListener("click", () => {
+      if (isMobileViewport()) closeMobileMenu();
+    });
+  });
+
+  mobileEditBtn?.addEventListener("click", () => {
+    closeMobileMenu();
+    editCustomerBtn?.click();
+  });
+
+  mobileCreateBtn?.addEventListener("click", () => {
+    closeMobileMenu();
+    createQuoteBtn?.click();
+  });
+
+  mobileLogoutBtn?.addEventListener("click", () => {
+    closeMobileMenu();
+    logoutBtn?.click();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeMobileMenu();
+  });
+
+  window.addEventListener("resize", () => {
+    if (!isMobileViewport()) closeMobileMenu();
+  });
+})();
