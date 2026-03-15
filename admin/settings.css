@@ -1812,3 +1812,162 @@ select:focus{
     padding: 14px;
   }
 }
+
+/* =========================================================
+   Settings page mobile no-side-scroll fix
+   Append to the VERY bottom of current settings.css
+   ========================================================= */
+
+@media (max-width: 1040px){
+  html,
+  body,
+  .app,
+  .main{
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .topbar,
+  .topbar-left,
+  .page-title,
+  .content,
+  .settings-grid,
+  .settings-col,
+  .panel,
+  .section-head,
+  .section-actions,
+  .logo-row,
+  .logo-meta,
+  .logo-actions,
+  .form-grid,
+  .kv-grid,
+  .field,
+  .color-row,
+  .security-row,
+  .notice,
+  .table-wrap,
+  .table,
+  .table tbody,
+  .table tbody tr,
+  .table tbody td{
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .content{
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .logo-row,
+  .security-row,
+  .section-head,
+  .section-actions,
+  .logo-actions{
+    overflow-x: hidden;
+  }
+
+  .color-row{
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .color-row input[type="text"],
+  .color-row input[type="color"]{
+    width: 100%;
+    min-width: 0;
+  }
+
+  .workspace-name,
+  .userline-email{
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  /* Team section: stop horizontal scrolling by turning the table into cards */
+  #team-table-wrap{
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  #team-table-wrap .table-compact{
+    min-width: 0;
+    width: 100%;
+  }
+}
+
+@media (max-width: 760px){
+  #team-table-wrap .table-compact{
+    border-collapse: separate;
+    border-spacing: 0;
+    min-width: 0;
+  }
+
+  #team-table-wrap .table-compact thead{
+    display: none;
+  }
+
+  #team-table-wrap .table-compact tbody{
+    display: grid;
+    gap: 12px;
+  }
+
+  #team-table-wrap .table-compact tbody tr{
+    display: block;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    border-radius: 14px;
+    background: var(--surface);
+    box-shadow: var(--shadow-1);
+    overflow: hidden;
+  }
+
+  #team-table-wrap .table-compact tbody td{
+    display: grid;
+    grid-template-columns: minmax(90px, 112px) 1fr;
+    gap: 10px;
+    align-items: start;
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    word-break: break-word;
+  }
+
+  #team-table-wrap .table-compact tbody td:last-child{
+    border-bottom: 0;
+  }
+
+  #team-table-wrap .table-compact tbody td::before{
+    color: rgba(90, 101, 114, 0.95);
+    font-size: 11px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    font-weight: 900;
+    line-height: 1.35;
+    content: "";
+  }
+
+  #team-table-wrap .table-compact tbody td:nth-child(1)::before{ content: "Member"; }
+  #team-table-wrap .table-compact tbody td:nth-child(2)::before{ content: "Email"; }
+  #team-table-wrap .table-compact tbody td:nth-child(3)::before{ content: "Role"; }
+  #team-table-wrap .table-compact tbody td:nth-child(4)::before{ content: "Added"; }
+
+  #team-table-wrap .table-compact .cell-strong,
+  #team-table-wrap .table-compact .cell-sub,
+  #team-table-wrap .table-compact select,
+  #team-table-wrap .table-compact .badge{
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  #team-table-wrap .table-compact .cell-sub{
+    white-space: normal;
+    word-break: break-word;
+  }
+
+  #team-table-wrap .table-compact .role-select,
+  #team-table-wrap .table-compact select{
+    width: 100%;
+  }
+}
